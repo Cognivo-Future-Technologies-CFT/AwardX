@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ArrowRight, Play, CheckCircle2, Trophy } from 'lucide-react';
 import { Button } from './Button';
 import { motion, useScroll, useTransform } from 'framer-motion';
@@ -14,6 +14,43 @@ export const Hero: React.FC = () => {
   const y2 = useTransform(scrollYProgress, [0, 1], [0, -150]);
   const y3 = useTransform(scrollYProgress, [0, 1], [0, 100]);
   const brandingY = useTransform(scrollYProgress, [0, 1], [0, 50]);
+
+  // Typing Effect Logic
+  const [text, setText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [loopNum, setLoopNum] = useState(0);
+  const [typingSpeed, setTypingSpeed] = useState(150);
+
+  const phrases = [
+    "Awards & Growth", 
+    "Employee Recognition", 
+    "Creative Excellence", 
+    "Innovation Challenges"
+  ];
+
+  useEffect(() => {
+    const handleTyping = () => {
+      const i = loopNum % phrases.length;
+      const fullText = phrases[i];
+
+      setText(isDeleting 
+        ? fullText.substring(0, text.length - 1) 
+        : fullText.substring(0, text.length + 1)
+      );
+
+      setTypingSpeed(isDeleting ? 50 : 150);
+
+      if (!isDeleting && text === fullText) {
+        setTimeout(() => setIsDeleting(true), 2000); // Pause at end
+      } else if (isDeleting && text === '') {
+        setIsDeleting(false);
+        setLoopNum(loopNum + 1);
+      }
+    };
+
+    const timer = setTimeout(handleTyping, typingSpeed);
+    return () => clearTimeout(timer);
+  }, [text, isDeleting, loopNum, typingSpeed, phrases]);
 
   return (
     <section ref={ref} className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-background">
@@ -51,9 +88,12 @@ export const Hero: React.FC = () => {
               NOMIFY V2.0 IS LIVE
             </div>
             
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1]">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1] min-h-[3.3em] lg:min-h-[auto]">
               The OS for <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500">Awards & Growth</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500">
+                {text}
+                <span className="border-r-4 border-indigo-600 ml-1 animate-pulse"></span>
+              </span>
             </h1>
             
             <p className="mt-4 text-lg md:text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-medium">
@@ -62,11 +102,11 @@ export const Hero: React.FC = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-4 sm:space-y-0 sm:space-x-4">
-              <Button variant="primary" size="lg" className="w-full sm:w-auto font-bold shadow-indigo-500/25">
+              <Button variant="primary" size="lg" className="w-full sm:w-auto font-bold shadow-indigo-500/25 rounded-full px-8">
                 Start Free Trial 
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
-              <Button variant="white" size="lg" className="w-full sm:w-auto font-bold">
+              <Button variant="white" size="lg" className="w-full sm:w-auto font-bold rounded-full px-8">
                 <Play className="mr-2 w-4 h-4 fill-slate-900" /> Watch Demo
               </Button>
             </div>
@@ -99,36 +139,34 @@ export const Hero: React.FC = () => {
               className="absolute inset-0 z-10"
               style={{ perspective: '1000px' }}
             >
-              <div className="w-full h-full bg-white rounded-2xl shadow-2xl shadow-indigo-900/10 border border-slate-200 overflow-hidden relative transform transition-transform hover:scale-[1.02] duration-500 group">
+              <div className="w-full h-full bg-white rounded-[2rem] shadow-2xl shadow-indigo-900/10 border border-slate-200 overflow-hidden relative transform transition-transform hover:scale-[1.02] duration-500 group">
                 {/* Header */}
-                <div className="h-10 border-b border-slate-100 flex items-center px-4 gap-2 bg-slate-50/50 justify-between">
-                   <div className="flex gap-1.5">
-                     <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
-                     <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
-                     <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                <div className="h-12 border-b border-slate-100 flex items-center px-6 gap-2 bg-slate-50/50 justify-between">
+                   <div className="flex gap-2">
+                     <div className="w-3 h-3 rounded-full bg-slate-200"></div>
+                     <div className="w-3 h-3 rounded-full bg-slate-200"></div>
                    </div>
                    <div className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">NOMIFY DASHBOARD</div>
                 </div>
                 
                 {/* Body Content Placeholder - Abstract Dashboard */}
-                <div className="p-6 relative">
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-5 text-4xl font-black text-slate-900 rotate-[-12deg]">NOMIFY</div>
+                <div className="p-8 relative">
                   
                   <div className="flex gap-6 mb-8">
                      <div className="w-1/3">
-                        <div className="h-3 w-16 bg-slate-100 rounded mb-2"></div>
-                        <div className="h-8 w-24 bg-slate-900 rounded"></div>
+                        <div className="h-3 w-16 bg-slate-100 rounded mb-3"></div>
+                        <div className="h-10 w-24 bg-slate-900 rounded-lg"></div>
                      </div>
                      <div className="w-1/3">
-                        <div className="h-3 w-16 bg-slate-100 rounded mb-2"></div>
-                        <div className="h-8 w-24 bg-slate-900 rounded"></div>
+                        <div className="h-3 w-16 bg-slate-100 rounded mb-3"></div>
+                        <div className="h-10 w-24 bg-slate-900 rounded-lg"></div>
                      </div>
                      <div className="w-1/3">
-                        <div className="h-3 w-16 bg-slate-100 rounded mb-2"></div>
-                        <div className="h-8 w-24 bg-indigo-600 rounded"></div>
+                        <div className="h-3 w-16 bg-slate-100 rounded mb-3"></div>
+                        <div className="h-10 w-24 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-200"></div>
                      </div>
                   </div>
-                  <div className="h-48 w-full bg-slate-50 rounded-xl border border-slate-100 relative overflow-hidden group-hover:border-indigo-100 transition-colors">
+                  <div className="h-48 w-full bg-slate-50 rounded-2xl border border-slate-100 relative overflow-hidden group-hover:border-indigo-100 transition-colors">
                     <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-indigo-500/10 to-transparent"></div>
                     <svg className="w-full h-full" preserveAspectRatio="none">
                       <path d="M0,100 C150,80 300,120 450,60 C600,0 750,40 900,20 L900,200 L0,200 Z" fill="url(#gradient)" className="opacity-20"/>
@@ -146,32 +184,31 @@ export const Hero: React.FC = () => {
 
             {/* Floating Elements - Parallax */}
             <motion.div style={{ y: y2 }} className="absolute -top-10 -right-10 z-20">
-              <div className="bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-48 animate-float">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-green-100 rounded-lg text-green-600">
+              <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-52 animate-float">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="p-2.5 bg-green-100 rounded-xl text-green-600">
                     <CheckCircle2 size={20} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">Status</div>
-                    <div className="text-sm font-bold text-slate-900">Judging Complete</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Status</div>
+                    <div className="text-sm font-bold text-slate-900">Live</div>
                   </div>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                   <div className="bg-green-500 h-full w-full"></div>
                 </div>
               </div>
             </motion.div>
 
             <motion.div style={{ y: y3 }} className="absolute -bottom-5 -left-5 z-30">
-              <div className="bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-56 animate-float animation-delay-2000">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+              <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-64 animate-float animation-delay-2000">
+                <div className="flex items-center gap-4">
+                  <div className="p-2.5 bg-purple-100 rounded-xl text-purple-600">
                     <Trophy size={20} />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">Top Candidate</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Top Candidate</div>
                     <div className="text-sm font-bold text-slate-900">Sarah Jenkins</div>
-                    <div className="text-xs text-slate-400">Score: 9.8/10</div>
                   </div>
                 </div>
               </div>

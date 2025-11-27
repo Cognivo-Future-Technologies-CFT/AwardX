@@ -17,6 +17,7 @@ import { FeaturesPage } from './components/pages/FeaturesPage';
 import { HowItWorksPage } from './components/pages/HowItWorksPage';
 import { StoriesPage } from './components/pages/StoriesPage';
 import { PricingPage } from './components/pages/PricingPage';
+import { ProductShowcase } from './components/ProductShowcase';
 
 const CTASection = () => (
   <section className="py-32 relative overflow-hidden bg-white">
@@ -72,6 +73,7 @@ const App: React.FC = () => {
           <>
             <Hero />
             <FeatureScroll />
+            <ProductShowcase />
             <UseCases />
             <Features />
             <AnalyticsPreview />
