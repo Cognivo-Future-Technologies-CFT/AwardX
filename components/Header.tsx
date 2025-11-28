@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Sparkles } from 'lucide-react';
+import { Menu, X, Sparkles, LayoutDashboard } from 'lucide-react';
 import { Button } from './Button';
 import { motion, useScroll } from 'framer-motion';
 
@@ -68,8 +69,12 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
           </nav>
 
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="ghost" size="sm" onClick={() => handleNavClick('home')}>Login</Button>
-            <Button variant="primary" size="sm" onClick={() => handleNavClick('pricing')}>Get Started</Button>
+            <Button variant="ghost" size="sm" onClick={() => handleNavClick('demo')} className="flex items-center gap-2">
+               <LayoutDashboard className="w-4 h-4" /> Demo
+            </Button>
+            <div className="h-4 w-px bg-slate-200"></div>
+            <Button variant="ghost" size="sm" onClick={() => handleNavClick('login')}>Login</Button>
+            <Button variant="primary" size="sm" onClick={() => handleNavClick('signup')}>Get Started</Button>
           </div>
 
           <button 
@@ -99,9 +104,12 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
               {item.label}
             </button>
           ))}
-          <div className="pt-4 flex flex-col space-y-3 px-4">
-            <Button variant="outline" className="w-full justify-center">Login</Button>
-            <Button variant="primary" className="w-full justify-center">Get Started</Button>
+          <div className="pt-4 flex flex-col space-y-3 px-4 border-t border-slate-100 mt-2">
+            <Button variant="secondary" className="w-full justify-center" onClick={() => handleNavClick('demo')}>
+               <LayoutDashboard className="w-4 h-4 mr-2" /> Open Demo
+            </Button>
+            <Button variant="outline" className="w-full justify-center" onClick={() => handleNavClick('login')}>Login</Button>
+            <Button variant="primary" className="w-full justify-center" onClick={() => handleNavClick('signup')}>Get Started</Button>
           </div>
         </motion.div>
       )}

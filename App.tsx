@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -12,12 +13,15 @@ import { Footer } from './components/Footer';
 import { Button } from './components/Button';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Import New Pages
+// Import New Pages & Components
 import { FeaturesPage } from './components/pages/FeaturesPage';
 import { HowItWorksPage } from './components/pages/HowItWorksPage';
 import { StoriesPage } from './components/pages/StoriesPage';
 import { PricingPage } from './components/pages/PricingPage';
+import { SignupPage } from './components/pages/SignupPage';
+import { LoginPage } from './components/pages/LoginPage';
 import { ProductShowcase } from './components/ProductShowcase';
+import { Dashboard } from './components/dashboard/Dashboard';
 
 const CTASection = () => (
   <section className="py-32 relative overflow-hidden bg-white">
@@ -45,8 +49,8 @@ const CTASection = () => (
             Join 2,000+ organizations using Nomify to celebrate excellence, manage entries, and grow their community.
           </p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <Button variant="white" size="lg" className="px-10 py-4 text-lg font-bold">Get Started Free</Button>
-            <Button variant="outline" size="lg" className="px-10 py-4 text-lg border-slate-600 text-slate-300 hover:text-white hover:border-white">Contact Sales</Button>
+            <Button variant="white" size="lg" className="px-10 py-4 text-lg font-bold rounded-full">Get Started Free</Button>
+            <Button variant="outline" size="lg" className="px-10 py-4 text-lg border-slate-600 text-slate-300 hover:text-white hover:border-white rounded-full">Contact Sales</Button>
           </div>
         </div>
       </motion.div>
@@ -67,6 +71,9 @@ const App: React.FC = () => {
         return <StoriesPage />;
       case 'pricing':
         return <PricingPage />;
+      case 'demo':
+      case 'dashboard':
+        return <Dashboard onLogout={() => setCurrentPage('home')} />;
       case 'home':
       default:
         return (
@@ -85,6 +92,19 @@ const App: React.FC = () => {
         );
     }
   };
+
+  if (currentPage === 'signup') {
+    return <SignupPage onNavigate={setCurrentPage} />;
+  }
+
+  if (currentPage === 'login') {
+    return <LoginPage onNavigate={setCurrentPage} />;
+  }
+  
+  // Render Demo/Dashboard without Header/Footer wrapping
+  if (currentPage === 'demo' || currentPage === 'dashboard') {
+     return <Dashboard onLogout={() => setCurrentPage('home')} />;
+  }
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-500/30 selection:text-indigo-900">
