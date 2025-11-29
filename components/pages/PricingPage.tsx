@@ -48,7 +48,7 @@ export const PricingPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Starter */}
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-lg flex flex-col hover:-translate-y-1 transition-transform">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Starter</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2 font-display">Starter</h3>
             <p className="text-sm text-slate-500 mb-6 h-10">Perfect for small competitions and local awards.</p>
             <div className="text-4xl font-extrabold text-slate-900 mb-8">
                {isAnnual ? '$79' : '$99'}<span className="text-base font-normal text-slate-500">/mo</span>
@@ -71,14 +71,14 @@ export const PricingPage: React.FC = () => {
             <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-bold px-4 py-1 rounded-b-lg shadow-lg">
                 MOST POPULAR
             </div>
-            <h3 className="text-xl font-bold text-white mb-2 mt-4">Growth</h3>
+            <h3 className="text-xl font-bold text-white mb-2 mt-4 font-display">Growth</h3>
             <p className="text-sm text-slate-400 mb-6 h-10">For growing organizations needing automation.</p>
             <div className="text-4xl font-extrabold text-white mb-8">
                {isAnnual ? '$239' : '$299'}<span className="text-base font-normal text-slate-500">/mo</span>
             </div>
             <Button variant="white" className="w-full mb-8">Start Free Trial</Button>
             <ul className="space-y-3 mb-8 flex-1">
-               {["Unlimited Entries", "Unlimited Judges", "WhatsApp Campaigns", "Multi-round Judging", "CRM System", "Remove Nomify Branding", "Priority Support"].map((f,i) => (
+               {["Unlimited Entries", "Unlimited Judges", "WhatsApp Campaigns", "Multi-round Judging", "CRM System", "Remove AwardX Branding", "Priority Support"].map((f,i) => (
                  <li key={i} className="flex items-center text-sm text-slate-300">
                     <Check className="w-4 h-4 text-indigo-400 mr-3" /> {f}
                  </li>
@@ -88,7 +88,7 @@ export const PricingPage: React.FC = () => {
 
           {/* Enterprise */}
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-lg flex flex-col hover:-translate-y-1 transition-transform">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Enterprise</h3>
+            <h3 className="text-xl font-bold text-slate-900 mb-2 font-display">Enterprise</h3>
             <p className="text-sm text-slate-500 mb-6 h-10">Full control for large-scale global programs.</p>
             <div className="text-4xl font-extrabold text-slate-900 mb-8">
                Custom
@@ -107,7 +107,7 @@ export const PricingPage: React.FC = () => {
 
       {/* Comparison Table */}
       <section className="max-w-5xl mx-auto px-4 mb-32">
-        <h2 className="text-2xl font-bold mb-8 text-center">Compare Plans</h2>
+        <h2 className="text-2xl font-bold mb-8 text-center font-display">Compare Plans</h2>
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -135,7 +135,7 @@ export const PricingPage: React.FC = () => {
 
       {/* FAQ */}
       <section className="max-w-3xl mx-auto px-4 mb-32">
-        <h2 className="text-3xl font-bold text-center mb-12">Frequently Asked Questions</h2>
+        <h2 className="text-3xl font-bold text-center mb-12 font-display">Frequently Asked Questions</h2>
         <div className="space-y-6">
            {[
              { q: "What counts as a submission?", a: "A submission is a single entry record. Drafts do not count towards your limit." },
@@ -158,7 +158,7 @@ export const PricingPage: React.FC = () => {
       <section className="px-4">
         <div className="max-w-5xl mx-auto bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-12 text-center text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-           <h2 className="text-3xl font-bold mb-4 relative z-10">Need custom pricing?</h2>
+           <h2 className="text-3xl font-bold mb-4 relative z-10 font-display">Need custom pricing?</h2>
            <p className="text-slate-300 mb-8 relative z-10">We offer volume discounts for educational institutions and non-profits.</p>
            <Button variant="white" className="relative z-10">Contact Enterprise Sales</Button>
         </div>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -37,8 +36,8 @@ const CTASection = () => (
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/30 rounded-full blur-[100px] pointer-events-none"></div>
         
         {/* Branding Watermark */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15rem] font-black text-white opacity-[0.03] select-none pointer-events-none">
-            NOMIFY
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15rem] font-black text-white opacity-[0.03] select-none pointer-events-none font-display">
+            AWARDX
         </div>
         
         <div className="relative z-10">
@@ -46,7 +45,7 @@ const CTASection = () => (
             Ready to launch your <br/>awards program?
           </h2>
           <p className="text-lg md:text-xl text-slate-300 mb-12 max-w-2xl mx-auto">
-            Join 2,000+ organizations using Nomify to celebrate excellence, manage entries, and grow their community.
+            Join 2,000+ organizations using AwardX to celebrate excellence, manage entries, and grow their community.
           </p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
             <Button variant="white" size="lg" className="px-10 py-4 text-lg font-bold rounded-full">Get Started Free</Button>

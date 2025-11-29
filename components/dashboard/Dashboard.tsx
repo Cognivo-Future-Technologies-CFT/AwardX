@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
 import { DashboardLayout } from './DashboardLayout';
+import { EventSelectionView } from './EventSelectionView';
 import { DashboardOverview } from './DashboardOverview';
 import { TemplateGallery } from './TemplateGallery';
 import { SubmissionTable } from './SubmissionTable';
-import { ProgramsList } from './ProgramsList';
 import { JudgingView } from './JudgingView';
 import { AnalyticsView } from './AnalyticsView';
 import { CRMView } from './CRMView';
@@ -13,21 +13,30 @@ import { SettingsView } from './SettingsView';
 import { ReachView } from './ReachView';
 import { TeamsView } from './TeamsView';
 import { AuditLogsView } from './AuditLogsView';
-import { motion } from 'framer-motion';
+import { CategoriesView } from './CategoriesView';
+import { ScheduleView } from './ScheduleView';
+import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
+import { motion, AnimatePresence } from 'framer-motion';
+import { Program } from '../../services/demoDb';
 
 interface DashboardProps {
   onLogout: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+  const [activeEvent, setActiveEvent] = useState<Program | null>(null);
   const [currentView, setCurrentView] = useState('overview');
 
   const renderView = () => {
     switch (currentView) {
       case 'overview':
-        return <DashboardOverview />;
-      case 'programs':
-        return <ProgramsList />;
+        return <DashboardOverview activeEvent={activeEvent} />;
+      case 'schedule':
+        return <ScheduleView activeEvent={activeEvent} />;
+      case 'submission-setup':
+        return <SubmissionProcessView activeEvent={activeEvent} />;
+      case 'awards':
+        return <CategoriesView activeEvent={activeEvent} />;
       case 'templates':
         return <TemplateGallery />;
       case 'submissions':
@@ -49,15 +58,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'settings':
         return <SettingsView />;
       default:
-        return <DashboardOverview />;
+        return <DashboardOverview activeEvent={activeEvent} />;
     }
   };
+
+  if (!activeEvent) {
+    return (
+      <motion.div
+        key="event-hub"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <EventSelectionView onSelectEvent={setActiveEvent} onLogout={onLogout} />
+      </motion.div>
+    );
+  }
 
   return (
     <DashboardLayout 
       currentView={currentView} 
+      activeEvent={activeEvent}
       onChangeView={setCurrentView}
       onLogout={onLogout}
+      onSwitchEvent={() => setActiveEvent(null)}
     >
       <motion.div
         key={currentView}

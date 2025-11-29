@@ -34,7 +34,7 @@ export const Timeline: React.FC = () => {
     <section id="how-it-works" className="py-32 bg-slate-50 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center mb-24">
-          <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">How Nomify Works</h2>
+          <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 font-display">How AwardX Works</h2>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">From concept to ceremony, our platform handles the complexity.</p>
         </div>
 

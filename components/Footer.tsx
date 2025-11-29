@@ -12,7 +12,7 @@ export const Footer: React.FC = () => {
               <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-white">Nomify</span>
+              <span className="text-xl font-bold text-white font-display">AwardX</span>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed mb-6">
               The all-in-one operating system for awards, competitions, and creative recognition programs.
@@ -58,7 +58,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
-          <p>&copy; {new Date().getFullYear()} Nomify Inc. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} AwardX Inc. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
             <a href="#" className="hover:text-white">Privacy Policy</a>
             <a href="#" className="hover:text-white">Terms of Service</a>

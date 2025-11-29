@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { MoreHorizontal, Filter, Download, Eye, Calendar, Search, ChevronDown, User, Plus } from 'lucide-react';
-import { db, Submission } from '../../services/demoDb';
+import { MoreHorizontal, Filter, Download, Eye, Calendar, Search, ChevronDown, User, Plus, CheckSquare, Trash2, CheckCircle, XCircle, Gavel } from 'lucide-react';
+import { db, Submission, Judge } from '../../services/demoDb';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: any = {
@@ -22,11 +23,16 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export const SubmissionTable: React.FC = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [judges, setJudges] = useState<Judge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
   const [newSub, setNewSub] = useState({ title: '', applicant: '', category: 'General', status: 'Pending' as const });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
 
   useEffect(() => {
     setSubmissions(db.getSubmissions());
+    setJudges(db.getJudges());
   }, []);
 
   const handleCreate = (e: React.FormEvent) => {
@@ -39,8 +45,58 @@ export const SubmissionTable: React.FC = () => {
     setNewSub({ title: '', applicant: '', category: 'General', status: 'Pending' });
   };
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === submissions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(submissions.map(s => s.id));
+    }
+  };
+
+  const handleBulkAction = (action: 'Accept' | 'Reject' | 'Delete' | 'Shortlist' | 'AssignJudge') => {
+    if (selectedIds.length === 0) return;
+
+    if (action === 'AssignJudge') {
+      setIsJudgeModalOpen(true);
+      return;
+    }
+
+    if (action === 'Delete') {
+      if (confirm(`Are you sure you want to delete ${selectedIds.length} submissions?`)) {
+        db.bulkUpdateSubmissions(selectedIds, { delete: true } as any);
+      }
+    } else {
+      const statusMap: any = {
+        'Accept': 'Accepted',
+        'Reject': 'Rejected',
+        'Shortlist': 'Shortlisted'
+      };
+      db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] });
+    }
+    
+    // Refresh
+    setSubmissions(db.getSubmissions());
+    setSelectedIds([]);
+  };
+
+  const handleAssignJudges = () => {
+    if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
+      db.bulkUpdateSubmissions(selectedIds, { assignedJudges: selectedJudgesForBulk });
+      setSubmissions(db.getSubmissions());
+      setIsJudgeModalOpen(false);
+      setSelectedJudgesForBulk([]);
+      setSelectedIds([]);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative pb-20">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">Submissions</h1>
@@ -79,10 +135,19 @@ export const SubmissionTable: React.FC = () => {
            <table className="w-full text-left border-collapse">
               <thead>
                  <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <th className="p-4 w-12 text-center">#</th>
+                    <th className="p-4 w-12 text-center">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        checked={selectedIds.length === submissions.length && submissions.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th className="p-4 w-12 text-center">ID</th>
                     <th className="p-4">Submission</th>
                     <th className="p-4">Category</th>
                     <th className="p-4">Status</th>
+                    <th className="p-4">Judges</th>
                     <th className="p-4">Score</th>
                     <th className="p-4">Date</th>
                     <th className="p-4 text-right">Actions</th>
@@ -90,7 +155,18 @@ export const SubmissionTable: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                  {submissions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <tr 
+                      key={sub.id} 
+                      className={`hover:bg-slate-50/80 transition-colors group ${selectedIds.includes(sub.id) ? 'bg-indigo-50/30' : ''}`}
+                    >
+                       <td className="p-4 text-center">
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            checked={selectedIds.includes(sub.id)}
+                            onChange={() => toggleSelection(sub.id)}
+                          />
+                       </td>
                        <td className="p-4 text-center text-xs text-slate-400">
                           {sub.id.split('-')[1]}
                        </td>
@@ -110,6 +186,27 @@ export const SubmissionTable: React.FC = () => {
                        </td>
                        <td className="p-4">
                           <StatusBadge status={sub.status} />
+                       </td>
+                       <td className="p-4">
+                          <div className="flex -space-x-2">
+                             {(sub.assignedJudges || []).length > 0 ? (
+                                <>
+                                   {(sub.assignedJudges || []).slice(0, 3).map((jid, i) => {
+                                      const j = judges.find(judge => judge.id === jid);
+                                      return j ? (
+                                         <img key={i} src={j.avatar} className="w-6 h-6 rounded-full border-2 border-white" title={j.name} alt="" />
+                                      ) : null;
+                                   })}
+                                   {(sub.assignedJudges || []).length > 3 && (
+                                      <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold">
+                                         +{(sub.assignedJudges?.length || 0) - 3}
+                                      </div>
+                                   )}
+                                </>
+                             ) : (
+                                <span className="text-xs text-slate-400 italic">Unassigned</span>
+                             )}
+                          </div>
                        </td>
                        <td className="p-4">
                           {sub.score ? (
@@ -133,7 +230,7 @@ export const SubmissionTable: React.FC = () => {
                  ))}
                  {submissions.length === 0 && (
                     <tr>
-                       <td colSpan={7} className="p-8 text-center text-slate-500">
+                       <td colSpan={9} className="p-8 text-center text-slate-500">
                           No submissions found. Create one to get started.
                        </td>
                     </tr>
@@ -142,6 +239,45 @@ export const SubmissionTable: React.FC = () => {
            </table>
         </div>
       </div>
+
+      {/* Floating Bulk Actions Bar */}
+      <AnimatePresence>
+        {selectedIds.length > 0 && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl z-30 flex items-center gap-6 border border-slate-700"
+          >
+             <div className="flex items-center gap-3 border-r border-slate-700 pr-6">
+                <span className="bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded">
+                   {selectedIds.length}
+                </span>
+                <span className="text-sm font-medium">Selected</span>
+             </div>
+             
+             <div className="flex items-center gap-2">
+                <button onClick={() => handleBulkAction('Accept')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium text-green-400">
+                   <CheckCircle className="w-4 h-4" /> Accept
+                </button>
+                <button onClick={() => handleBulkAction('Reject')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium text-red-400">
+                   <XCircle className="w-4 h-4" /> Reject
+                </button>
+                <button onClick={() => handleBulkAction('Shortlist')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium text-purple-400">
+                   <Gavel className="w-4 h-4" /> Shortlist
+                </button>
+                <div className="w-px h-4 bg-slate-700 mx-2"></div>
+                <button onClick={() => handleBulkAction('AssignJudge')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium text-blue-400">
+                   <User className="w-4 h-4" /> Assign Judge
+                </button>
+                <div className="w-px h-4 bg-slate-700 mx-2"></div>
+                <button onClick={() => handleBulkAction('Delete')} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium text-slate-400 hover:text-red-400">
+                   <Trash2 className="w-4 h-4" /> Delete
+                </button>
+             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Manual Submission">
          <form onSubmit={handleCreate} className="space-y-4">
@@ -181,6 +317,45 @@ export const SubmissionTable: React.FC = () => {
                <Button type="submit">Add Submission</Button>
             </div>
          </form>
+      </Modal>
+
+      {/* Assign Judge Modal */}
+      <Modal isOpen={isJudgeModalOpen} onClose={() => setIsJudgeModalOpen(false)} title="Assign Judges">
+         <div className="space-y-4">
+            <p className="text-sm text-slate-500 mb-4">
+               Select judges to assign to the {selectedIds.length} selected submissions. 
+               This will add them to the existing panel for these entries.
+            </p>
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+               {judges.map(judge => (
+                  <label key={judge.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
+                     <div className="flex items-center gap-3">
+                        <img src={judge.avatar} alt="" className="w-8 h-8 rounded-full" />
+                        <div>
+                           <div className="text-sm font-bold text-slate-900">{judge.name}</div>
+                           <div className="text-xs text-slate-500">{judge.email}</div>
+                        </div>
+                     </div>
+                     <input 
+                        type="checkbox" 
+                        className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                        checked={selectedJudgesForBulk.includes(judge.id)}
+                        onChange={(e) => {
+                           if (e.target.checked) {
+                              setSelectedJudgesForBulk([...selectedJudgesForBulk, judge.id]);
+                           } else {
+                              setSelectedJudgesForBulk(selectedJudgesForBulk.filter(id => id !== judge.id));
+                           }
+                        }}
+                     />
+                  </label>
+               ))}
+            </div>
+            <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
+               <Button type="button" variant="ghost" onClick={() => setIsJudgeModalOpen(false)}>Cancel</Button>
+               <Button onClick={handleAssignJudges}>Assign Selected</Button>
+            </div>
+         </div>
       </Modal>
     </div>
   );

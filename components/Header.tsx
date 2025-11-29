@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Sparkles, LayoutDashboard } from 'lucide-react';
 import { Button } from './Button';
@@ -51,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
             <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 group-hover:text-indigo-600 transition-colors">Nomify</span>
+            <span className="text-xl font-bold tracking-tight text-slate-900 group-hover:text-indigo-600 transition-colors font-display">AwardX</span>
           </div>
 
           <nav className="hidden md:flex items-center space-x-8">

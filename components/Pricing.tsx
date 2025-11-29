@@ -27,7 +27,7 @@ const tiers: PricingTier[] = [
       "Unlimited Judges",
       "WhatsApp Campaigns",
       "Multi-round Judging",
-      "Remove Nomify Branding",
+      "Remove AwardX Branding",
       "Priority Support"
     ]
   },
@@ -53,7 +53,7 @@ export const Pricing: React.FC = () => {
     <section id="pricing" className="py-32 bg-slate-50 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">Simple, transparent pricing</h2>
+          <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 font-display">Simple, transparent pricing</h2>
           <p className="text-slate-600 mb-8">Choose the plan that fits your program's scale.</p>
           
           <div className="flex items-center justify-center space-x-4">
@@ -89,7 +89,7 @@ export const Pricing: React.FC = () => {
               )}
 
               <div className="mb-8">
-                <h3 className={`text-xl font-bold mb-2 ${tier.recommended ? 'text-white' : 'text-slate-900'}`}>{tier.name}</h3>
+                <h3 className={`text-xl font-bold mb-2 font-display ${tier.recommended ? 'text-white' : 'text-slate-900'}`}>{tier.name}</h3>
                 <div className="flex items-baseline mb-4">
                   <span className={`text-4xl font-extrabold ${tier.recommended ? 'text-white' : 'text-slate-900'}`}>
                     {tier.price === "Custom" ? "Custom" : (isAnnual ? tier.price : `$${parseInt(tier.price.slice(1)) * 1.2}`.split('.')[0])}

@@ -8,7 +8,7 @@ const testimonials: Testimonial[] = [
     name: "Sarah Jenkins",
     role: "Director of Awards",
     company: "Design Institute",
-    content: "Nomify cut our administrative time by 70%. The WhatsApp integration for notifying nominees was a game changer for our engagement rates.",
+    content: "AwardX cut our administrative time by 70%. The WhatsApp integration for notifying nominees was a game changer for our engagement rates.",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80"
   },
   {
@@ -22,7 +22,7 @@ const testimonials: Testimonial[] = [
     name: "Elena Rodriguez",
     role: "Marketing Lead",
     company: "Creative Arts Council",
-    content: "We switched from a custom solution to Nomify. The portfolio generation feature gave our winners valuable exposure we couldn't offer before.",
+    content: "We switched from a custom solution to AwardX. The portfolio generation feature gave our winners valuable exposure we couldn't offer before.",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80"
   }
 ];
@@ -34,7 +34,7 @@ export const Testimonials: React.FC = () => {
       <div className="absolute top-0 right-0 w-1/3 h-full bg-slate-50 -skew-x-12 z-0 opacity-50"></div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <h2 className="text-4xl md:text-5xl font-bold text-center text-slate-900 mb-20">
+        <h2 className="text-4xl md:text-5xl font-bold text-center text-slate-900 mb-20 font-display">
           Trusted by leading <span className="text-indigo-600">organizations</span>
         </h2>
 

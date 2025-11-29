@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff, Gavel, Star, TrendingUp } from 'lucide-react';
@@ -140,7 +139,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
              <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
              </div>
-             <span className="text-lg font-bold text-slate-900">Nomify</span>
+             <span className="text-lg font-bold text-slate-900 font-display">AwardX</span>
           </div>
         </div>
 
@@ -155,7 +154,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                 <Sparkles className="w-5 h-5 text-white" />
              </div>
-             <span className="text-2xl font-bold tracking-tight text-slate-900">Nomify</span>
+             <span className="text-2xl font-bold tracking-tight text-slate-900 font-display">AwardX</span>
           </div>
 
           <div className="mb-8">
@@ -247,7 +246,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
         </motion.div>
         
         <div className="mt-12 text-xs text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} Nomify Inc. Protected by reCAPTCHA.
+          &copy; {new Date().getFullYear()} AwardX Inc. Protected by reCAPTCHA.
         </div>
       </div>
 

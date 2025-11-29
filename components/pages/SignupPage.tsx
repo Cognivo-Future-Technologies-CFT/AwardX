@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Check, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
@@ -53,7 +52,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
              <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
              </div>
-             <span className="text-lg font-bold text-slate-900">Nomify</span>
+             <span className="text-lg font-bold text-slate-900 font-display">AwardX</span>
           </div>
         </div>
 
@@ -68,7 +67,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                 <Sparkles className="w-5 h-5 text-white" />
              </div>
-             <span className="text-2xl font-bold tracking-tight text-slate-900">Nomify</span>
+             <span className="text-2xl font-bold tracking-tight text-slate-900 font-display">AwardX</span>
           </div>
 
           <div className="mb-8">
@@ -173,7 +172,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
         </motion.div>
         
         <div className="mt-12 text-xs text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} Nomify Inc. Protected by reCAPTCHA.
+          &copy; {new Date().getFullYear()} AwardX Inc. Protected by reCAPTCHA.
         </div>
       </div>
 
@@ -203,7 +202,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
                        <Sparkles className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                       <div className="text-white font-bold text-sm">Nomify Bot</div>
+                       <div className="text-white font-bold text-sm">AwardX Bot</div>
                        <div className="text-indigo-200 text-xs">Just now</div>
                     </div>
                  </div>
@@ -255,7 +254,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
          
          <div className="absolute bottom-12 text-center">
             <p className="text-slate-400 text-sm max-w-sm mx-auto italic">
-              "Nomify transformed how we handle our 5,000+ yearly submissions. It's simply beautiful."
+              "AwardX transformed how we handle our 5,000+ yearly submissions. It's simply beautiful."
             </p>
             <p className="text-slate-500 text-xs mt-3 font-bold uppercase tracking-widest">Global Design Awards</p>
          </div>

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { db } from '../../services/demoDb';
+import { db, Program } from '../../services/demoDb';
 
 const submissionData = [
   { name: 'Mon', entries: 12 },
@@ -42,7 +42,11 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, color }: any) 
   </motion.div>
 );
 
-export const DashboardOverview: React.FC = () => {
+interface DashboardOverviewProps {
+  activeEvent?: Program | null;
+}
+
+export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEvent }) => {
   const [stats, setStats] = useState({
     totalSubmissions: 0,
     activePrograms: 0,
@@ -53,20 +57,29 @@ export const DashboardOverview: React.FC = () => {
   useEffect(() => {
     // Poll for updates in this demo environment
     const updateStats = () => {
-       setStats(db.getStats());
+       // If activeEvent is present, stats could be scoped. 
+       // For this demo, `db.getStats(id)` will just return mock data usually.
+       setStats(db.getStats(activeEvent?.id));
     };
     updateStats();
     const interval = setInterval(updateStats, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeEvent]);
 
   return (
     <div className="space-y-8">
       {/* Welcome & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-           <h1 className="text-2xl font-bold text-slate-900">Good Morning, Sarah 👋</h1>
-           <p className="text-slate-500">Here's your demo environment status.</p>
+           <h1 className="text-2xl font-bold text-slate-900">
+             {activeEvent ? `${activeEvent.type} Overview` : 'Dashboard Overview'}
+           </h1>
+           <p className="text-slate-500">
+             {activeEvent 
+               ? `Tracking performance for "${activeEvent.title}"` 
+               : "Here's your demo environment status."
+             }
+           </p>
         </div>
         <div className="flex gap-3">
            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 font-medium text-sm transition-colors">
@@ -80,9 +93,9 @@ export const DashboardOverview: React.FC = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Submissions" value={stats.totalSubmissions} change="+Demo" isPositive={true} icon={FileCheck} color="text-indigo-600 bg-indigo-600" />
+        <StatCard title={activeEvent?.type === 'Grant' ? "Applications" : "Total Submissions"} value={stats.totalSubmissions} change="+Demo" isPositive={true} icon={FileCheck} color="text-indigo-600 bg-indigo-600" />
         <StatCard title="Est. Revenue" value={`$${stats.revenue}`} change="+Demo" isPositive={true} icon={DollarSign} color="text-emerald-600 bg-emerald-600" />
-        <StatCard title="Active Programs" value={stats.activePrograms} change="Active" isPositive={true} icon={Users} color="text-purple-600 bg-purple-600" />
+        <StatCard title="Active Judges" value={3} change="Online" isPositive={true} icon={Users} color="text-purple-600 bg-purple-600" />
         <StatCard title="Pending Review" value={stats.pendingReview} change="Action Needed" isPositive={false} icon={Clock} color="text-orange-600 bg-orange-600" />
       </div>
 
@@ -91,7 +104,9 @@ export const DashboardOverview: React.FC = () => {
          {/* Main Chart */}
          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex justify-between items-center mb-6">
-               <h3 className="font-bold text-slate-900 text-lg">Submission Trends</h3>
+               <h3 className="font-bold text-slate-900 text-lg">
+                 {activeEvent?.type === 'Grant' ? 'Application Volume' : 'Submission Trends'}
+               </h3>
                <select className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-1.5 text-slate-600 outline-none">
                   <option>Last 7 Days</option>
                </select>

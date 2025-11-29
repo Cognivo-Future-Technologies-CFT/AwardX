@@ -67,15 +67,15 @@ export const FeaturesPage: React.FC = () => {
            animate={{ opacity: 1, scale: 1 }}
            className="relative z-10 py-16"
          >
-           <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 tracking-tight leading-tight">
+           <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 tracking-tight leading-tight font-display">
              Everything You Need to Run <br/>
              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500">Powerful Awards</span>
            </h1>
            <p className="text-xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed">
-             Nomify brings submissions, judging, CRM, social campaigns, and automation into one unified platform. Stop juggling spreadsheets.
+             AwardX brings submissions, judging, CRM, social campaigns, and automation into one unified platform. Stop juggling spreadsheets.
            </p>
            <div className="flex flex-col sm:flex-row justify-center gap-4">
-             <Button size="lg" className="shadow-xl shadow-indigo-500/30">Try Nomify Free</Button>
+             <Button size="lg" className="shadow-xl shadow-indigo-500/30">Try AwardX Free</Button>
              <Button variant="outline" size="lg" className="bg-white">Book a Demo</Button>
            </div>
          </motion.div>
@@ -209,7 +209,7 @@ export const FeaturesPage: React.FC = () => {
       {/* Comparison Table */}
       <section className="px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto mb-32">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-slate-900 mb-4">Why Nomify Wins</h2>
+          <h2 className="text-4xl font-bold text-slate-900 mb-4 font-display">Why AwardX Wins</h2>
           <p className="text-slate-500">See how we stack up against the competition.</p>
         </div>
 
@@ -219,7 +219,7 @@ export const FeaturesPage: React.FC = () => {
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200">
                   <th className="p-6 text-slate-500 font-medium">Feature</th>
-                  <th className="p-6 text-indigo-600 font-bold text-lg bg-indigo-50/50">Nomify</th>
+                  <th className="p-6 text-indigo-600 font-bold text-lg bg-indigo-50/50">AwardX</th>
                   <th className="p-6 text-slate-600 font-semibold">Zealous</th>
                   <th className="p-6 text-slate-600 font-semibold">AwardForce</th>
                 </tr>
@@ -267,7 +267,7 @@ export const FeaturesPage: React.FC = () => {
               Run your competition in half the time,<br/> with twice the results.
             </h2>
             <div className="flex justify-center gap-4 mt-8">
-               <Button variant="white" size="lg">Try Nomify Now</Button>
+               <Button variant="white" size="lg">Try AwardX Now</Button>
                <Button variant="outline" size="lg" className="border-slate-600 text-slate-300 hover:bg-slate-800">Watch Demo</Button>
             </div>
           </div>

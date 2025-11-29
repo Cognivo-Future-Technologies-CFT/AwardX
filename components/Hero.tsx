@@ -57,9 +57,9 @@ export const Hero: React.FC = () => {
       {/* Background Branding */}
       <motion.div 
         style={{ y: brandingY }}
-        className="absolute top-20 left-1/2 -translate-x-1/2 text-[18vw] font-black text-slate-50 opacity-80 pointer-events-none select-none z-0 tracking-tighter"
+        className="absolute top-20 left-1/2 -translate-x-1/2 text-[18vw] font-black text-slate-50 opacity-80 pointer-events-none select-none z-0 tracking-tighter font-display"
       >
-        NOMIFY
+        AwardX
       </motion.div>
 
       {/* Abstract Background Gradients */}
@@ -85,10 +85,10 @@ export const Hero: React.FC = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
               </span>
-              NOMIFY V2.0 IS LIVE
+              AWARDX V2.0 IS LIVE
             </div>
             
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1] min-h-[3.3em] lg:min-h-[auto]">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 leading-[1.1] min-h-[3.3em] lg:min-h-[auto] font-display">
               The OS for <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500">
                 {text}
@@ -118,7 +118,7 @@ export const Hero: React.FC = () => {
                 ))}
               </div>
               <div>
-                <span className="font-bold text-slate-900">2,000+</span> organizations joined Nomify
+                <span className="font-bold text-slate-900">2,000+</span> organizations joined AwardX
               </div>
             </div>
           </motion.div>
@@ -146,7 +146,7 @@ export const Hero: React.FC = () => {
                      <div className="w-3 h-3 rounded-full bg-slate-200"></div>
                      <div className="w-3 h-3 rounded-full bg-slate-200"></div>
                    </div>
-                   <div className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">NOMIFY DASHBOARD</div>
+                   <div className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">AWARDX DASHBOARD</div>
                 </div>
                 
                 {/* Body Content Placeholder - Abstract Dashboard */}

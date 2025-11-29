@@ -71,7 +71,7 @@ export const HowItWorksPage: React.FC = () => {
     <div className="pt-24 pb-20 bg-white min-h-screen">
       {/* Hero */}
       <section className="text-center max-w-4xl mx-auto px-4 mb-20">
-        <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 font-display">How Nomify Works</h1>
+        <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 font-display">How AwardX Works</h1>
         <p className="text-xl text-slate-600">
           A simple, end-to-end workflow for running any competition or award. <br/>
           From concept to ceremony in one platform.
@@ -156,7 +156,7 @@ export const HowItWorksPage: React.FC = () => {
       <section className="bg-slate-50 py-24">
         <div className="max-w-7xl mx-auto px-4">
            <div className="text-center mb-16">
-             <h2 className="text-4xl font-bold text-slate-900 mb-4">Power Users? We got you.</h2>
+             <h2 className="text-4xl font-bold text-slate-900 mb-4 font-display">Power Users? We got you.</h2>
              <p className="text-slate-500">Advanced flows for complex requirements.</p>
            </div>
            
@@ -194,7 +194,7 @@ export const HowItWorksPage: React.FC = () => {
 
       {/* CTA */}
       <section className="py-20 text-center px-4">
-         <h2 className="text-3xl font-bold text-slate-900 mb-8">Ready to streamline your workflow?</h2>
+         <h2 className="text-3xl font-bold text-slate-900 mb-8 font-display">Ready to streamline your workflow?</h2>
          <Button size="lg" className="px-12">Start Your First Program</Button>
       </section>
     </div>

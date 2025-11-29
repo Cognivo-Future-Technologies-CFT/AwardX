@@ -42,12 +42,12 @@ export const Features: React.FC = () => {
             whileInView={{ opacity: 1 }}
             className="text-indigo-600 font-bold tracking-wider text-xs uppercase mb-3 block"
           >
-            Powered by Nomify OS
+            Powered by AwardX OS
           </motion.span>
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-5xl font-bold mb-6 text-slate-900 tracking-tight"
+            className="text-4xl md:text-5xl font-bold mb-6 text-slate-900 tracking-tight font-display"
           >
             Everything you need for <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">world-class competitions</span>
@@ -68,7 +68,7 @@ export const Features: React.FC = () => {
              <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-indigo-500/20 blur-[100px] rounded-full"></div>
              
              {/* Watermark */}
-             <div className="absolute top-6 right-6 text-white/5 font-bold text-xl tracking-widest uppercase">Nomify Engine</div>
+             <div className="absolute top-6 right-6 text-white/5 font-bold text-xl tracking-widest uppercase font-display">AwardX Engine</div>
 
              <div className="relative z-10 flex flex-col md:flex-row items-start gap-8 h-full">
                <div className="flex-1">
@@ -150,7 +150,7 @@ export const Features: React.FC = () => {
                         <div className="h-4 w-3/4 bg-slate-200 rounded"></div>
                         <div className="h-4 w-1/2 bg-slate-100 rounded"></div>
                         <div className="mt-4 flex gap-2">
-                            <span className="bg-indigo-50 text-indigo-600 text-[10px] px-2 py-1 rounded">Nomify Verified</span>
+                            <span className="bg-indigo-50 text-indigo-600 text-[10px] px-2 py-1 rounded">AwardX Verified</span>
                         </div>
                       </div>
                     </div>

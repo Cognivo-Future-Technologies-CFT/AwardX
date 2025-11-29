@@ -67,7 +67,7 @@ export const StoriesPage: React.FC = () => {
       <section className="text-center max-w-4xl mx-auto px-4 mb-20">
         <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 font-display">Stories from Our Community</h1>
         <p className="text-xl text-slate-600">
-          How organizers across industries use Nomify to run seamless, high-impact programs.
+          How organizers across industries use AwardX to run seamless, high-impact programs.
         </p>
       </section>
 
@@ -77,7 +77,7 @@ export const StoriesPage: React.FC = () => {
           title="Scaling the Indie Film Awards"
           industry="Film Festival"
           color="from-rose-500 to-orange-500"
-          description="The IFA faced a logistical nightmare managing 4,000+ video files via Dropbox and email. Judging took 3 months. Nomify streamlined the entire ingestion pipeline."
+          description="The IFA faced a logistical nightmare managing 4,000+ video files via Dropbox and email. Judging took 3 months. AwardX streamlined the entire ingestion pipeline."
           quote="We cut our administrative time by 70% in the first year alone. The playback engine for judges is flawless."
           author="Marcus Thorne, Festival Director"
           stats={[
@@ -103,7 +103,7 @@ export const StoriesPage: React.FC = () => {
           title="NextGen Art Scholarship"
           industry="Education"
           color="from-emerald-500 to-teal-500"
-          description="A university grant program struggled with messy paper applications. Nomify digitized the process and added a public voting round to engage students."
+          description="A university grant program struggled with messy paper applications. AwardX digitized the process and added a public voting round to engage students."
           quote="The public voting gallery went viral on campus. We had 50,000 votes in a week."
           author="Dr. Elena Rodriguez, Dean of Arts"
           stats={[
@@ -115,7 +115,7 @@ export const StoriesPage: React.FC = () => {
 
       {/* Use Cases Grid */}
       <section className="max-w-5xl mx-auto px-4 mb-32">
-          <h2 className="text-3xl font-bold text-center text-slate-900 mb-12">Trusted across every sector</h2>
+          <h2 className="text-3xl font-bold text-center text-slate-900 mb-12 font-display">Trusted across every sector</h2>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <UseCaseBlock icon={Film} title="Film Festivals" desc="Screener links & time-coded comments" />
               <UseCaseBlock icon={GraduationCap} title="Grants" desc="Financial aid & research proposals" />
@@ -132,7 +132,7 @@ export const StoriesPage: React.FC = () => {
 
       {/* CTA */}
       <section className="py-20 text-center px-4">
-         <h2 className="text-3xl font-bold text-slate-900 mb-4">Want your program featured here?</h2>
+         <h2 className="text-3xl font-bold text-slate-900 mb-4 font-display">Want your program featured here?</h2>
          <p className="text-slate-500 mb-8">Join the community of world-class organizers.</p>
          <Button variant="outline">Contact Us</Button>
       </section>

@@ -8,14 +8,45 @@ export interface PaymentConfig {
   connected: boolean;
 }
 
+export type EventType = 
+  | 'Award' 
+  | 'Competition' 
+  | 'Grant' 
+  | 'Internal Event' 
+  | 'Exhibition' 
+  | 'Residency' 
+  | 'Fair' 
+  | 'Commission' 
+  | 'Other';
+
 export interface Program {
   id: string;
   title: string;
-  category: string;
+  category: string; // Industry category (Design, Tech, etc.)
+  type: EventType; // The strategic type (Award, Grant, etc.)
   status: 'Active' | 'Draft' | 'Completed';
   deadline: string;
   entriesCount: number;
   paymentConfig?: PaymentConfig;
+}
+
+export interface Category {
+  id: string;
+  title: string;
+  programId: string;
+  parentId: string | null;
+  entriesCount: number;
+}
+
+export interface Round {
+  id: string;
+  programId: string;
+  title: string;
+  type: 'Submission' | 'Judging' | 'Voting' | 'Announcement';
+  startDate: string;
+  endDate: string;
+  status: 'Upcoming' | 'Active' | 'Completed';
+  description?: string;
 }
 
 export interface Submission {
@@ -27,6 +58,7 @@ export interface Submission {
   score: number | null;
   date: string;
   image: string;
+  assignedJudges?: string[]; // Array of Judge IDs
 }
 
 export interface Judge {
@@ -101,6 +133,8 @@ export interface Log {
 
 class DemoDatabase {
   private PROGRAMS_KEY = 'nomify_demo_programs';
+  private CATEGORIES_KEY = 'nomify_demo_categories';
+  private ROUNDS_KEY = 'nomify_demo_rounds';
   private SUBMISSIONS_KEY = 'nomify_demo_submissions';
   private JUDGES_KEY = 'nomify_demo_judges';
   private CONTACTS_KEY = 'nomify_demo_contacts';
@@ -121,6 +155,7 @@ class DemoDatabase {
           id: 'PROG-001', 
           title: 'Global Design Awards 2024', 
           category: 'Design', 
+          type: 'Award',
           status: 'Active', 
           deadline: '2024-12-31', 
           entriesCount: 124,
@@ -136,6 +171,7 @@ class DemoDatabase {
           id: 'PROG-002', 
           title: 'Tech Innovation Summit', 
           category: 'Technology', 
+          type: 'Competition',
           status: 'Draft', 
           deadline: '2025-01-15', 
           entriesCount: 0,
@@ -151,6 +187,7 @@ class DemoDatabase {
           id: 'PROG-003', 
           title: 'Sustainable Future Grants', 
           category: 'Sustainability', 
+          type: 'Grant',
           status: 'Active', 
           deadline: '2024-11-30', 
           entriesCount: 45,
@@ -166,13 +203,35 @@ class DemoDatabase {
       localStorage.setItem(this.PROGRAMS_KEY, JSON.stringify(initialPrograms));
     }
 
+    if (!localStorage.getItem(this.CATEGORIES_KEY)) {
+      const initialCategories: Category[] = [
+        { id: 'CAT-001', title: 'Product Design', programId: 'PROG-001', parentId: null, entriesCount: 45 },
+        { id: 'CAT-002', title: 'Consumer Electronics', programId: 'PROG-001', parentId: 'CAT-001', entriesCount: 20 },
+        { id: 'CAT-003', title: 'Sustainable Tech', programId: 'PROG-001', parentId: 'CAT-002', entriesCount: 12 },
+        { id: 'CAT-004', title: 'Architecture', programId: 'PROG-001', parentId: null, entriesCount: 30 },
+        { id: 'CAT-005', title: 'Urban Planning', programId: 'PROG-001', parentId: 'CAT-004', entriesCount: 15 },
+      ];
+      localStorage.setItem(this.CATEGORIES_KEY, JSON.stringify(initialCategories));
+    }
+
+    if (!localStorage.getItem(this.ROUNDS_KEY)) {
+      const initialRounds: Round[] = [
+        { id: 'RND-001', programId: 'PROG-001', title: 'Call for Entries', type: 'Submission', startDate: '2024-09-01', endDate: '2024-12-31', status: 'Active', description: 'Open submission period for all categories.' },
+        { id: 'RND-002', programId: 'PROG-001', title: 'Preliminary Review', type: 'Judging', startDate: '2025-01-05', endDate: '2025-01-20', status: 'Upcoming', description: 'Internal team review to shortlist top 50.' },
+        { id: 'RND-003', programId: 'PROG-001', title: 'Expert Jury Panel', type: 'Judging', startDate: '2025-01-25', endDate: '2025-02-10', status: 'Upcoming', description: 'Scoring by international jury panel.' },
+        { id: 'RND-004', programId: 'PROG-001', title: 'Public Voting', type: 'Voting', startDate: '2025-02-15', endDate: '2025-02-28', status: 'Upcoming', description: 'Online gallery open for People\'s Choice Award.' },
+        { id: 'RND-005', programId: 'PROG-001', title: 'Winners Announcement', type: 'Announcement', startDate: '2025-03-10', endDate: '2025-03-10', status: 'Upcoming', description: 'Live virtual ceremony and press release.' },
+      ];
+      localStorage.setItem(this.ROUNDS_KEY, JSON.stringify(initialRounds));
+    }
+
     if (!localStorage.getItem(this.SUBMISSIONS_KEY)) {
       const initialSubmissions: Submission[] = [
-        { id: 'SUB-001', title: 'Eco-Friendly Packaging', applicant: 'Sarah Miller', category: 'Sustainability', status: 'Under Review', score: 8.5, date: '2024-10-22', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=50&h=50&fit=crop' },
-        { id: 'SUB-002', title: 'Urban Vertical Gardens', applicant: 'James Chen', category: 'Architecture', status: 'Shortlisted', score: 9.2, date: '2024-10-21', image: 'https://images.unsplash.com/photo-1518544806308-837d58999b21?w=50&h=50&fit=crop' },
-        { id: 'SUB-003', title: 'AI Medical Diagnostics', applicant: 'TechHealth Inc.', category: 'Innovation', status: 'Pending', score: null, date: '2024-10-20', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=50&h=50&fit=crop' },
-        { id: 'SUB-004', title: 'Ocean Cleanup Drone', applicant: 'BlueWave Team', category: 'Sustainability', status: 'Accepted', score: 7.8, date: '2024-10-19', image: 'https://images.unsplash.com/photo-1484591974057-265bb767ef71?w=50&h=50&fit=crop' },
-        { id: 'SUB-005', title: 'Community Art Center', applicant: 'Elena Ross', category: 'Architecture', status: 'Rejected', score: 4.5, date: '2024-10-18', image: 'https://images.unsplash.com/photo-1544967082-d9d25d867d66?w=50&h=50&fit=crop' },
+        { id: 'SUB-001', title: 'Eco-Friendly Packaging', applicant: 'Sarah Miller', category: 'Sustainability', status: 'Under Review', score: 8.5, date: '2024-10-22', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=50&h=50&fit=crop', assignedJudges: ['J-001'] },
+        { id: 'SUB-002', title: 'Urban Vertical Gardens', applicant: 'James Chen', category: 'Architecture', status: 'Shortlisted', score: 9.2, date: '2024-10-21', image: 'https://images.unsplash.com/photo-1518544806308-837d58999b21?w=50&h=50&fit=crop', assignedJudges: ['J-002'] },
+        { id: 'SUB-003', title: 'AI Medical Diagnostics', applicant: 'TechHealth Inc.', category: 'Innovation', status: 'Pending', score: null, date: '2024-10-20', image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=50&h=50&fit=crop', assignedJudges: [] },
+        { id: 'SUB-004', title: 'Ocean Cleanup Drone', applicant: 'BlueWave Team', category: 'Sustainability', status: 'Accepted', score: 7.8, date: '2024-10-19', image: 'https://images.unsplash.com/photo-1484591974057-265bb767ef71?w=50&h=50&fit=crop', assignedJudges: ['J-001', 'J-002'] },
+        { id: 'SUB-005', title: 'Community Art Center', applicant: 'Elena Ross', category: 'Architecture', status: 'Rejected', score: 4.5, date: '2024-10-18', image: 'https://images.unsplash.com/photo-1544967082-d9d25d867d66?w=50&h=50&fit=crop', assignedJudges: [] },
       ];
       localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(initialSubmissions));
     }
@@ -308,6 +367,10 @@ class DemoDatabase {
     return JSON.parse(localStorage.getItem(this.PROGRAMS_KEY) || '[]');
   }
 
+  getProgramById(id: string): Program | undefined {
+    return this.getPrograms().find(p => p.id === id);
+  }
+
   addProgram(program: Omit<Program, 'id' | 'entriesCount'>): Program {
     const programs = this.getPrograms();
     const newProgram: Program = {
@@ -329,22 +392,80 @@ class DemoDatabase {
     }
   }
 
+  getCategories(programId: string): Category[] {
+    const all = JSON.parse(localStorage.getItem(this.CATEGORIES_KEY) || '[]') as Category[];
+    return all.filter(c => c.programId === programId);
+  }
+
+  addCategory(category: Omit<Category, 'id' | 'entriesCount'>): Category {
+    const all = JSON.parse(localStorage.getItem(this.CATEGORIES_KEY) || '[]') as Category[];
+    const newCat: Category = {
+      ...category,
+      id: `CAT-${String(all.length + 1).padStart(3, '0')}`,
+      entriesCount: 0
+    };
+    all.push(newCat);
+    localStorage.setItem(this.CATEGORIES_KEY, JSON.stringify(all));
+    return newCat;
+  }
+
+  getRounds(programId: string): Round[] {
+    const all = JSON.parse(localStorage.getItem(this.ROUNDS_KEY) || '[]') as Round[];
+    return all.filter(r => r.programId === programId).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  }
+
+  addRound(round: Omit<Round, 'id'>): Round {
+    const all = JSON.parse(localStorage.getItem(this.ROUNDS_KEY) || '[]') as Round[];
+    const newRound: Round = {
+      ...round,
+      id: `RND-${String(all.length + 1).padStart(3, '0')}`
+    };
+    all.push(newRound);
+    localStorage.setItem(this.ROUNDS_KEY, JSON.stringify(all));
+    return newRound;
+  }
+
   getSubmissions(): Submission[] {
     return JSON.parse(localStorage.getItem(this.SUBMISSIONS_KEY) || '[]');
   }
 
-  addSubmission(submission: Omit<Submission, 'id' | 'date' | 'score' | 'image'>): Submission {
+  addSubmission(submission: Omit<Submission, 'id' | 'date' | 'score' | 'image' | 'assignedJudges'>): Submission {
     const submissions = this.getSubmissions();
     const newSubmission: Submission = {
       ...submission,
       id: `SUB-${String(submissions.length + 1).padStart(3, '0')}`,
       date: new Date().toISOString().split('T')[0],
       score: null,
-      image: `https://source.unsplash.com/random/50x50?${submission.category}`
+      image: `https://source.unsplash.com/random/50x50?${submission.category}`,
+      assignedJudges: []
     };
     submissions.unshift(newSubmission);
     localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(submissions));
     return newSubmission;
+  }
+
+  bulkUpdateSubmissions(ids: string[], updates: Partial<Submission> & { assignedJudges?: string[] }) {
+    const submissions = this.getSubmissions();
+    const updatedSubmissions = submissions.map(sub => {
+      if (ids.includes(sub.id)) {
+        if (updates.assignedJudges) {
+             const current = sub.assignedJudges || [];
+             // Merge unique judges
+             const newJudges = Array.from(new Set([...current, ...updates.assignedJudges]));
+             return { ...sub, ...updates, assignedJudges: newJudges };
+        }
+        return { ...sub, ...updates };
+      }
+      return sub;
+    });
+    
+    if ((updates as any).delete) {
+        const filtered = submissions.filter(sub => !ids.includes(sub.id));
+        localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(filtered));
+        return;
+    }
+
+    localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(updatedSubmissions));
   }
 
   getJudges(): Judge[] {
@@ -375,15 +496,17 @@ class DemoDatabase {
     return JSON.parse(localStorage.getItem(this.LOGS_KEY) || '[]');
   }
 
-  getStats() {
+  getStats(eventId?: string) {
     const submissions = this.getSubmissions();
     const programs = this.getPrograms();
     
+    const relevantSubmissions = eventId ? submissions : submissions; 
+
     return {
-      totalSubmissions: submissions.length,
+      totalSubmissions: relevantSubmissions.length,
       activePrograms: programs.filter(p => p.status === 'Active').length,
-      pendingReview: submissions.filter(s => s.status === 'Pending' || s.status === 'Under Review').length,
-      revenue: submissions.length * 45 // Mock revenue calc
+      pendingReview: relevantSubmissions.filter(s => s.status === 'Pending' || s.status === 'Under Review').length,
+      revenue: relevantSubmissions.length * 45 // Mock revenue calc
     };
   }
 }
