@@ -7,6 +7,7 @@ import {
   UploadCloud, ShieldCheck, UserCircle, Layers, AlertCircle, FileCheck
 } from 'lucide-react';
 import { Button } from '../Button';
+import { FormBuilderWithSelector } from './FormBuilderWithSelector';
 
 interface SubmissionProcessViewProps {
   activeEvent: Program | null;
@@ -278,85 +279,15 @@ export const SubmissionProcessView: React.FC<SubmissionProcessViewProps> = ({ ac
         );
       case 'form':
         return (
-           <div className="flex gap-6 h-full">
-              {/* Toolbox */}
-              <div className="w-64 flex-shrink-0 space-y-4">
-                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Input Fields</h4>
-                    <div className="space-y-2">
-                       {formFields.map((field) => (
-                          <div key={field.label} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50 hover:border-indigo-200 hover:bg-white hover:shadow-sm cursor-grab active:cursor-grabbing transition-all group">
-                             <field.icon className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
-                             <span className="text-sm font-medium text-slate-700">{field.label}</span>
-                             <Move className="w-3 h-3 ml-auto text-slate-300 opacity-0 group-hover:opacity-100" />
-                          </div>
-                       ))}
-                    </div>
-                 </div>
-                 <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                    <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Pro Feature</h4>
-                    <p className="text-xs text-indigo-600 mb-3">Enable <strong>Conditional Logic</strong> to show/hide fields based on answers.</p>
-                    <div className="h-2 w-full bg-indigo-200 rounded-full overflow-hidden">
-                       <div className="h-full w-2/3 bg-indigo-500"></div>
-                    </div>
-                 </div>
-              </div>
-
-              {/* Canvas */}
-              <div className="flex-1 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 p-8 overflow-y-auto min-h-[600px] relative">
-                 <div className="absolute top-4 right-4 flex gap-2">
-                    <Button size="sm" variant="white">Preview</Button>
-                    <Button size="sm">Save Form</Button>
-                 </div>
-
-                 <div className="max-w-2xl mx-auto space-y-4">
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
-                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
-                          <GripVertical className="w-5 h-5" />
-                       </div>
-                       <label className="block text-sm font-bold text-slate-900 mb-1">Project Title <span className="text-red-500">*</span></label>
-                       <input disabled className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50" placeholder="Enter title" />
-                    </div>
-
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
-                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
-                          <GripVertical className="w-5 h-5" />
-                       </div>
-                       <label className="block text-sm font-bold text-slate-900 mb-1">Category</label>
-                       <select disabled className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50">
-                          <option>Select a category...</option>
-                       </select>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
-                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
-                          <GripVertical className="w-5 h-5" />
-                       </div>
-                       <label className="block text-sm font-bold text-slate-900 mb-1">Project Description</label>
-                       <textarea disabled className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 h-24 resize-none" placeholder="Describe your entry..." />
-                    </div>
-
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
-                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
-                          <GripVertical className="w-5 h-5" />
-                       </div>
-                       <div className="flex justify-between items-center mb-2">
-                          <label className="block text-sm font-bold text-slate-900">Project Files</label>
-                          <span className="text-xs text-slate-400">Max 50MB</span>
-                       </div>
-                       <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 flex flex-col items-center justify-center bg-slate-50">
-                          <ImageIcon className="w-8 h-8 text-slate-300 mb-2" />
-                          <span className="text-sm text-slate-500">Drag files here</span>
-                       </div>
-                    </div>
-                    
-                    {/* Drop Zone */}
-                    <div className="h-24 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl flex items-center justify-center text-indigo-400 text-sm font-medium">
-                       Drop new field here
-                    </div>
-                 </div>
-              </div>
-           </div>
+          <FormBuilderWithSelector
+            activeEvent={activeEvent}
+            onFormSelect={(formId) => {
+              // Store selected form for submission process
+              if (activeEvent) {
+                localStorage.setItem(`selected_form_${activeEvent.id}`, formId);
+              }
+            }}
+          />
         );
       case 'fees':
         return (

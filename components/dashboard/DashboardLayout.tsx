@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, FileText, Gavel, 
+import {
+  LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
-  UserCog
+  UserCog, Edit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program, Category, db, PERMISSIONS, Contact } from '../../services/demoDb';
@@ -35,11 +35,10 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ id, label, icon: Icon, curren
   <div className="mb-1">
     <button
       onClick={onClick}
-      className={`group w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-        currentView === id 
-          ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100/50' 
-          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
-      }`}
+      className={`group w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${currentView === id
+        ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100/50'
+        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
+        }`}
       title={collapsed ? label : undefined}
     >
       <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
@@ -64,13 +63,13 @@ interface CategoryTreeItemProps {
   onSelect: (id: string) => void;
 }
 
-const CategoryTreeItem: React.FC<CategoryTreeItemProps> = ({ 
-  category, 
-  allCategories, 
-  depth = 0, 
-  onAddSub, 
-  activeId, 
-  onSelect 
+const CategoryTreeItem: React.FC<CategoryTreeItemProps> = ({
+  category,
+  allCategories,
+  depth = 0,
+  onAddSub,
+  activeId,
+  onSelect
 }) => {
   const children = allCategories.filter(c => c.parentId === category.id);
   const [expanded, setExpanded] = useState(true);
@@ -78,56 +77,56 @@ const CategoryTreeItem: React.FC<CategoryTreeItemProps> = ({
   return (
     <div className="relative">
       {depth > 0 && (
-         <div className="absolute left-[-12px] top-0 bottom-0 w-px bg-slate-200"></div>
+        <div className="absolute left-[-12px] top-0 bottom-0 w-px bg-slate-200"></div>
       )}
       <div className={`flex items-center justify-between py-1.5 pr-2 pl-2 rounded-lg group hover:bg-slate-50 transition-colors ${activeId === category.id ? 'bg-indigo-50/50 text-indigo-700' : 'text-slate-600'}`}>
-         <div 
-            className="flex items-center gap-2 cursor-pointer flex-1 min-w-0" 
-            style={{ paddingLeft: `${depth * 4}px` }}
-            onClick={() => onSelect('awards')}
-         >
-            {children.length > 0 ? (
-               <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="p-0.5 hover:bg-slate-200 rounded">
-                  {expanded ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
-               </button>
-            ) : (
-               <div className="w-4 h-4 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-               </div>
-            )}
-            <span className="text-xs font-medium truncate">{category.title}</span>
-         </div>
-         <button 
-            onClick={(e) => { e.stopPropagation(); onAddSub(category.id); }}
-            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-indigo-100 hover:text-indigo-600 rounded transition-all"
-            title="Add Subcategory"
-         >
-            <Plus className="w-3 h-3" />
-         </button>
+        <div
+          className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+          style={{ paddingLeft: `${depth * 4}px` }}
+          onClick={() => onSelect('awards')}
+        >
+          {children.length > 0 ? (
+            <button onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="p-0.5 hover:bg-slate-200 rounded">
+              {expanded ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+            </button>
+          ) : (
+            <div className="w-4 h-4 flex items-center justify-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+            </div>
+          )}
+          <span className="text-xs font-medium truncate">{category.title}</span>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddSub(category.id); }}
+          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-indigo-100 hover:text-indigo-600 rounded transition-all"
+          title="Add Subcategory"
+        >
+          <Plus className="w-3 h-3" />
+        </button>
       </div>
-      
+
       {expanded && children.length > 0 && (
-         <div className="ml-4">
-            {children.map(child => (
-               <CategoryTreeItem 
-                  key={child.id} 
-                  category={child} 
-                  allCategories={allCategories} 
-                  depth={depth + 1} 
-                  onAddSub={onAddSub}
-                  activeId={activeId}
-                  onSelect={onSelect}
-               />
-            ))}
-         </div>
+        <div className="ml-4">
+          {children.map(child => (
+            <CategoryTreeItem
+              key={child.id}
+              category={child}
+              allCategories={allCategories}
+              depth={depth + 1}
+              onAddSub={onAddSub}
+              activeId={activeId}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
 };
 
-export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ 
-  children, 
-  currentView, 
+export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
+  children,
+  currentView,
   activeEvent,
   onChangeView,
   onLogout,
@@ -137,13 +136,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
-  
+
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [parentForModal, setParentForModal] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
-  
+
   // User & Permissions
   const [currentUser, setCurrentUser] = useState<Contact>(db.getCurrentUser());
   const [allUsers, setAllUsers] = useState<Contact[]>([]);
@@ -159,7 +158,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeEvent || !newCategoryName) return;
-    
+
     db.addCategory({
       title: newCategoryName,
       programId: activeEvent.id,
@@ -178,8 +177,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Define Nav items with Permissions
   const leftNavItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
-    { id: 'schedule', label: 'Schedule', icon: CalendarClock, permission: PERMISSIONS.MANAGE_PROGRAMS }, 
-    { id: 'submission-setup', label: 'Submission Process', icon: Settings2, permission: PERMISSIONS.MANAGE_PROGRAMS }, 
+    { id: 'program-details', label: 'Program Details', icon: Edit, permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'schedule', label: 'Schedule', icon: CalendarClock, permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'submission-setup', label: 'Submission Process', icon: Settings2, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submissions', label: 'Submissions', icon: FileText, permission: PERMISSIONS.VIEW_SUBMISSIONS },
     { id: 'judging', label: 'Judging', icon: Gavel, permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards', label: 'Awards', icon: Trophy, permission: PERMISSIONS.MANAGE_PROGRAMS },
@@ -203,8 +203,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const rootCategories = categories.filter(c => c.parentId === null);
 
   const handleUserSwitch = (userId: string) => {
-      db.setCurrentUser(userId);
-      window.location.reload(); // Simple reload to refresh all permissions
+    db.setCurrentUser(userId);
+    window.location.reload(); // Simple reload to refresh all permissions
   };
 
   return (
@@ -213,48 +213,47 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {isTestMode && (
         <div className="fixed top-0 left-0 w-full h-1 bg-amber-400 z-[60]" />
       )}
-      
+
       {/* LEFT SIDEBAR - Desktop */}
-      <aside 
-        className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out ${
-          isLeftCollapsed ? 'w-20' : 'w-64'
-        }`}
+      <aside
+        className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out ${isLeftCollapsed ? 'w-20' : 'w-64'
+          }`}
       >
         {/* Header / Logo / Event Switcher */}
         <div className={`h-auto min-h-[5rem] flex flex-col border-b border-slate-50 transition-all ${isLeftCollapsed ? 'items-center py-4' : 'p-4'}`}>
           {/* Back to Hub Button */}
           {!isLeftCollapsed && (
-             <button 
-                onClick={onSwitchEvent}
-                className="flex items-center text-xs font-bold text-slate-400 hover:text-indigo-600 mb-4 transition-colors group"
-             >
-                <ArrowLeft className="w-3 h-3 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Hub
-             </button>
+            <button
+              onClick={onSwitchEvent}
+              className="flex items-center text-xs font-bold text-slate-400 hover:text-indigo-600 mb-4 transition-colors group"
+            >
+              <ArrowLeft className="w-3 h-3 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Hub
+            </button>
           )}
           {isLeftCollapsed && (
-             <button onClick={onSwitchEvent} className="mb-4 text-slate-400 hover:text-indigo-600"><ArrowLeft className="w-4 h-4" /></button>
+            <button onClick={onSwitchEvent} className="mb-4 text-slate-400 hover:text-indigo-600"><ArrowLeft className="w-4 h-4" /></button>
           )}
 
           {/* Active Event Display */}
           <div className="flex items-center gap-3">
-             <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-                <Sparkles className="w-5 h-5 text-white" />
-             </div>
-             {!isLeftCollapsed && (
-               <div className="overflow-hidden">
-                 <div className="font-display tracking-tight text-sm font-bold text-slate-900 truncate leading-tight">
-                   {activeEvent?.title || 'Active Event'}
-                 </div>
-                 <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">{activeEvent?.type || 'Event'}</div>
-               </div>
-             )}
+            <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            {!isLeftCollapsed && (
+              <div className="overflow-hidden">
+                <div className="font-display tracking-tight text-sm font-bold text-slate-900 truncate leading-tight">
+                  {activeEvent?.title || 'Active Event'}
+                </div>
+                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">{activeEvent?.type || 'Event'}</div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-6 px-3 scrollbar-hide">
           {!isLeftCollapsed && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3 font-display">Event Operations</div>}
-          
+
           {visibleLeftNav.map((item) => (
             <SidebarItem
               key={item.id}
@@ -265,76 +264,54 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               collapsed={isLeftCollapsed}
               onClick={() => onChangeView(item.id)}
             >
-              {/* Render Tree for Awards */}
-              {item.id === 'awards' && !isLeftCollapsed && (
-                 <div className="ml-2 mt-1 mb-2 pl-2 border-l border-slate-100">
-                    {rootCategories.map(cat => (
-                       <CategoryTreeItem 
-                          key={cat.id} 
-                          category={cat} 
-                          allCategories={categories} 
-                          onAddSub={openCategoryModal}
-                          activeId={currentView === 'awards' ? '' : ''}
-                          onSelect={onChangeView}
-                       />
-                    ))}
-                    <button 
-                       onClick={(e) => { e.stopPropagation(); openCategoryModal(null); }}
-                       className="flex items-center gap-2 text-xs text-indigo-600 hover:text-indigo-800 font-semibold mt-2 px-2 py-1 rounded hover:bg-indigo-50 w-full text-left transition-colors"
-                    >
-                       <Plus className="w-3 h-3" /> Add Award
-                    </button>
-                 </div>
-              )}
             </SidebarItem>
           ))}
         </div>
 
         {/* User Profile (Left Bottom) */}
         <div className="p-3 border-t border-slate-100 relative group">
-           <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${isLeftCollapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
-              <img 
-                 src={currentUser.avatar} 
-                 alt="User" 
-                 className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover shrink-0"
-              />
-              {!isLeftCollapsed && (
-                <div className="flex-1 min-w-0 overflow-hidden">
-                   <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
-                   <div className="text-xs text-indigo-600 font-medium truncate">{currentUser.role}</div>
-                </div>
-              )}
-           </div>
-           
-           {/* User Switcher Dropdown (For Demo Purposes) */}
-           <div className="absolute bottom-full left-0 w-64 bg-white rounded-xl shadow-2xl border border-slate-100 p-2 mb-2 hidden group-hover:block z-50">
-               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">Switch Persona (Demo)</div>
-               {allUsers.map(u => (
-                   <button 
-                    key={u.id}
-                    onClick={() => handleUserSwitch(u.id)}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm ${currentUser.id === u.id ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-50'}`}
-                   >
-                       <img src={u.avatar} className="w-5 h-5 rounded-full" />
-                       <span className="truncate">{u.name} ({u.role})</span>
-                   </button>
-               ))}
-           </div>
-           
-           <button 
-             onClick={onLogout}
-             className={`w-full flex items-center mt-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors group ${
-               isLeftCollapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
-             }`}
-             title="Sign Out"
-           >
-             <LogOut className="w-5 h-5 group-hover:text-red-500 transition-colors" />
-             {!isLeftCollapsed && <span>Sign Out</span>}
-           </button>
+          <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${isLeftCollapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
+            <img
+              src={currentUser.avatar}
+              alt="User"
+              className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover shrink-0"
+            />
+            {!isLeftCollapsed && (
+              <div className="flex-1 min-w-0 overflow-hidden">
+                <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
+                <div className="text-xs text-indigo-600 font-medium truncate">{currentUser.role}</div>
+              </div>
+            )}
+          </div>
+
+          {/* User Switcher Dropdown (For Demo Purposes) */}
+          <div className="absolute bottom-full left-0 w-64 bg-white rounded-xl shadow-2xl border border-slate-100 p-2 mb-2 hidden group-hover:block z-50">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">Switch Persona (Demo)</div>
+            {allUsers.map(u => (
+              <button
+                key={u.id}
+                onClick={() => handleUserSwitch(u.id)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm ${currentUser.id === u.id ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-50'}`}
+              >
+                <img src={u.avatar} className="w-5 h-5 rounded-full" />
+                <span className="truncate">{u.name} ({u.role})</span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={onLogout}
+            className={`w-full flex items-center mt-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors group ${isLeftCollapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
+              }`}
+            title="Sign Out"
+          >
+            <LogOut className="w-5 h-5 group-hover:text-red-500 transition-colors" />
+            {!isLeftCollapsed && <span>Sign Out</span>}
+          </button>
         </div>
 
         {/* Toggle Button */}
-        <button 
+        <button
           onClick={() => setIsLeftCollapsed(!isLeftCollapsed)}
           className="absolute -right-3 top-24 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-indigo-600 z-50"
         >
@@ -344,7 +321,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
 
       {/* MAIN CONTENT AREA */}
-      <div 
+      <div
         className={`flex-1 flex flex-col transition-all duration-300 ease-in-out min-h-screen relative
           ${isLeftCollapsed ? 'lg:pl-20' : 'lg:pl-64'} 
           ${isRightCollapsed ? 'lg:pr-20' : 'lg:pr-64'}
@@ -357,37 +334,37 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <Menu />
             </button>
             <div className="hidden md:flex items-center gap-2 text-sm">
-               <span className="text-slate-400 cursor-pointer hover:text-slate-600" onClick={onSwitchEvent}>Event Hub</span>
-               <ChevronRight className="w-4 h-4 text-slate-300" />
-               <span className="text-slate-600 font-medium">{activeEvent?.title}</span>
-               <ChevronRight className="w-4 h-4 text-slate-300" />
-               <span className="font-semibold text-slate-900 capitalize bg-slate-100 px-2 py-1 rounded-md text-xs">{currentView}</span>
+              <span className="text-slate-400 cursor-pointer hover:text-slate-600" onClick={onSwitchEvent}>Event Hub</span>
+              <ChevronRight className="w-4 h-4 text-slate-300" />
+              <span className="text-slate-600 font-medium">{activeEvent?.title}</span>
+              <ChevronRight className="w-4 h-4 text-slate-300" />
+              <span className="font-semibold text-slate-900 capitalize bg-slate-100 px-2 py-1 rounded-md text-xs">{currentView}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-4 lg:gap-6">
             {/* PRD 4.8 Test Mode Toggle */}
-            <div 
+            <div
               onClick={() => setIsTestMode(!isTestMode)}
               className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors border ${isTestMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
             >
-               <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${isTestMode ? 'bg-amber-400' : 'bg-slate-300'}`}>
-                  <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isTestMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
-               </div>
-               <span className={`text-xs font-bold uppercase tracking-wide ${isTestMode ? 'text-amber-700' : 'text-slate-500'}`}>
-                  {isTestMode ? 'Sandbox' : 'Live'}
-               </span>
+              <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${isTestMode ? 'bg-amber-400' : 'bg-slate-300'}`}>
+                <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isTestMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+              </div>
+              <span className={`text-xs font-bold uppercase tracking-wide ${isTestMode ? 'text-amber-700' : 'text-slate-500'}`}>
+                {isTestMode ? 'Sandbox' : 'Live'}
+              </span>
             </div>
 
             <div className="hidden sm:flex relative group">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search workspace..." 
+              <input
+                type="text"
+                placeholder="Search workspace..."
                 className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 lg:w-64 transition-all hover:bg-white hover:border-slate-300"
               />
             </div>
-            
+
             <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white ring-1 ring-white"></span>
@@ -398,29 +375,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Scrollable Content */}
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
           {isTestMode && (
-             <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-                <Beaker className="w-5 h-5 text-amber-600 mt-0.5" />
-                <div>
-                   <h4 className="text-sm font-bold text-amber-800">You are in Sandbox Mode</h4>
-                   <p className="text-xs text-amber-700 mt-1">Actions performed here will not affect live data. Use this environment to test your program configuration.</p>
-                </div>
-             </div>
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <Beaker className="w-5 h-5 text-amber-600 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-amber-800">You are in Sandbox Mode</h4>
+                <p className="text-xs text-amber-700 mt-1">Actions performed here will not affect live data. Use this environment to test your program configuration.</p>
+              </div>
+            </div>
           )}
           <div className="max-w-7xl mx-auto">
-             {children}
+            {children}
           </div>
         </main>
       </div>
 
 
       {/* RIGHT SIDEBAR - Desktop */}
-      <aside 
-        className={`hidden lg:flex flex-col fixed inset-y-0 right-0 z-40 bg-white border-l border-slate-200 transition-all duration-300 ease-in-out ${
-          isRightCollapsed ? 'w-20' : 'w-64'
-        }`}
+      <aside
+        className={`hidden lg:flex flex-col fixed inset-y-0 right-0 z-40 bg-white border-l border-slate-200 transition-all duration-300 ease-in-out ${isRightCollapsed ? 'w-20' : 'w-64'
+          }`}
       >
         {/* Toggle Button */}
-        <button 
+        <button
           onClick={() => setIsRightCollapsed(!isRightCollapsed)}
           className="absolute -left-3 top-24 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-indigo-600 z-50"
         >
@@ -429,48 +405,48 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Right Sidebar Header */}
         <div className={`h-20 flex items-center border-b border-slate-50 transition-all ${isRightCollapsed ? 'justify-center' : 'px-6'}`}>
-           {isRightCollapsed ? (
-             <Shield className="w-5 h-5 text-slate-400" />
-           ) : (
-             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Workspace Tools</span>
-           )}
+          {isRightCollapsed ? (
+            <Shield className="w-5 h-5 text-slate-400" />
+          ) : (
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Workspace Tools</span>
+          )}
         </div>
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-6 px-3">
           {visibleRightNav.length > 0 ? (
-              visibleRightNav.map((item) => (
-                <SidebarItem 
-                  key={item.id} 
-                  id={item.id} 
-                  label={item.label} 
-                  icon={item.icon} 
-                  collapsed={isRightCollapsed} 
-                  currentView={currentView}
-                  onClick={() => onChangeView(item.id)}
-                />
-              ))
+            visibleRightNav.map((item) => (
+              <SidebarItem
+                key={item.id}
+                id={item.id}
+                label={item.label}
+                icon={item.icon}
+                collapsed={isRightCollapsed}
+                currentView={currentView}
+                onClick={() => onChangeView(item.id)}
+              />
+            ))
           ) : (
-              !isRightCollapsed && <div className="text-xs text-slate-400 text-center px-4">No tools available for your role.</div>
+            !isRightCollapsed && <div className="text-xs text-slate-400 text-center px-4">No tools available for your role.</div>
           )}
         </div>
 
         {/* Promo / Bottom Action */}
         {!isRightCollapsed && (
           <div className="p-4 border-t border-slate-100">
-             <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white text-center">
-                <p className="text-xs font-bold opacity-80 mb-1">PRO PLAN</p>
-                <p className="text-sm font-bold mb-3">8 Days Left</p>
-                <button className="w-full py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors">
-                   Upgrade Now
-                </button>
-             </div>
+            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white text-center">
+              <p className="text-xs font-bold opacity-80 mb-1">PRO PLAN</p>
+              <p className="text-sm font-bold mb-3">8 Days Left</p>
+              <button className="w-full py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors">
+                Upgrade Now
+              </button>
+            </div>
           </div>
         )}
         {isRightCollapsed && (
-           <div className="p-3 border-t border-slate-100 flex justify-center">
-              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-           </div>
+          <div className="p-3 border-t border-slate-100 flex justify-center">
+            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+          </div>
         )}
       </aside>
 
@@ -479,7 +455,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -495,19 +471,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-white" />
+                    <Sparkles className="w-4 h-4 text-white" />
                   </div>
                   <span className="font-bold text-xl text-slate-900 font-display">AwardX</span>
                 </div>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-50 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
               </div>
-              
+
               <div className="flex-1 py-6 px-4 space-y-6">
-                <button 
-                   onClick={() => { onSwitchEvent(); setIsMobileMenuOpen(false); }}
-                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 font-medium text-sm border border-slate-100"
+                <button
+                  onClick={() => { onSwitchEvent(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-50 font-medium text-sm border border-slate-100"
                 >
-                   <ArrowLeft className="w-4 h-4" /> Back to Event Hub
+                  <ArrowLeft className="w-4 h-4" /> Back to Event Hub
                 </button>
 
                 <div>
@@ -520,11 +496,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           onChangeView(item.id);
                           setIsMobileMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                          currentView === item.id 
-                            ? 'bg-indigo-50 text-indigo-700' 
-                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                        }`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${currentView === item.id
+                          ? 'bg-indigo-50 text-indigo-700'
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                          }`}
                       >
                         <item.icon className={`w-5 h-5 ${currentView === item.id ? 'text-indigo-600' : 'text-slate-400'}`} />
                         {item.label}
@@ -543,11 +518,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                           onChangeView(item.id);
                           setIsMobileMenuOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                          currentView === item.id 
-                            ? 'bg-indigo-50 text-indigo-700' 
-                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                        }`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${currentView === item.id
+                          ? 'bg-indigo-50 text-indigo-700'
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                          }`}
                       >
                         <item.icon className={`w-5 h-5 ${currentView === item.id ? 'text-indigo-600' : 'text-slate-400'}`} />
                         {item.label}
@@ -568,27 +542,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </AnimatePresence>
 
       <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title={parentForModal ? "Add Subcategory" : "Create New Award"}>
-         <form onSubmit={handleAddCategory} className="space-y-4">
-            <div>
-               <label className="block text-sm font-semibold text-slate-700 mb-1">
-                  {parentForModal ? "Subcategory Name" : "Award Name"}
-               </label>
-               <div className="relative">
-                  <Folder className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input 
-                     required
-                     className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                     placeholder={parentForModal ? "e.g. Best UI" : "e.g. Design Awards"}
-                     value={newCategoryName}
-                     onChange={(e) => setNewCategoryName(e.target.value)}
-                  />
-               </div>
+        <form onSubmit={handleAddCategory} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              {parentForModal ? "Subcategory Name" : "Award Name"}
+            </label>
+            <div className="relative">
+              <Folder className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                required
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder={parentForModal ? "e.g. Best UI" : "e.g. Design Awards"}
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+              />
             </div>
-            <div className="flex justify-end gap-3 pt-4">
-               <Button type="button" variant="ghost" onClick={() => setIsCategoryModalOpen(false)}>Cancel</Button>
-               <Button type="submit">Create</Button>
-            </div>
-         </form>
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="ghost" onClick={() => setIsCategoryModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Create</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

@@ -133,3 +133,4 @@ VITE_SITE_URL=http://localhost:3000
 - Ensure redirect URIs match exactly in both Google Console and Supabase
 - Database schema should be run once before using the app
 
+

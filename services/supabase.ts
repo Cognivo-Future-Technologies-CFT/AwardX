@@ -9,14 +9,14 @@ const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
 
 // Create Supabase client (untyped for flexibility until database is set up)
 // After running the SQL schema, regenerate types with: npx supabase gen types typescript --project-id YOUR_PROJECT_ID > services/database.types.ts
-export const supabase: SupabaseClient | null = isSupabaseConfigured 
+export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    })
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  })
   : null; // Will be null if not configured - app should handle this gracefully
 
 // Helper to check if Supabase is configured
@@ -135,7 +135,7 @@ export const auth = {
   // Listen to auth state changes
   onAuthStateChange: (callback: (event: string, session: any) => void) => {
     if (!supabase) {
-      return { data: { subscription: { unsubscribe: () => {} } } };
+      return { data: { subscription: { unsubscribe: () => { } } } };
     }
     return supabase.auth.onAuthStateChange(callback);
   },
@@ -158,38 +158,38 @@ export const organizations = {
 
   getCurrent: async (): Promise<{ data: { id: string } | null; error: any }> => {
     if (!supabase) return { data: null, error: 'Supabase not configured' };
-    
+
     const { user, error: userError } = await auth.getUser();
     if (userError || !user) return { data: null, error: userError || 'Not authenticated' };
-    
+
     // First get the profile to get organization_id
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('organization_id')
       .eq('id', user.id)
       .single();
-    
+
     if (profileError) {
       // Profile might not exist yet - that's okay, user just signed up
       return { data: null, error: null };
     }
-    
+
     // If no organization_id, return null (user not assigned to org yet)
     if (!profile || !profile.organization_id) {
       return { data: null, error: null };
     }
-    
+
     // Then get the organization
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .select('id, name, slug, logo_url, website, industry, plan')
       .eq('id', profile.organization_id)
       .single();
-    
+
     if (orgError || !org) {
       return { data: null, error: orgError || 'Organization not found' };
     }
-    
+
     return { data: org as { id: string }, error: null };
   },
 
@@ -267,6 +267,11 @@ export const programs = {
     description: string;
     status: string;
     deadline: string;
+    slug: string;
+    cover_image_url: string;
+    industry_category: string;
+    visibility: string;
+    timezone: string;
   }>) => {
     const { data, error } = await supabase
       .from('programs')
@@ -624,7 +629,7 @@ export const scores = {
       .from('scores')
       .upsert(scoreRecords, { onConflict: 'submission_judge_id,criterion_id' })
       .select();
-    
+
     if (!error) {
       // Mark as completed
       await supabase
@@ -632,7 +637,7 @@ export const scores = {
         .update({ status: 'completed', completed_at: new Date().toISOString() })
         .eq('id', submissionJudgeId);
     }
-    
+
     return { data, error };
   },
 
@@ -1121,7 +1126,7 @@ export const storage = {
     const { data, error } = await supabase.storage
       .from('avatars')
       .upload(fileName, file, { upsert: true });
-    
+
     if (data) {
       const { data: urlData } = supabase.storage
         .from('avatars')
@@ -1137,7 +1142,7 @@ export const storage = {
     const { data, error } = await supabase.storage
       .from('submissions')
       .upload(fileName, file);
-    
+
     if (data) {
       return { path: data.path, error: null };
     }

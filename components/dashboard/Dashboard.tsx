@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
 import { DashboardOverview } from './DashboardOverview';
-import { TemplateGallery } from './TemplateGallery';
+import { FormBuilderView } from './FormBuilderView';
 import { SubmissionTable } from './SubmissionTable';
 import { JudgingView } from './JudgingView';
 import { AnalyticsView } from './AnalyticsView';
@@ -16,6 +16,7 @@ import { AuditLogsView } from './AuditLogsView';
 import { CategoriesView } from './CategoriesView';
 import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
+import { ProgramDetailsView } from './ProgramDetailsView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/demoDb';
 import { db as databaseService } from '../../services/database';
@@ -53,7 +54,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'awards':
         return <CategoriesView activeEvent={activeEvent} />;
       case 'templates':
-        return <TemplateGallery />;
+        return <FormBuilderView activeEvent={activeEvent} />;
       case 'submissions':
         return <SubmissionTable />;
       case 'judging':
@@ -72,6 +73,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <AuditLogsView />;
       case 'settings':
         return <SettingsView />;
+      case 'program-details':
+        return <ProgramDetailsView activeEvent={activeEvent} />;
       default:
         return <DashboardOverview activeEvent={activeEvent} />;
     }
@@ -102,8 +105,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   }
 
   return (
-    <DashboardLayout 
-      currentView={currentView} 
+    <DashboardLayout
+      currentView={currentView}
       activeEvent={activeEvent}
       onChangeView={setCurrentView}
       onLogout={onLogout}

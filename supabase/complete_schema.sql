@@ -730,3 +730,4 @@ INSERT INTO public.permissions (key, name, description, category) VALUES
   ('manage_settings', 'Manage Settings', 'Access organization settings', 'Administration')
 ON CONFLICT (key) DO NOTHING;
 
+

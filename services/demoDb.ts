@@ -8,15 +8,15 @@ export interface PaymentConfig {
   connected: boolean;
 }
 
-export type EventType = 
-  | 'Award' 
-  | 'Competition' 
-  | 'Grant' 
-  | 'Internal Event' 
-  | 'Exhibition' 
-  | 'Residency' 
-  | 'Fair' 
-  | 'Commission' 
+export type EventType =
+  | 'Award'
+  | 'Competition'
+  | 'Grant'
+  | 'Internal Event'
+  | 'Exhibition'
+  | 'Residency'
+  | 'Fair'
+  | 'Commission'
   | 'Other';
 
 export interface Program {
@@ -27,6 +27,11 @@ export interface Program {
   status: 'Active' | 'Draft' | 'Completed';
   deadline: string;
   entriesCount: number;
+  description?: string;
+  slug?: string;
+  coverImageUrl?: string;
+  visibility?: 'Public' | 'Private';
+  timezone?: string;
   paymentConfig?: PaymentConfig;
 }
 
@@ -161,7 +166,7 @@ class DemoDatabase {
   private POSTS_KEY = 'nomify_demo_posts';
   private ROLES_KEY = 'nomify_demo_roles';
   private LOGS_KEY = 'nomify_demo_logs';
-  
+
   // Current Session State
   private CURRENT_USER_KEY = 'nomify_current_user_id';
 
@@ -171,113 +176,113 @@ class DemoDatabase {
 
   private seed() {
     // ... (Existing seed logic for Programs, Categories, Rounds, Submissions, Judges, Social, Posts, Logs - unchanged)
-    
+
     if (!localStorage.getItem(this.PROGRAMS_KEY)) {
-        // Keeping previous seed logic hidden for brevity as it was already correct in previous turns
-        // Just re-initializing the array if needed for context
-        const initialPrograms: Program[] = [
-            { 
-              id: 'PROG-001', 
-              title: 'Global Design Awards 2024', 
-              category: 'Design', 
-              type: 'Award',
-              status: 'Active', 
-              deadline: '2024-12-31', 
-              entriesCount: 124,
-              paymentConfig: { enabled: true, provider: 'Stripe', currency: 'USD', fee: 50, connected: true }
-            }
-        ];
-        localStorage.setItem(this.PROGRAMS_KEY, JSON.stringify(initialPrograms));
+      // Keeping previous seed logic hidden for brevity as it was already correct in previous turns
+      // Just re-initializing the array if needed for context
+      const initialPrograms: Program[] = [
+        {
+          id: 'PROG-001',
+          title: 'Global Design Awards 2024',
+          category: 'Design',
+          type: 'Award',
+          status: 'Active',
+          deadline: '2024-12-31',
+          entriesCount: 124,
+          paymentConfig: { enabled: true, provider: 'Stripe', currency: 'USD', fee: 50, connected: true }
+        }
+      ];
+      localStorage.setItem(this.PROGRAMS_KEY, JSON.stringify(initialPrograms));
     }
-    
+
     // Ensure critical tables exist
     if (!localStorage.getItem(this.CONTACTS_KEY)) {
-       const initialContacts: Contact[] = [
-          { 
-            id: 'C-001', 
-            name: 'Sarah Jenkins', 
-            email: 'sarah@awardx.com', 
-            role: 'Admin', 
-            status: 'Active', 
-            lastActive: 'Now', 
-            avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
-            source: 'Internal',
-            surveyAnswer: 'Owner',
-            joinedDate: '2023-01-01'
-          },
-          { 
-            id: 'C-002', 
-            name: 'Mike Ross', 
-            email: 'mike@awardx.com', 
-            role: 'Editor', 
-            status: 'Active', 
-            lastActive: '2 hours ago', 
-            avatar: 'https://i.pravatar.cc/150?u=5',
-            source: 'Internal',
-            surveyAnswer: 'Editor',
-            joinedDate: '2024-02-01'
-          },
-          {
-            id: 'C-003',
-            name: 'Emily Judge',
-            email: 'emily@external.com',
-            role: 'Judge',
-            status: 'Active',
-            lastActive: '1 day ago',
-            avatar: 'https://i.pravatar.cc/150?u=8',
-            source: 'Invite',
-            surveyAnswer: '',
-            joinedDate: '2024-03-10'
-          }
-       ];
-       localStorage.setItem(this.CONTACTS_KEY, JSON.stringify(initialContacts));
-       // Set default logged in user
-       localStorage.setItem(this.CURRENT_USER_KEY, 'C-001');
+      const initialContacts: Contact[] = [
+        {
+          id: 'C-001',
+          name: 'Sarah Jenkins',
+          email: 'sarah@awardx.com',
+          role: 'Admin',
+          status: 'Active',
+          lastActive: 'Now',
+          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
+          source: 'Internal',
+          surveyAnswer: 'Owner',
+          joinedDate: '2023-01-01'
+        },
+        {
+          id: 'C-002',
+          name: 'Mike Ross',
+          email: 'mike@awardx.com',
+          role: 'Editor',
+          status: 'Active',
+          lastActive: '2 hours ago',
+          avatar: 'https://i.pravatar.cc/150?u=5',
+          source: 'Internal',
+          surveyAnswer: 'Editor',
+          joinedDate: '2024-02-01'
+        },
+        {
+          id: 'C-003',
+          name: 'Emily Judge',
+          email: 'emily@external.com',
+          role: 'Judge',
+          status: 'Active',
+          lastActive: '1 day ago',
+          avatar: 'https://i.pravatar.cc/150?u=8',
+          source: 'Invite',
+          surveyAnswer: '',
+          joinedDate: '2024-03-10'
+        }
+      ];
+      localStorage.setItem(this.CONTACTS_KEY, JSON.stringify(initialContacts));
+      // Set default logged in user
+      localStorage.setItem(this.CURRENT_USER_KEY, 'C-001');
     }
 
     if (!localStorage.getItem(this.ROLES_KEY)) {
       const initialRoles: Role[] = [
-        { 
-            id: 'R-001', 
-            name: 'Admin', 
-            permissions: ['all'], 
-            usersCount: 1, 
-            color: 'bg-purple-100 text-purple-700' 
+        {
+          id: 'R-001',
+          name: 'Admin',
+          permissions: ['all'],
+          usersCount: 1,
+          color: 'bg-purple-100 text-purple-700'
         },
-        { 
-            id: 'R-002', 
-            name: 'Editor', 
-            permissions: [
-                PERMISSIONS.VIEW_OVERVIEW,
-                PERMISSIONS.VIEW_SUBMISSIONS,
-                PERMISSIONS.MANAGE_SUBMISSIONS,
-                PERMISSIONS.MANAGE_FORMS,
-                PERMISSIONS.MANAGE_REACH
-            ], 
-            usersCount: 1, 
-            color: 'bg-blue-100 text-blue-700' 
+        {
+          id: 'R-002',
+          name: 'Editor',
+          permissions: [
+            PERMISSIONS.VIEW_OVERVIEW,
+            PERMISSIONS.VIEW_SUBMISSIONS,
+            PERMISSIONS.MANAGE_SUBMISSIONS,
+            PERMISSIONS.MANAGE_FORMS,
+            PERMISSIONS.MANAGE_REACH
+          ],
+          usersCount: 1,
+          color: 'bg-blue-100 text-blue-700'
         },
-        { 
-            id: 'R-003', 
-            name: 'Judge', 
-            permissions: [
-                PERMISSIONS.VIEW_OVERVIEW,
-                PERMISSIONS.VIEW_JUDGING,
-                PERMISSIONS.MANAGE_JUDGING
-            ], 
-            usersCount: 1, 
-            color: 'bg-amber-100 text-amber-700' 
+        {
+          id: 'R-003',
+          name: 'Judge',
+          permissions: [
+            PERMISSIONS.VIEW_OVERVIEW,
+            PERMISSIONS.VIEW_JUDGING,
+            PERMISSIONS.MANAGE_JUDGING
+          ],
+          usersCount: 1,
+          color: 'bg-amber-100 text-amber-700'
         },
-        { 
-            id: 'R-004', 
-            name: 'Viewer', 
-            permissions: [
-                PERMISSIONS.VIEW_OVERVIEW,
-                PERMISSIONS.VIEW_ANALYTICS,
-                PERMISSIONS.VIEW_SUBMISSIONS
-            ], 
-            usersCount: 0, 
-            color: 'bg-slate-100 text-slate-700' 
+        {
+          id: 'R-004',
+          name: 'Viewer',
+          permissions: [
+            PERMISSIONS.VIEW_OVERVIEW,
+            PERMISSIONS.VIEW_ANALYTICS,
+            PERMISSIONS.VIEW_SUBMISSIONS
+          ],
+          usersCount: 0,
+          color: 'bg-slate-100 text-slate-700'
         },
       ];
       localStorage.setItem(this.ROLES_KEY, JSON.stringify(initialRoles));
@@ -287,25 +292,25 @@ class DemoDatabase {
   // --- User & Role Management ---
 
   getCurrentUser(): Contact {
-      const id = localStorage.getItem(this.CURRENT_USER_KEY);
-      const contacts = this.getContacts();
-      return contacts.find(c => c.id === id) || contacts[0];
+    const id = localStorage.getItem(this.CURRENT_USER_KEY);
+    const contacts = this.getContacts();
+    return contacts.find(c => c.id === id) || contacts[0];
   }
 
   setCurrentUser(contactId: string) {
-      localStorage.setItem(this.CURRENT_USER_KEY, contactId);
+    localStorage.setItem(this.CURRENT_USER_KEY, contactId);
   }
 
   getUserRole(roleName: string): Role | undefined {
-      return this.getRoles().find(r => r.name === roleName);
+    return this.getRoles().find(r => r.name === roleName);
   }
 
   hasPermission(permission: string): boolean {
-      const user = this.getCurrentUser();
-      const role = this.getUserRole(user.role);
-      if (!role) return false;
-      if (role.permissions.includes('all')) return true;
-      return role.permissions.includes(permission);
+    const user = this.getCurrentUser();
+    const role = this.getUserRole(user.role);
+    if (!role) return false;
+    if (role.permissions.includes('all')) return true;
+    return role.permissions.includes(permission);
   }
 
   // --- Existing Getters/Setters ---
@@ -334,8 +339,8 @@ class DemoDatabase {
     const programs = this.getPrograms();
     const index = programs.findIndex(p => p.id === program.id);
     if (index !== -1) {
-       programs[index] = program;
-       localStorage.setItem(this.PROGRAMS_KEY, JSON.stringify(programs));
+      programs[index] = program;
+      localStorage.setItem(this.PROGRAMS_KEY, JSON.stringify(programs));
     }
   }
 
@@ -354,6 +359,110 @@ class DemoDatabase {
     all.push(newCat);
     localStorage.setItem(this.CATEGORIES_KEY, JSON.stringify(all));
     return newCat;
+  }
+
+  deleteCategory(categoryId: string): void {
+    const all = JSON.parse(localStorage.getItem(this.CATEGORIES_KEY) || '[]') as Category[];
+    
+    // Recursive function to get all children IDs
+    const getAllChildrenIds = (parentId: string): string[] => {
+      const children = all.filter(c => c.parentId === parentId);
+      const childIds = children.map(c => c.id);
+      // Recursively get children of children
+      const grandChildrenIds = childIds.flatMap(id => getAllChildrenIds(id));
+      return [...childIds, ...grandChildrenIds];
+    };
+    
+    // Get all children IDs
+    const childrenIds = getAllChildrenIds(categoryId);
+    
+    // Delete the category and all its children
+    const idsToDelete = [categoryId, ...childrenIds];
+    const remaining = all.filter(c => !idsToDelete.includes(c.id));
+    
+    localStorage.setItem(this.CATEGORIES_KEY, JSON.stringify(remaining));
+  }
+
+  // Forms
+  private readonly FORMS_KEY = 'awardx_forms';
+  private readonly FORM_FIELDS_KEY = 'awardx_form_fields';
+
+  getForms(programId: string): any[] {
+    const all = JSON.parse(localStorage.getItem(this.FORMS_KEY) || '[]');
+    return all.filter((f: any) => f.programId === programId);
+  }
+
+  getFormById(formId: string): any | null {
+    const all = JSON.parse(localStorage.getItem(this.FORMS_KEY) || '[]');
+    return all.find((f: any) => f.id === formId) || null;
+  }
+
+  getFormFields(formId: string): any[] {
+    const all = JSON.parse(localStorage.getItem(this.FORM_FIELDS_KEY) || '[]');
+    return all.filter((f: any) => f.formId === formId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  saveForm(form: { id?: string; programId: string; name: string; description?: string; formType?: string; isActive?: boolean }): any {
+    const all = JSON.parse(localStorage.getItem(this.FORMS_KEY) || '[]');
+    const formData = {
+      ...form,
+      id: form.id || `FORM-${Date.now()}`,
+      formType: form.formType || 'submission',
+      isActive: form.isActive !== undefined ? form.isActive : true,
+      createdAt: form.id ? all.find((f: any) => f.id === form.id)?.createdAt || new Date().toISOString() : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (form.id) {
+      const index = all.findIndex((f: any) => f.id === form.id);
+      if (index !== -1) {
+        all[index] = formData;
+      } else {
+        all.push(formData);
+      }
+    } else {
+      all.push(formData);
+    }
+
+    localStorage.setItem(this.FORMS_KEY, JSON.stringify(all));
+    return formData;
+  }
+
+  saveFormFields(formId: string, fields: any[]): void {
+    const all = JSON.parse(localStorage.getItem(this.FORM_FIELDS_KEY) || '[]');
+    // Remove existing fields for this form
+    const filtered = all.filter((f: any) => f.formId !== formId);
+    
+    // Add new fields
+    fields.forEach((field, index) => {
+      filtered.push({
+        id: field.id || `FIELD-${Date.now()}-${index}`,
+        formId,
+        fieldType: field.type,
+        label: field.label,
+        placeholder: field.placeholder || null,
+        helpText: null,
+        isRequired: field.required || false,
+        validationRules: field.validation || {},
+        options: field.options || [],
+        conditionalLogic: null,
+        sortOrder: index,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    localStorage.setItem(this.FORM_FIELDS_KEY, JSON.stringify(filtered));
+  }
+
+  deleteForm(formId: string): void {
+    const all = JSON.parse(localStorage.getItem(this.FORMS_KEY) || '[]');
+    const remaining = all.filter((f: any) => f.id !== formId);
+    localStorage.setItem(this.FORMS_KEY, JSON.stringify(remaining));
+
+    // Also delete form fields
+    const allFields = JSON.parse(localStorage.getItem(this.FORM_FIELDS_KEY) || '[]');
+    const remainingFields = allFields.filter((f: any) => f.formId !== formId);
+    localStorage.setItem(this.FORM_FIELDS_KEY, JSON.stringify(remainingFields));
   }
 
   getRounds(programId: string): Round[] {
@@ -396,50 +505,50 @@ class DemoDatabase {
     const updatedSubmissions = submissions.map(sub => {
       if (ids.includes(sub.id)) {
         if (updates.assignedJudges) {
-             const current = sub.assignedJudges || [];
-             const newJudges = Array.from(new Set([...current, ...updates.assignedJudges]));
-             return { ...sub, ...updates, assignedJudges: newJudges };
+          const current = sub.assignedJudges || [];
+          const newJudges = Array.from(new Set([...current, ...updates.assignedJudges]));
+          return { ...sub, ...updates, assignedJudges: newJudges };
         }
         return { ...sub, ...updates };
       }
       return sub;
     });
-    
+
     if ((updates as any).delete) {
-        const filtered = submissions.filter(sub => !ids.includes(sub.id));
-        localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(filtered));
-        return;
+      const filtered = submissions.filter(sub => !ids.includes(sub.id));
+      localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(filtered));
+      return;
     }
 
     localStorage.setItem(this.SUBMISSIONS_KEY, JSON.stringify(updatedSubmissions));
   }
 
   getJudges(): Judge[] {
-     return JSON.parse(localStorage.getItem(this.JUDGES_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(this.JUDGES_KEY) || '[]');
   }
 
   getContacts(): Contact[] {
-     return JSON.parse(localStorage.getItem(this.CONTACTS_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(this.CONTACTS_KEY) || '[]');
   }
 
   addContact(contact: Omit<Contact, 'id' | 'lastActive' | 'joinedDate' | 'avatar'>): Contact {
-      const contacts = this.getContacts();
-      const newContact: Contact = {
-          ...contact,
-          id: `C-${String(contacts.length + 100).padStart(3, '0')}`,
-          lastActive: 'Never',
-          joinedDate: new Date().toISOString().split('T')[0],
-          avatar: `https://i.pravatar.cc/150?u=${Math.random()}`
-      };
-      contacts.push(newContact);
-      localStorage.setItem(this.CONTACTS_KEY, JSON.stringify(contacts));
-      return newContact;
+    const contacts = this.getContacts();
+    const newContact: Contact = {
+      ...contact,
+      id: `C-${String(contacts.length + 100).padStart(3, '0')}`,
+      lastActive: 'Never',
+      joinedDate: new Date().toISOString().split('T')[0],
+      avatar: `https://i.pravatar.cc/150?u=${Math.random()}`
+    };
+    contacts.push(newContact);
+    localStorage.setItem(this.CONTACTS_KEY, JSON.stringify(contacts));
+    return newContact;
   }
 
   getMessages(): Message[] {
-     return JSON.parse(localStorage.getItem(this.MESSAGES_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(this.MESSAGES_KEY) || '[]');
   }
-  
+
   getSocialAccounts(): SocialAccount[] {
     return JSON.parse(localStorage.getItem(this.SOCIAL_KEY) || '[]');
   }
@@ -453,24 +562,24 @@ class DemoDatabase {
   }
 
   addRole(role: Omit<Role, 'id' | 'usersCount'>): Role {
-      const roles = this.getRoles();
-      const newRole: Role = {
-          ...role,
-          id: `R-${String(roles.length + 1).padStart(3, '0')}`,
-          usersCount: 0
-      };
-      roles.push(newRole);
-      localStorage.setItem(this.ROLES_KEY, JSON.stringify(roles));
-      return newRole;
+    const roles = this.getRoles();
+    const newRole: Role = {
+      ...role,
+      id: `R-${String(roles.length + 1).padStart(3, '0')}`,
+      usersCount: 0
+    };
+    roles.push(newRole);
+    localStorage.setItem(this.ROLES_KEY, JSON.stringify(roles));
+    return newRole;
   }
 
   updateRole(updatedRole: Role) {
-      const roles = this.getRoles();
-      const index = roles.findIndex(r => r.id === updatedRole.id);
-      if (index !== -1) {
-          roles[index] = updatedRole;
-          localStorage.setItem(this.ROLES_KEY, JSON.stringify(roles));
-      }
+    const roles = this.getRoles();
+    const index = roles.findIndex(r => r.id === updatedRole.id);
+    if (index !== -1) {
+      roles[index] = updatedRole;
+      localStorage.setItem(this.ROLES_KEY, JSON.stringify(roles));
+    }
   }
 
   getLogs(): Log[] {
@@ -480,15 +589,15 @@ class DemoDatabase {
   getStats(eventId?: string) {
     const submissions = this.getSubmissions();
     const programs = this.getPrograms();
-    
+
     // In a real app, this would filter by eventId
-    const relevantSubmissions = eventId ? submissions : submissions; 
+    const relevantSubmissions = eventId ? submissions : submissions;
 
     return {
       totalSubmissions: relevantSubmissions.length,
       activePrograms: programs.filter(p => p.status === 'Active').length,
       pendingReview: relevantSubmissions.filter(s => s.status === 'Pending' || s.status === 'Under Review').length,
-      revenue: relevantSubmissions.length * 45 
+      revenue: relevantSubmissions.length * 45
     };
   }
 }

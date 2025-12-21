@@ -25,3 +25,4 @@ Vite only loads environment variables when the server starts, so any changes to 
 
 After restarting, the error message should disappear and Supabase authentication should work correctly.
 
+

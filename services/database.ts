@@ -41,6 +41,11 @@ class DatabaseService {
         fee: Number(program.program_payment_configs.fee_amount) || 0,
         connected: program.program_payment_configs.connected || false,
       } : undefined,
+      description: program.description,
+      slug: program.slug,
+      coverImageUrl: program.cover_image_url,
+      visibility: program.visibility ? (program.visibility.charAt(0).toUpperCase() + program.visibility.slice(1)) as 'Public' | 'Private' : 'Public',
+      timezone: program.timezone || 'UTC',
     };
   }
 
@@ -82,6 +87,11 @@ class DatabaseService {
       title: program.title,
       status: program.status.toLowerCase(),
       deadline: program.deadline || undefined,
+      slug: program.slug,
+      description: program.description,
+      cover_image_url: program.coverImageUrl,
+      industry_category: program.category,
+      visibility: program.visibility?.toLowerCase(),
     });
     if (error) throw new Error(error.message);
     return data;
@@ -91,7 +101,7 @@ class DatabaseService {
   async getCategories(programId: string): Promise<Category[]> {
     const { data, error } = await supabasePrograms.getById(programId);
     if (error || !data?.categories) return [];
-    
+
     return (data.categories || []).map((cat: any) => ({
       id: cat.id,
       title: cat.title,
@@ -103,7 +113,7 @@ class DatabaseService {
 
   async addCategory(category: Omit<Category, 'id' | 'entriesCount'>): Promise<Category> {
     if (!supabase) throw new Error('Supabase not configured');
-    
+
     const { data, error } = await supabase
       .from('categories')
       .insert({
@@ -113,9 +123,9 @@ class DatabaseService {
       })
       .select()
       .single();
-    
+
     if (error || !data) throw new Error(error?.message || 'Failed to create category');
-    
+
     return {
       id: data.id,
       title: data.title,
@@ -128,15 +138,15 @@ class DatabaseService {
   // Rounds
   async getRounds(programId: string): Promise<Round[]> {
     if (!supabase) return [];
-    
+
     const { data, error } = await supabase
       .from('rounds')
       .select('*')
       .eq('program_id', programId)
       .order('start_date');
-    
+
     if (error || !data) return [];
-    
+
     return data.map((r: any) => ({
       id: r.id,
       programId: r.program_id,
@@ -160,7 +170,7 @@ class DatabaseService {
 
   async addRound(round: Omit<Round, 'id'>): Promise<Round> {
     if (!supabase) throw new Error('Supabase not configured');
-    
+
     const { data, error } = await supabase
       .from('rounds')
       .insert({
@@ -174,9 +184,9 @@ class DatabaseService {
       })
       .select()
       .single();
-    
+
     if (error || !data) throw new Error(error?.message || 'Failed to create round');
-    
+
     return {
       id: data.id,
       programId: data.program_id,
@@ -193,9 +203,9 @@ class DatabaseService {
   async getSubmissions(programId?: string): Promise<Submission[]> {
     const filters = programId ? { programId } : undefined;
     const { data, error } = await submissions.getAll(filters);
-    
+
     if (error || !data) return [];
-    
+
     return data.map((s: any) => ({
       id: s.id,
       title: s.title || 'Untitled',
@@ -222,15 +232,15 @@ class DatabaseService {
 
   async addSubmission(submission: Omit<Submission, 'id' | 'date' | 'score' | 'image' | 'assignedJudges'>): Promise<Submission> {
     if (!supabase) throw new Error('Supabase not configured');
-    
+
     // Need to find program and category IDs
     const programs = await this.getPrograms();
     const program = programs.find(p => p.title === submission.category || p.id);
     if (!program) throw new Error('Program not found');
-    
+
     const categories = await this.getCategories(program.id);
     const category = categories.find(c => c.title === submission.category);
-    
+
     const { data, error } = await supabase
       .from('submissions')
       .insert({
@@ -243,9 +253,9 @@ class DatabaseService {
       })
       .select()
       .single();
-    
+
     if (error || !data) throw new Error(error?.message || 'Failed to create submission');
-    
+
     return {
       id: data.id,
       title: data.title,
@@ -261,7 +271,7 @@ class DatabaseService {
 
   async bulkUpdateSubmissions(ids: string[], updates: Partial<Submission>) {
     if (!supabase) throw new Error('Supabase not configured');
-    
+
     const statusMap: Record<string, string> = {
       'Pending': 'pending',
       'Under Review': 'under_review',
@@ -269,17 +279,17 @@ class DatabaseService {
       'Accepted': 'accepted',
       'Rejected': 'rejected',
     };
-    
+
     const supabaseUpdates: any = {};
     if (updates.status) {
       supabaseUpdates.status = statusMap[updates.status] || updates.status.toLowerCase();
     }
-    
+
     const { error } = await supabase
       .from('submissions')
       .update(supabaseUpdates)
       .in('id', ids);
-    
+
     if (error) throw new Error(error.message);
   }
 
@@ -287,14 +297,14 @@ class DatabaseService {
   async getJudges(): Promise<Judge[]> {
     const { data, error } = await judges.getAll();
     if (error || !data) return [];
-    
+
     return data.map((j: any) => ({
       id: j.id,
       name: j.name,
       avatar: j.avatar_url || `https://i.pravatar.cc/150?u=${j.id}`,
       email: j.email,
       status: this.mapJudgeStatus(j.status) as Judge['status'],
-      progress: j.completed_count && j.assigned_count 
+      progress: j.completed_count && j.assigned_count
         ? Math.round((j.completed_count / j.assigned_count) * 100)
         : 0,
       assignedCount: j.assigned_count || 0,
@@ -315,7 +325,7 @@ class DatabaseService {
   async getContacts(): Promise<Contact[]> {
     const { data, error } = await contacts.getAll();
     if (error || !data) return [];
-    
+
     return data.map((c: any) => ({
       id: c.id,
       name: c.name,
@@ -336,9 +346,9 @@ class DatabaseService {
       email: contact.email,
       source: contact.source,
     });
-    
+
     if (error || !data) throw new Error(error?.message || 'Failed to create contact');
-    
+
     return {
       id: data.id,
       name: data.name,
@@ -357,7 +367,7 @@ class DatabaseService {
   async getRoles(): Promise<Role[]> {
     const { data, error } = await roles.getAll();
     if (error || !data) return [];
-    
+
     return data.map((r: any) => ({
       id: r.id,
       name: r.name,
@@ -371,12 +381,12 @@ class DatabaseService {
   async getStats(programId?: string) {
     const submissions = await this.getSubmissions(programId);
     const programs = await this.getPrograms();
-    
-    const relevantSubmissions = programId 
+
+    const relevantSubmissions = programId
       ? submissions.filter(s => {
-          // Would need to track which program each submission belongs to
-          return true; // Simplified for now
-        })
+        // Would need to track which program each submission belongs to
+        return true; // Simplified for now
+      })
       : submissions;
 
     const activePrograms = programs.filter(p => p.status === 'Active');
@@ -384,7 +394,7 @@ class DatabaseService {
     return {
       totalSubmissions: relevantSubmissions.length,
       activePrograms: activePrograms.length,
-      pendingReview: relevantSubmissions.filter(s => 
+      pendingReview: relevantSubmissions.filter(s =>
         s.status === 'Pending' || s.status === 'Under Review'
       ).length,
       revenue: relevantSubmissions.length * 45, // Mock calculation
@@ -395,17 +405,17 @@ class DatabaseService {
   async getCurrentUser(): Promise<Contact | null> {
     const { user } = await auth.getUser();
     if (!user) return null;
-    
+
     if (!supabase) return null;
-    
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
-    
+
     if (!profile) return null;
-    
+
     return {
       id: user.id,
       name: profile.full_name || user.email || 'User',

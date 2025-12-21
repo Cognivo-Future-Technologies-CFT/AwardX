@@ -22,6 +22,7 @@ import { LoginPage } from './components/pages/LoginPage';
 import { ProductShowcase } from './components/ProductShowcase';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { AuthCallback } from './components/AuthCallback';
+import { WorkflowPage } from './components/pages/WorkflowPage';
 import { auth } from './services/supabase';
 
 const CTASection = () => (
@@ -60,7 +61,14 @@ const CTASection = () => (
 );
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState('home');
+  const [currentPage, setCurrentPage] = useState(() => {
+    // Check URL on initial load for workflow page
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('page') === 'workflow') {
+      return 'workflow';
+    }
+    return 'home';
+  });
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   // Check auth state on mount and listen for changes
@@ -118,6 +126,8 @@ const App: React.FC = () => {
 
   const renderPage = () => {
     switch (currentPage) {
+      case 'workflow':
+        return <WorkflowPage />;
       case 'features':
         return <FeaturesPage />;
       case 'how-it-works':
@@ -223,6 +233,11 @@ const App: React.FC = () => {
     return <LoginPage onNavigate={setCurrentPage} />;
   }
   
+  // Render Workflow page without Header/Footer wrapping
+  if (currentPage === 'workflow') {
+    return <WorkflowPage />;
+  }
+
   // Render Demo/Dashboard without Header/Footer wrapping
   if (currentPage === 'demo' || currentPage === 'dashboard') {
     return (

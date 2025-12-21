@@ -59,3 +59,4 @@ To fully migrate to Supabase:
 - [ ] CRM functionality
 - [ ] Teams/roles management
 
+

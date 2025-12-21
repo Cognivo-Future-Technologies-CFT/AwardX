@@ -129,3 +129,4 @@ RLS is enabled on all sensitive tables. Basic policies are included, but you sho
 - Restart the development server after changing `.env`
 - Verify variable names use `VITE_` prefix
 
+
