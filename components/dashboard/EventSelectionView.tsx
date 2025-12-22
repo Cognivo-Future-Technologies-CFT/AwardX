@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
    Trophy, Gavel, HandCoins, Building2, Palette, MapPin,
    Store, Briefcase, Sparkles, Calendar, ArrowRight,
-   LogOut, Bell, Search
+   LogOut, Bell, Search, RefreshCw
 } from 'lucide-react';
 import { Program, EventType } from '../../services/demoDb';
 import { auth } from '../../services/supabase';
@@ -68,6 +68,8 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedType, setSelectedType] = useState<EventType | null>(null);
    const [newEvent, setNewEvent] = useState({ title: '', category: 'General', deadline: '' });
+   const [isLoading, setIsLoading] = useState(true);
+   const [isRefreshing, setIsRefreshing] = useState(false);
    const [userData, setUserData] = useState<UserData>({
       name: 'Loading...',
       avatar: '',
@@ -107,18 +109,26 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
       }
    ];
 
+   // Optimized load programs function
+   const loadPrograms = useCallback(async (showLoading = false) => {
+      if (showLoading) setIsRefreshing(true);
+      try {
+         // Ensure database is initialized (only once)
+         await databaseService.initialize();
+         const programs = await databaseService.getPrograms();
+         setEvents(programs);
+      } catch (error) {
+         console.error('Failed to load programs:', error);
+      } finally {
+         setIsLoading(false);
+         setIsRefreshing(false);
+      }
+   }, []);
+
    // Fetch real user data from Supabase
    useEffect(() => {
-      const loadPrograms = async () => {
-         try {
-            const programs = await databaseService.getPrograms();
-            setEvents(programs);
-         } catch (error) {
-            console.error('Failed to load programs:', error);
-         }
-      };
-      
-      loadPrograms();
+      // Load programs immediately
+      loadPrograms(true);
 
       const fetchUserData = async () => {
          try {
@@ -136,7 +146,45 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
       };
 
       fetchUserData();
-   }, []);
+      
+      // Refresh programs when component becomes visible or window gains focus
+      let visibilityTimeout: NodeJS.Timeout;
+      let focusTimeout: NodeJS.Timeout;
+      
+      const handleVisibilityChange = () => {
+         if (!document.hidden) {
+            clearTimeout(visibilityTimeout);
+            visibilityTimeout = setTimeout(() => {
+               loadPrograms(false);
+            }, 100); // Small delay to avoid rapid refreshes
+         }
+      };
+      
+      const handleFocus = () => {
+         clearTimeout(focusTimeout);
+         focusTimeout = setTimeout(() => {
+            loadPrograms(false);
+         }, 200); // Slightly longer delay for focus to avoid conflicts
+      };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      
+      // Set up periodic refresh (every 20 seconds when visible)
+      const refreshInterval = setInterval(() => {
+         if (!document.hidden) {
+            loadPrograms(false);
+         }
+      }, 20000);
+      
+      return () => {
+         document.removeEventListener('visibilitychange', handleVisibilityChange);
+         window.removeEventListener('focus', handleFocus);
+         clearInterval(refreshInterval);
+         clearTimeout(visibilityTimeout);
+         clearTimeout(focusTimeout);
+      };
+   }, [loadPrograms]);
 
    const handleTypeSelect = (type: EventType) => {
       setSelectedType(type);
@@ -147,23 +195,53 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
     e.preventDefault();
     if (!newEvent.title || !newEvent.deadline || !selectedType) return;
     
+    // Save event data before clearing
+    const eventData = { ...newEvent };
+    const eventType = selectedType;
+    
+    // Optimistic update - add event immediately to UI
+    const optimisticEvent: Program = {
+      id: `temp-${Date.now()}`,
+      title: eventData.title,
+      category: eventData.category,
+      type: eventType,
+      status: 'Draft',
+      deadline: eventData.deadline,
+      entriesCount: 0,
+      paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
+    };
+    
+    // Add optimistic event immediately
+    setEvents(prev => [optimisticEvent, ...prev]);
+    setIsModalOpen(false);
+    setNewEvent({ title: '', category: 'General', deadline: '' });
+    
     try {
+      // Ensure database is initialized before creating
+      await databaseService.initialize();
+      
       const created = await databaseService.addProgram({
-        ...newEvent,
-        type: selectedType,
+        ...eventData,
+        type: eventType,
         status: 'Draft',
         paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
       });
       
-      const programs = await databaseService.getPrograms();
-      setEvents(programs);
-      setIsModalOpen(false);
-      setNewEvent({ title: '', category: 'General', deadline: '' });
+      // Replace optimistic event with real one
+      setEvents(prev => prev.map(e => e.id === optimisticEvent.id ? created : e));
+      
       // Automatically enter the new event
       onSelectEvent(created);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create program:', error);
-      alert('Failed to create program. Please try again.');
+      // Remove optimistic event on error
+      setEvents(prev => prev.filter(e => e.id !== optimisticEvent.id));
+      const errorMessage = error?.message || 'Failed to create program. Please try again.';
+      alert(errorMessage);
+      // Reopen modal on error
+      setIsModalOpen(true);
+      setSelectedType(eventType);
+      setNewEvent(eventData);
     }
   };
 
@@ -189,24 +267,29 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                      <Bell className="w-5 h-5" />
                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
                   </button>
-                  <div className="flex items-center gap-3 pl-2 cursor-pointer group relative">
-                     {userData.avatar ? (
-                        <img src={userData.avatar} alt="" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
-                     ) : (
-                        <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-                           {userData.name.charAt(0).toUpperCase()}
+                  <div className="flex items-center gap-3">
+                     <div className="flex items-center gap-3 pl-2">
+                        {userData.avatar ? (
+                           <img src={userData.avatar} alt="" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
+                        ) : (
+                           <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                              {userData.name.charAt(0).toUpperCase()}
+                           </div>
+                        )}
+                        <div className="hidden md:block text-left">
+                           <div className="text-sm font-bold text-slate-900">{userData.name}</div>
+                           <div className="text-xs text-slate-500">{userData.role}</div>
                         </div>
-                     )}
-                     <div className="hidden md:block text-left">
-                        <div className="text-sm font-bold text-slate-900">{userData.name}</div>
-                        <div className="text-xs text-slate-500">{userData.role}</div>
                      </div>
-                     {/* Dropdown for logout */}
-                     <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 p-1 hidden group-hover:block z-50">
-                        <button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2">
-                           <LogOut className="w-4 h-4" /> Sign Out
-                        </button>
-                     </div>
+                     {/* Always visible logout button */}
+                     <button 
+                        onClick={onLogout} 
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 hover:border-red-200"
+                        title="Sign Out"
+                     >
+                        <LogOut className="w-4 h-4" /> 
+                        <span className="hidden sm:inline">Sign Out</span>
+                     </button>
                   </div>
                </div>
             </div>
@@ -220,21 +303,42 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                      <h2 className="text-2xl font-bold text-slate-900">Your Events</h2>
                      <p className="text-slate-500">Manage your active programs and competitions.</p>
                   </div>
+                  <button
+                     onClick={() => loadPrograms(true)}
+                     disabled={isRefreshing}
+                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                     title="Refresh events"
+                  >
+                     <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                     {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                  </button>
                </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {events.map(event => (
-                     <ExistingEventCard key={event.id} event={event} onClick={() => onSelectEvent(event)} />
-                  ))}
+               {isLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {[1, 2, 3].map((i) => (
+                        <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse">
+                           <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
+                           <div className="h-3 bg-slate-200 rounded w-1/2 mb-2"></div>
+                           <div className="h-3 bg-slate-200 rounded w-2/3"></div>
+                        </div>
+                     ))}
+                  </div>
+               ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {events.map(event => (
+                        <ExistingEventCard key={event.id} event={event} onClick={() => onSelectEvent(event)} />
+                     ))}
 
-                  {/* Empty State */}
-                  {events.length === 0 && (
-                     <div className="col-span-full py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-                        <p className="text-slate-500 mb-4">No events created yet.</p>
-                        <p className="text-sm text-slate-400">Select a category below to start.</p>
-                     </div>
-                  )}
-               </div>
+                     {/* Empty State */}
+                     {events.length === 0 && !isLoading && (
+                        <div className="col-span-full py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                           <p className="text-slate-500 mb-4">No events created yet.</p>
+                           <p className="text-sm text-slate-400">Select a category below to start.</p>
+                        </div>
+                     )}
+                  </div>
+               )}
             </section>
 
             {/* Create New Event Section - Grouped */}

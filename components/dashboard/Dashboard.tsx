@@ -99,7 +99,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        <EventSelectionView onSelectEvent={setActiveEvent} onLogout={onLogout} />
+        <EventSelectionView 
+          onSelectEvent={setActiveEvent} 
+          onLogout={onLogout} 
+        />
       </motion.div>
     );
   }

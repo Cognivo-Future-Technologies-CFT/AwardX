@@ -8,11 +8,45 @@ class DatabaseService {
   // Initialize and get current organization
   async initialize() {
     try {
+      // First try to get existing organization
       const { data: org, error } = await organizations.getCurrent();
       if (org && org.id) {
         this.currentOrgId = org.id;
+        return { org, error: null };
       }
-      // If no org, that's okay - user might need to create one
+      
+      // If no org exists, try to create a default one for the user
+      if (!org && !error) {
+        const { user } = await auth.getUser();
+        if (user) {
+          // Try to create a default organization
+          const email = user.email || 'user';
+          const baseName = user.user_metadata?.full_name || email.split('@')[0] || 'My Organization';
+          const orgName = baseName.trim() || 'My Organization';
+          
+          // Generate a unique slug
+          let baseSlug = orgName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+          if (!baseSlug) baseSlug = 'my-organization';
+          
+          // Add timestamp to make slug unique if needed
+          const orgSlug = `${baseSlug}-${Date.now()}`;
+          
+          const { data: newOrg, error: createError } = await organizations.create(orgName, orgSlug);
+          if (newOrg && !createError) {
+            this.currentOrgId = newOrg.id;
+            return { org: newOrg, error: null };
+          } else if (createError) {
+            // If creation failed due to conflict, try to get existing org
+            console.warn('Organization creation failed, trying to get existing:', createError);
+            const { data: existingOrg } = await organizations.getCurrent();
+            if (existingOrg && existingOrg.id) {
+              this.currentOrgId = existingOrg.id;
+              return { org: existingOrg, error: null };
+            }
+          }
+        }
+      }
+      
       return { org, error };
     } catch (error) {
       console.error('Failed to initialize database:', error);
@@ -22,6 +56,15 @@ class DatabaseService {
 
   getCurrentOrgId(): string | null {
     return this.currentOrgId;
+  }
+
+  // Refresh organization cache
+  async refreshOrgCache() {
+    this.currentOrgId = null;
+    const { data: org } = await organizations.getCurrent();
+    if (org?.id) {
+      this.currentOrgId = org.id;
+    }
   }
 
   // Convert Supabase program to demo format
@@ -72,13 +115,42 @@ class DatabaseService {
   }
 
   async addProgram(program: Omit<Program, 'id' | 'entriesCount'>): Promise<Program> {
+    // Ensure organization exists
+    if (!this.currentOrgId) {
+      await this.initialize();
+    }
+    
+    // Look up event_type_id by name
+    let eventTypeId: string | undefined = undefined;
+    if (program.type && supabase) {
+      const { data: eventTypes, error: eventTypeError } = await supabase
+        .from('event_types')
+        .select('id')
+        .eq('name', program.type)
+        .maybeSingle();
+      
+      if (!eventTypeError && eventTypes) {
+        eventTypeId = eventTypes.id;
+      }
+    }
+
     const { data, error } = await supabasePrograms.create({
       title: program.title,
-      description: '',
+      description: program.description || '',
       industry_category: program.category,
       deadline: program.deadline || undefined,
+      event_type_id: eventTypeId,
     });
-    if (error || !data) throw new Error(error?.message || 'Failed to create program');
+    
+    if (error) {
+      const errorMessage = error?.message || 'Failed to create program';
+      throw new Error(errorMessage);
+    }
+    
+    if (!data) {
+      throw new Error('Failed to create program: No data returned');
+    }
+    
     return this.mapProgram(data);
   }
 
@@ -93,8 +165,14 @@ class DatabaseService {
       industry_category: program.category,
       visibility: program.visibility?.toLowerCase(),
     });
-    if (error) throw new Error(error.message);
-    return data;
+    if (error) {
+      const errorMessage = error?.message || 'Failed to update program';
+      throw new Error(errorMessage);
+    }
+    if (!data) {
+      throw new Error('Failed to update program: No data returned');
+    }
+    return this.mapProgram(data);
   }
 
   // Categories

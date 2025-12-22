@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { auth } from '../services/supabase';
+import { auth, refreshUserCache } from '../services/supabase';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
@@ -24,6 +24,9 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onError }
 
         if (session) {
           // Session exists, authentication successful
+          // Refresh user cache to get latest org info
+          await refreshUserCache();
+          
           setStatus('success');
           
           // Wait a moment to show success state, then redirect

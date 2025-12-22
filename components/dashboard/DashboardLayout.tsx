@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program, Category, db, PERMISSIONS, Contact } from '../../services/demoDb';
+import { db as databaseService } from '../../services/database';
+import { auth } from '../../services/supabase';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 
@@ -144,11 +146,71 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [newCategoryName, setNewCategoryName] = useState('');
 
   // User & Permissions
-  const [currentUser, setCurrentUser] = useState<Contact>(db.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<Contact>({
+    id: '',
+    name: 'Loading...',
+    email: '',
+    role: 'Admin',
+    status: 'Active',
+    lastActive: 'Now',
+    avatar: '',
+    source: 'Internal',
+    surveyAnswer: '',
+    joinedDate: new Date().toISOString().split('T')[0],
+  });
   const [allUsers, setAllUsers] = useState<Contact[]>([]);
 
   useEffect(() => {
-    setCurrentUser(db.getCurrentUser());
+    // Fetch real user data from Supabase
+    const fetchUserData = async () => {
+      try {
+        const realUser = await databaseService.getCurrentUser();
+        if (realUser) {
+          setCurrentUser(realUser);
+        } else {
+          // Fallback: Get user from auth
+          const { user } = await auth.getUser();
+          if (user) {
+            setCurrentUser({
+              id: user.id,
+              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+              role: 'Admin',
+              status: 'Active',
+              lastActive: 'Now',
+              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`,
+              source: 'Internal',
+              surveyAnswer: '',
+              joinedDate: new Date().toISOString().split('T')[0],
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        // Fallback: Get user from auth directly
+        try {
+          const { user } = await auth.getUser();
+          if (user) {
+            setCurrentUser({
+              id: user.id,
+              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+              role: 'Admin',
+              status: 'Active',
+              lastActive: 'Now',
+              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`,
+              source: 'Internal',
+              surveyAnswer: '',
+              joinedDate: new Date().toISOString().split('T')[0],
+            });
+          }
+        } catch (authError) {
+          console.error('Failed to get user from auth:', authError);
+        }
+      }
+    };
+    
+    fetchUserData();
     setAllUsers(db.getContacts().filter(c => c.role !== 'Applicant')); // For quick switch
     if (activeEvent) {
       setCategories(db.getCategories(activeEvent.id));
