@@ -6,9 +6,7 @@ import {
   auth,
   submissions,
   judges,
-  contacts,
   roles,
-  messages,
   auditLogs,
   socialAccounts,
   scheduledPosts,
@@ -17,7 +15,181 @@ import {
   forms,
 } from './supabase';
 import { getCurrentUserId } from './supabase';
-import { Program, Category, Round, Submission, Judge, Contact, Role, Message, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
+import { Program, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
+import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
+
+// --- Event Overview Page Service ---
+export const programPages = {
+  // Config
+  async getConfig(programId: string) {
+    const { data, error } = await supabase
+      .from('program_page_configs')
+      .select('*')
+      .eq('program_id', programId)
+      .maybeSingle();
+
+    // Return default empty config if none exists, or null
+    return { data, error };
+  },
+
+  async createOrUpdateConfig(programId: string, config: Partial<PageConfig>) {
+    // Check if exists first (or rely on upsert if ID is known/stable)
+    // Here we'll upsert based on program_id uniqueness
+    const { data, error } = await supabase
+      .from('program_page_configs')
+      .upsert({
+        program_id: programId,
+        theme_settings: config.themeSettings,
+        is_published: config.isPublished,
+        seo_title: config.seoTitle,
+        seo_description: config.seoDescription,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'program_id' })
+      .select()
+      .single();
+
+    return { data, error };
+  },
+
+  // Sections
+  async getSections(programId: string) {
+    const { data, error } = await supabase
+      .from('program_page_sections')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  async saveSection(section: Partial<PageSection>) {
+    // If ID starts with 'temp-', remove it to let DB generate one
+    const id = section.id?.startsWith('temp-') ? undefined : section.id;
+
+    const { data, error } = await supabase
+      .from('program_page_sections')
+      .upsert({
+        id,
+        program_id: section.programId,
+        section_type: section.sectionType,
+        title: section.title,
+        subtitle: section.subtitle,
+        content: section.content,
+        settings: section.settings,
+        sort_order: section.sortOrder,
+        is_visible: section.isVisible,
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async deleteSection(id: string) {
+    return await supabase.from('program_page_sections').delete().eq('id', id);
+  },
+
+  // Sponsors
+  async getSponsors(programId: string) {
+    const { data, error } = await supabase
+      .from('program_sponsors')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  async saveSponsor(sponsor: Partial<Sponsor>) {
+    const id = sponsor.id?.startsWith('temp-') ? undefined : sponsor.id;
+
+    const { data, error } = await supabase
+      .from('program_sponsors')
+      .upsert({
+        id,
+        program_id: sponsor.programId,
+        name: sponsor.name,
+        logo_url: sponsor.logoUrl,
+        website_url: sponsor.websiteUrl,
+        tier: sponsor.tier,
+        tier_label: sponsor.tierLabel,
+        sort_order: sponsor.sortOrder,
+        is_active: sponsor.isActive
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async deleteSponsor(id: string) {
+    return await supabase.from('program_sponsors').delete().eq('id', id);
+  },
+
+  // FAQs
+  async getFAQs(programId: string) {
+    const { data, error } = await supabase
+      .from('program_faqs')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  async saveFAQ(faq: Partial<FAQ>) {
+    const id = faq.id?.startsWith('temp-') ? undefined : faq.id;
+
+    const { data, error } = await supabase
+      .from('program_faqs')
+      .upsert({
+        id,
+        program_id: faq.programId,
+        question: faq.question,
+        answer: faq.answer,
+        category: faq.category,
+        sort_order: faq.sortOrder,
+        is_visible: faq.isVisible
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async deleteFAQ(id: string) {
+    return await supabase.from('program_faqs').delete().eq('id', id);
+  },
+
+  // Timeline Milestones
+  async getTimeline(programId: string) {
+    const { data, error } = await supabase
+      .from('program_timeline_milestones')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  async saveMilestone(milestone: Partial<TimelineMilestone>) {
+    const id = milestone.id?.startsWith('temp-') ? undefined : milestone.id;
+
+    const { data, error } = await supabase
+      .from('program_timeline_milestones')
+      .upsert({
+        id,
+        program_id: milestone.programId,
+        title: milestone.title,
+        date: milestone.date,
+        description: milestone.description,
+        icon: milestone.icon,
+        sort_order: milestone.sortOrder,
+        is_visible: milestone.isVisible
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async deleteMilestone(id: string) {
+    return await supabase.from('program_timeline_milestones').delete().eq('id', id);
+  }
+};
 
 class DatabaseService {
   private currentOrgId: string | null = null;
@@ -57,7 +229,7 @@ class DatabaseService {
         await this.refreshPermissionCache();
         return { org, error: null };
       }
-      
+
       // If no org exists, try to create a default one for the user
       if (!org && !error) {
         const { user } = await auth.getUser();
@@ -66,14 +238,14 @@ class DatabaseService {
           const email = user.email || 'user';
           const baseName = user.user_metadata?.full_name || email.split('@')[0] || 'My Organization';
           const orgName = baseName.trim() || 'My Organization';
-          
+
           // Generate a unique slug
           let baseSlug = orgName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
           if (!baseSlug) baseSlug = 'my-organization';
-          
+
           // Add timestamp to make slug unique if needed
           const orgSlug = `${baseSlug}-${Date.now()}`;
-          
+
           const { data: newOrg, error: createError } = await organizations.create(orgName, orgSlug);
           if (newOrg && !createError) {
             this.currentOrgId = newOrg.id;
@@ -89,7 +261,7 @@ class DatabaseService {
           }
         }
       }
-      
+
       return { org, error };
     } catch (error) {
       console.error('Failed to initialize database:', error);
@@ -207,7 +379,7 @@ class DatabaseService {
     if (!this.currentOrgId) {
       await this.initialize();
     }
-    
+
     // Look up event_type_id by name
     let eventTypeId: string | undefined = undefined;
     if (program.type && supabase) {
@@ -216,7 +388,7 @@ class DatabaseService {
         .select('id')
         .eq('name', program.type)
         .maybeSingle();
-      
+
       if (!eventTypeError && eventTypes) {
         eventTypeId = eventTypes.id;
       }
@@ -229,16 +401,16 @@ class DatabaseService {
       deadline: program.deadline || undefined,
       event_type_id: eventTypeId,
     });
-    
+
     if (error) {
       const errorMessage = error?.message || 'Failed to create program';
       throw new Error(errorMessage);
     }
-    
+
     if (!data) {
       throw new Error('Failed to create program: No data returned');
     }
-    
+
     const created = this.mapProgram(data);
     await this.safeAuditLog({
       action: 'Created program',
@@ -428,7 +600,32 @@ class DatabaseService {
 
     if (error || !data) return [];
 
-    return data.map((s: any) => ({
+    return data.map((s: any) => this.mapSubmission(s));
+  }
+
+  async getPublicSubmissions(programId: string): Promise<Submission[]> {
+    const { data, error } = await submissions.getPublic(programId);
+    if (error || !data) return [];
+    return data.map((s: any) => this.mapSubmission(s));
+  }
+
+  async vote(submissionId: string) {
+    const { data, error } = await submissions.vote(submissionId);
+    if (error) throw new Error(error.message || 'Failed to cast vote');
+
+    await this.safeAuditLog({
+      action: 'Cast public vote',
+      actionType: 'update',
+      resourceType: 'submission',
+      resourceId: submissionId,
+      details: 'Public vote cast',
+    });
+
+    return data;
+  }
+
+  private mapSubmission(s: any): Submission {
+    return {
       id: s.id,
       title: s.title || 'Untitled',
       applicant: s.applicant_name || s.applicant_email || 'Unknown',
@@ -438,7 +635,8 @@ class DatabaseService {
       date: s.submitted_at ? new Date(s.submitted_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       image: s.cover_image_url || `https://source.unsplash.com/random/50x50?${s.id}`,
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
-    }));
+      votes: s.votes_count || 0,
+    };
   }
 
   private mapSubmissionStatus(status: string): string {
@@ -590,55 +788,6 @@ class DatabaseService {
     return statusMap[status?.toLowerCase()] || 'Invited';
   }
 
-  // Contacts/CRM
-  async getContacts(): Promise<Contact[]> {
-    const { data, error } = await contacts.getAll();
-    if (error || !data) return [];
-
-    return data.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-      role: 'User', // Would need to join with organization_members to get role
-      status: c.status === 'active' ? 'Active' : 'Inactive',
-      lastActive: c.last_active_at ? new Date(c.last_active_at).toLocaleDateString() : 'Never',
-      avatar: c.avatar_url || `https://i.pravatar.cc/150?u=${c.id}`,
-      source: c.source || 'Unknown',
-      surveyAnswer: c.survey_answer || '',
-      joinedDate: c.joined_at ? new Date(c.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-    }));
-  }
-
-  async addContact(contact: Omit<Contact, 'id' | 'lastActive' | 'joinedDate' | 'avatar'>): Promise<Contact> {
-    const { data, error } = await contacts.create({
-      name: contact.name,
-      email: contact.email,
-      source: contact.source,
-    });
-
-    if (error || !data) throw new Error(error?.message || 'Failed to create contact');
-
-    const created: Contact = {
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      role: contact.role,
-      status: 'Active',
-      lastActive: 'Never',
-      avatar: data.avatar_url || `https://i.pravatar.cc/150?u=${data.id}`,
-      source: data.source || contact.source,
-      surveyAnswer: '',
-      joinedDate: new Date().toISOString().split('T')[0],
-    };
-    await this.safeAuditLog({
-      action: 'Created contact',
-      actionType: 'create',
-      resourceType: 'contact',
-      resourceId: created.id,
-      details: `${created.name} (${created.email})`,
-    });
-    return created;
-  }
 
   // Roles
   async getRoles(): Promise<Role[]> {
@@ -752,32 +901,6 @@ class DatabaseService {
     });
   }
 
-  // Messages
-  async getMessageThreads() {
-    const { data, error } = await messages.getThreads();
-    if (error || !data) return [];
-    return data;
-  }
-
-  async getMessagesByThread(threadId: string) {
-    const { data, error } = await messages.getByThread(threadId);
-    if (error || !data) return [];
-    return data;
-  }
-
-  async sendMessage(threadId: string, content: string) {
-    const { data, error } = await messages.send(threadId, content);
-    if (error) throw new Error(error.message || 'Failed to send message');
-    await this.safeAuditLog({
-      action: 'Sent message',
-      actionType: 'create',
-      resourceType: 'message',
-      resourceId: (data as any)?.id,
-      details: `thread:${threadId}`,
-      metadata: { threadId },
-    });
-    return data;
-  }
 
   // Audit logs
   async getLogs(): Promise<Log[]> {
@@ -1029,7 +1152,7 @@ class DatabaseService {
   }
 
   // Current User (from auth)
-  async getCurrentUser(): Promise<Contact | null> {
+  async getCurrentUser(): Promise<any | null> {
     const { user } = await auth.getUser();
     if (!user) return null;
 

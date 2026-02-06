@@ -84,7 +84,7 @@ export const auth = {
         data: metadata,
       },
     });
-    
+
     // Ensure profile is created (trigger should handle this, but we verify)
     if (data?.user && !error) {
       // Check if profile exists, if not create it
@@ -93,7 +93,7 @@ export const auth = {
         .select('id')
         .eq('id', data.user.id)
         .single();
-      
+
       if (!existingProfile) {
         await supabase
           .from('profiles')
@@ -104,7 +104,7 @@ export const auth = {
           });
       }
     }
-    
+
     return { data, error };
   },
 
@@ -343,28 +343,28 @@ export const organizations = {
 
   create: async (name: string, slug: string) => {
     if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
-    
+
     const { user } = await auth.getUser();
     if (!user) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     // Check if organization with this slug already exists
     const { data: existingOrg } = await supabase
       .from('organizations')
       .select('id, name, slug')
       .eq('slug', slug)
       .maybeSingle();
-    
+
     if (existingOrg) {
       // Organization exists, just link user to it
       await supabase
         .from('profiles')
         .update({ organization_id: existingOrg.id })
         .eq('id', user.id);
-      
+
       cachedOrgId = existingOrg.id;
       return { data: existingOrg, error: null };
     }
-    
+
     // Try RPC first, fallback to direct insert
     try {
       const { data, error } = await supabase.rpc('setup_new_organization', {
@@ -379,7 +379,7 @@ export const organizations = {
           .select('*')
           .eq('slug', slug)
           .single();
-        
+
         if (org) {
           cachedOrgId = org.id;
           return { data: org, error: null };
@@ -388,7 +388,7 @@ export const organizations = {
     } catch (rpcError) {
       console.warn('RPC setup_new_organization not available, using direct insert');
     }
-    
+
     // Fallback: Create organization directly
     const { data: org, error: orgError } = await supabase
       .from('organizations')
@@ -398,7 +398,7 @@ export const organizations = {
       })
       .select()
       .single();
-    
+
     // Handle 409 conflict (slug already exists)
     if (orgError) {
       if (orgError.code === '23505' || orgError.message?.includes('duplicate') || orgError.message?.includes('unique')) {
@@ -408,32 +408,32 @@ export const organizations = {
           .select('*')
           .eq('slug', slug)
           .single();
-        
+
         if (existing) {
           // Link user to existing org
           await supabase
             .from('profiles')
             .update({ organization_id: existing.id })
             .eq('id', user.id);
-          
+
           cachedOrgId = existing.id;
           return { data: existing, error: null };
         }
       }
       return { data: null, error: orgError };
     }
-    
+
     if (!org) {
       return { data: null, error: { message: 'Failed to create organization' } };
     }
-    
+
     // Ensure profile exists and update it to link to organization
     const { data: profile } = await supabase
       .from('profiles')
       .select('id')
       .eq('id', user.id)
       .maybeSingle();
-    
+
     if (!profile) {
       // Create profile if it doesn't exist
       await supabase
@@ -451,10 +451,10 @@ export const organizations = {
         .update({ organization_id: org.id })
         .eq('id', user.id);
     }
-    
+
     // Clear cache
     cachedOrgId = org.id;
-    
+
     return { data: org, error: null };
   },
 
@@ -474,7 +474,7 @@ export const programs = {
   getAll: async () => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     const { data, error } = await supabase
       .from('programs')
       .select(`
@@ -492,7 +492,7 @@ export const programs = {
   getById: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('programs')
       .select(`
@@ -518,14 +518,14 @@ export const programs = {
   }) => {
     const org = await organizations.getCurrent();
     const orgId = org.data?.id;
-    
+
     if (!orgId) {
-      return { 
-        data: null, 
-        error: { message: 'Organization not found. Please ensure you are logged in and have an organization set up.' } 
+      return {
+        data: null,
+        error: { message: 'Organization not found. Please ensure you are logged in and have an organization set up.' }
       };
     }
-    
+
     const { data, error } = await supabase
       .from('programs')
       .insert({
@@ -553,7 +553,7 @@ export const programs = {
   }>) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('programs')
       .update(updates)
@@ -570,7 +570,7 @@ export const programs = {
   delete: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
-    
+
     const { error } = await supabase
       .from('programs')
       .delete()
@@ -579,10 +579,31 @@ export const programs = {
     return { error };
   },
 
+  getPublicById: async (id: string) => {
+    // No org check needed for public page
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+
+    const { data, error } = await supabase
+      .from('programs')
+      .select(`
+        *,
+        event_types(*),
+        categories(*),
+        rounds(*),
+        program_payment_configs(*),
+        judging_criteria(*),
+        organization:organizations(id, name, logo_url, industry, website)
+      `)
+      .eq('id', id)
+      // .eq('visibility', 'public') // Optional: enforce public visibility
+      .single();
+    return { data, error };
+  },
+
   getStats: async (programId?: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     if (programId) {
       // Verify program belongs to org
       const { data: program } = await supabase
@@ -591,9 +612,9 @@ export const programs = {
         .eq('id', programId)
         .eq('organization_id', orgId)
         .single();
-      
+
       if (!program) return { data: null, error: { message: 'Program not found' } };
-      
+
       const { data, error } = await supabase
         .from('program_stats')
         .select('*')
@@ -606,9 +627,9 @@ export const programs = {
       .from('programs')
       .select('id')
       .eq('organization_id', orgId);
-    
+
     if (!programs || programs.length === 0) return { data: [], error: null };
-    
+
     const programIds = programs.map(p => p.id);
     const { data, error } = await supabase
       .from('program_stats')
@@ -623,7 +644,7 @@ export const categories = {
   getByProgram: async (programId: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: { message: 'Not authenticated' } };
-    
+
     // Verify program belongs to org
     const { data: program } = await supabase
       .from('programs')
@@ -631,9 +652,9 @@ export const categories = {
       .eq('id', programId)
       .eq('organization_id', orgId)
       .single();
-    
+
     if (!program) return { data: [], error: { message: 'Program not found' } };
-    
+
     const { data, error } = await supabase
       .from('categories')
       .select('*')
@@ -650,7 +671,7 @@ export const categories = {
   }) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     // Verify program belongs to org
     const { data: program } = await supabase
       .from('programs')
@@ -658,9 +679,9 @@ export const categories = {
       .eq('id', category.program_id)
       .eq('organization_id', orgId)
       .single();
-    
+
     if (!program) return { data: null, error: { message: 'Program not found' } };
-    
+
     const { data, error } = await supabase
       .from('categories')
       .insert(category)
@@ -672,18 +693,18 @@ export const categories = {
   update: async (id: string, updates: Partial<{ title: string; description: string }>) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     // Verify category's program belongs to org
     const { data: category } = await supabase
       .from('categories')
       .select('program_id, programs!inner(organization_id)')
       .eq('id', id)
       .single();
-    
+
     if (!category || (category as any).programs?.organization_id !== orgId) {
       return { data: null, error: { message: 'Category not found' } };
     }
-    
+
     const { data, error } = await supabase
       .from('categories')
       .update(updates)
@@ -696,18 +717,18 @@ export const categories = {
   delete: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
-    
+
     // Verify category's program belongs to org
     const { data: category } = await supabase
       .from('categories')
       .select('program_id, programs!inner(organization_id)')
       .eq('id', id)
       .single();
-    
+
     if (!category || (category as any).programs?.organization_id !== orgId) {
       return { error: { message: 'Category not found' } };
     }
-    
+
     const { error } = await supabase
       .from('categories')
       .delete()
@@ -721,7 +742,7 @@ export const rounds = {
   getByProgram: async (programId: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: { message: 'Not authenticated' } };
-    
+
     // Verify program belongs to org
     const { data: program } = await supabase
       .from('programs')
@@ -729,9 +750,9 @@ export const rounds = {
       .eq('id', programId)
       .eq('organization_id', orgId)
       .single();
-    
+
     if (!program) return { data: [], error: { message: 'Program not found' } };
-    
+
     const { data, error } = await supabase
       .from('rounds')
       .select('*')
@@ -788,15 +809,15 @@ export const submissions = {
   }) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     // Get all programs for this org
     const { data: orgPrograms } = await supabase
       .from('programs')
       .select('id')
       .eq('organization_id', orgId);
-    
+
     if (!orgPrograms || orgPrograms.length === 0) return { data: [], error: null };
-    
+
     const programIds = orgPrograms.map(p => p.id);
     let query = supabase
       .from('submissions')
@@ -832,7 +853,7 @@ export const submissions = {
   getById: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('submissions')
       .select(`
@@ -864,10 +885,10 @@ export const submissions = {
     const orgId = await getCurrentOrgId();
     const userId = await getCurrentUserId();
     if (!userId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     // Check if this is a public form submission (submission_data contains form_id)
     const isPublicFormSubmission = submission.submission_data?.form_id !== undefined;
-    
+
     if (isPublicFormSubmission || submission.allowPublicSubmission) {
       // For public form submissions, just verify the program exists
       const { data: program } = await supabase
@@ -875,25 +896,25 @@ export const submissions = {
         .select('id')
         .eq('id', submission.program_id)
         .single();
-      
+
       if (!program) return { data: null, error: { message: 'Program not found' } };
     } else {
       // For internal submissions, verify program belongs to user's org
       if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-      
+
       const { data: program } = await supabase
         .from('programs')
         .select('id')
         .eq('id', submission.program_id)
         .eq('organization_id', orgId)
         .single();
-      
+
       if (!program) return { data: null, error: { message: 'Program not found' } };
     }
-    
+
     // Extract allowPublicSubmission from submission object before inserting
     const { allowPublicSubmission, ...submissionData } = submission;
-    
+
     const { data, error } = await supabase
       .from('submissions')
       .insert({
@@ -908,18 +929,18 @@ export const submissions = {
   updateStatus: async (id: string, status: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     // Verify submission belongs to org
     const { data: submission } = await supabase
       .from('submissions')
       .select('program_id, programs!inner(organization_id)')
       .eq('id', id)
       .single();
-    
+
     if (!submission || (submission as any).programs?.organization_id !== orgId) {
       return { data: null, error: { message: 'Submission not found' } };
     }
-    
+
     const { data, error } = await supabase
       .from('submissions')
       .update({ status })
@@ -932,17 +953,17 @@ export const submissions = {
   bulkUpdateStatus: async (ids: string[], status: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     // Get all org programs
     const { data: orgPrograms } = await supabase
       .from('programs')
       .select('id')
       .eq('organization_id', orgId);
-    
+
     if (!orgPrograms || orgPrograms.length === 0) return { data: [], error: null };
-    
+
     const programIds = orgPrograms.map(p => p.id);
-    
+
     // Only update submissions that belong to org programs
     const { data, error } = await supabase
       .from('submissions')
@@ -956,18 +977,18 @@ export const submissions = {
   delete: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
-    
+
     // Verify submission belongs to org
     const { data: submission } = await supabase
       .from('submissions')
       .select('program_id, programs!inner(organization_id)')
       .eq('id', id)
       .single();
-    
+
     if (!submission || (submission as any).programs?.organization_id !== orgId) {
       return { error: { message: 'Submission not found' } };
     }
-    
+
     const { error } = await supabase
       .from('submissions')
       .delete()
@@ -986,6 +1007,40 @@ export const submissions = {
       .select();
     return { data, error };
   },
+
+  // Public Voting
+  getPublic: async (programId: string) => {
+    if (!supabase) return { data: [], error: { message: 'Supabase not configured' } };
+
+    const { data, error } = await supabase
+      .from('submissions')
+      .select(`
+        *,
+        categories(title)
+      `)
+      .eq('program_id', programId)
+      .eq('status', 'Shortlisted') // Usually we only vote on shortlisted entries
+      .order('votes_count', { ascending: false });
+
+    return { data, error };
+  },
+
+  vote: async (id: string) => {
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+
+    // Increment votes_count using rpc or manual increment
+    // Since we don't have rpc yet, let's assume votes_count exists
+    const { data, error } = await supabase.rpc('increment_vote', { submission_id: id });
+
+    // Fallback if rpc fails (dev mode)
+    if (error) {
+      console.warn('RPC increment_vote failed, attempting manual update');
+      const { data: sub } = await supabase.from('submissions').select('votes_count').eq('id', id).single();
+      return supabase.from('submissions').update({ votes_count: (sub?.votes_count || 0) + 1 }).eq('id', id);
+    }
+
+    return { data, error };
+  },
 };
 
 // Judges
@@ -993,7 +1048,7 @@ export const judges = {
   getAll: async () => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     const { data, error } = await supabase
       .from('judges')
       .select('*')
@@ -1005,7 +1060,7 @@ export const judges = {
   getById: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('judges')
       .select(`
@@ -1051,7 +1106,7 @@ export const judges = {
   updateStatus: async (id: string, status: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('judges')
       .update({ status })
@@ -1068,7 +1123,7 @@ export const judgingCriteria = {
   getByProgram: async (programId: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: { message: 'Not authenticated' } };
-    
+
     // Verify program belongs to org
     const { data: program } = await supabase
       .from('programs')
@@ -1076,9 +1131,9 @@ export const judgingCriteria = {
       .eq('id', programId)
       .eq('organization_id', orgId)
       .single();
-    
+
     if (!program) return { data: [], error: { message: 'Program not found' } };
-    
+
     const { data, error } = await supabase
       .from('judging_criteria')
       .select('*')
@@ -1164,199 +1219,16 @@ export const scores = {
   },
 };
 
-// Contacts (CRM)
-export const contacts = {
-  getAll: async (filters?: { status?: string; source?: string }) => {
-    const orgId = await getCurrentOrgId();
-    if (!orgId) return { data: [], error: null };
-    
-    let query = supabase
-      .from('contacts')
-      .select('*')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false });
 
-    if (filters?.status) {
-      query = query.eq('status', filters.status);
-    }
-    if (filters?.source) {
-      query = query.eq('source', filters.source);
-    }
 
-    const { data, error } = await query;
-    return { data, error };
-  },
 
-  getById: async (id: string) => {
-    const orgId = await getCurrentOrgId();
-    if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('*, contact_custom_fields(*)')
-      .eq('id', id)
-      .eq('organization_id', orgId)
-      .single();
-    return { data, error };
-  },
-
-  create: async (contact: {
-    name: string;
-    email: string;
-    phone?: string;
-    source?: string;
-    tags?: string[];
-  }) => {
-    const org = await organizations.getCurrent();
-    const { data, error } = await supabase
-      .from('contacts')
-      .insert({
-        ...contact,
-        organization_id: org.data?.id,
-      })
-      .select()
-      .single();
-    return { data, error };
-  },
-
-  update: async (id: string, updates: Partial<{
-    name: string;
-    email: string;
-    phone: string;
-    status: string;
-    tags: string[];
-  }>) => {
-    const orgId = await getCurrentOrgId();
-    if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
-    const { data, error } = await supabase
-      .from('contacts')
-      .update(updates)
-      .eq('id', id)
-      .eq('organization_id', orgId)
-      .select()
-      .single();
-    return { data, error };
-  },
-
-  delete: async (id: string) => {
-    const orgId = await getCurrentOrgId();
-    if (!orgId) return { error: { message: 'Not authenticated' } };
-    
-    const { error } = await supabase
-      .from('contacts')
-      .delete()
-      .eq('id', id)
-      .eq('organization_id', orgId);
-    return { error };
-  },
-};
-
-// Messages
-export const messages = {
-  getThreads: async () => {
-    const orgId = await getCurrentOrgId();
-    const userId = await getCurrentUserId();
-    if (!orgId || !userId) return { data: [], error: null };
-    
-    // Get threads where user is a participant and thread belongs to org
-    const { data, error } = await supabase
-      .from('message_threads')
-      .select(`
-        *,
-        thread_participants!inner(user_id, last_read_at),
-        messages(content, sent_at, sender_name)
-      `)
-      .eq('organization_id', orgId)
-      .eq('thread_participants.user_id', userId)
-      .order('updated_at', { ascending: false });
-    return { data, error };
-  },
-
-  getByThread: async (threadId: string) => {
-    const orgId = await getCurrentOrgId();
-    const userId = await getCurrentUserId();
-    if (!orgId || !userId) return { data: [], error: { message: 'Not authenticated' } };
-    
-    // Verify thread belongs to org and user is participant
-    const { data: thread } = await supabase
-      .from('message_threads')
-      .select('id, organization_id, thread_participants!inner(user_id)')
-      .eq('id', threadId)
-      .eq('organization_id', orgId)
-      .eq('thread_participants.user_id', userId)
-      .single();
-    
-    if (!thread) return { data: [], error: { message: 'Thread not found' } };
-    
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('thread_id', threadId)
-      .order('sent_at', { ascending: true });
-    return { data, error };
-  },
-
-  send: async (threadId: string, content: string) => {
-    const user = (await auth.getUser()).user;
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        sender_id: user?.id,
-        content,
-        sender_name: user?.user_metadata?.full_name || user?.email,
-      })
-      .select()
-      .single();
-    return { data, error };
-  },
-
-  createThread: async (subject: string, participantIds: string[]) => {
-    const orgId = await getCurrentOrgId();
-    if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-
-    const currentUserId = await getCurrentUserId();
-    if (!currentUserId) return { data: null, error: { message: 'Not authenticated' } };
-    
-    const { data: thread, error: threadError } = await supabase
-      .from('message_threads')
-      .insert({ 
-        subject,
-        organization_id: orgId
-      })
-      .select()
-      .single();
-
-    if (threadError || !thread) return { data: null, error: threadError };
-
-    const uniqueParticipantIds = Array.from(new Set([currentUserId, ...(participantIds || [])].filter(Boolean)));
-    const participants = uniqueParticipantIds.map(userId => ({
-      thread_id: thread.id,
-      user_id: userId,
-    }));
-    await supabase.from('thread_participants').insert(participants);
-
-    return { data: thread, error: null };
-  },
-
-  markAsRead: async (threadId: string) => {
-    const userId = (await auth.getUser()).user?.id;
-    const { error } = await supabase
-      .from('thread_participants')
-      .update({ last_read_at: new Date().toISOString() })
-      .eq('thread_id', threadId)
-      .eq('user_id', userId);
-    return { error };
-  },
-};
 
 // Roles
 export const roles = {
   getAll: async () => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     const { data, error } = await supabase
       .from('roles')
       .select(`
@@ -1437,7 +1309,7 @@ export const roles = {
   delete: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
-    
+
     const { error } = await supabase
       .from('roles')
       .delete()
@@ -1452,7 +1324,7 @@ export const auditLogs = {
   getAll: async (filters?: { type?: string; resourceType?: string; limit?: number }) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     let query = supabase
       .from('audit_logs')
       .select('*')
@@ -1552,7 +1424,7 @@ export const socialAccounts = {
   getAll: async () => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     const { data, error } = await supabase
       .from('social_accounts')
       .select('*')
@@ -1581,7 +1453,7 @@ export const socialAccounts = {
   disconnect: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('social_accounts')
       .update({ status: 'disconnected' })
@@ -1598,7 +1470,7 @@ export const scheduledPosts = {
   getAll: async () => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     const { data, error } = await supabase
       .from('scheduled_posts')
       .select('*')
@@ -1634,7 +1506,7 @@ export const scheduledPosts = {
   }>) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
-    
+
     const { data, error } = await supabase
       .from('scheduled_posts')
       .update(updates)
@@ -1648,7 +1520,7 @@ export const scheduledPosts = {
   delete: async (id: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
-    
+
     const { error } = await supabase
       .from('scheduled_posts')
       .delete()
@@ -1944,11 +1816,11 @@ export const forms = {
       .from('program_form_fields')
       .delete()
       .eq('form_id', id);
-    
+
     if (fieldsError) {
       return { error: fieldsError };
     }
-    
+
     // Then delete the form
     const { error } = await supabase.from('program_forms').delete().eq('id', id);
     return { error };
@@ -2096,7 +1968,7 @@ export const cms = {
   getCampaignTemplates: async () => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
-    
+
     // Get both system templates and org-specific templates
     const { data, error } = await supabase
       .from('campaign_templates')
@@ -2195,6 +2067,208 @@ export const realtime = {
 
   unsubscribe: (channel: any) => {
     supabase.removeChannel(channel);
+  },
+};
+
+// ============================================================================
+// PAGE BUILDER HELPERS
+// ============================================================================
+
+export const programPages = {
+  // Config
+  getConfig: async (programId: string) => {
+    // Try to get existing config
+    const { data, error } = await supabase
+      .from('program_page_configs')
+      .select('*')
+      .eq('program_id', programId)
+      .maybeSingle();
+
+    if (!data && !error) {
+      // Return default if none exists (frontend should handle creation)
+      return { data: null, error: null };
+    }
+    return { data, error };
+  },
+
+  createOrUpdateConfig: async (programId: string, updates: any) => {
+    // Check if exists
+    const { data: existing } = await supabase
+      .from('program_page_configs')
+      .select('id')
+      .eq('program_id', programId)
+      .maybeSingle();
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('program_page_configs')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('program_id', programId)
+        .select()
+        .single();
+      return { data, error };
+    } else {
+      const { data, error } = await supabase
+        .from('program_page_configs')
+        .insert({ program_id: programId, ...updates })
+        .select()
+        .single();
+      return { data, error };
+    }
+  },
+
+  // Sections
+  getSections: async (programId: string) => {
+    const { data, error } = await supabase
+      .from('program_page_sections')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order', { ascending: true });
+    return { data, error };
+  },
+
+  saveSection: async (section: any) => {
+    // If it has an ID, update, else insert
+    if (section.id && !section.id.startsWith('temp-')) {
+      const { data, error } = await supabase
+        .from('program_page_sections')
+        .update({
+          ...section,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', section.id)
+        .select()
+        .single();
+      return { data, error };
+    } else {
+      const { id, ...newSection } = section; // Remove temp id
+      const { data, error } = await supabase
+        .from('program_page_sections')
+        .insert(newSection)
+        .select()
+        .single();
+      return { data, error };
+    }
+  },
+
+  deleteSection: async (sectionId: string) => {
+    const { error } = await supabase
+      .from('program_page_sections')
+      .delete()
+      .eq('id', sectionId);
+    return { error };
+  },
+
+  reorderSections: async (sections: { id: string, sort_order: number }[]) => {
+    // Create updates promise array
+    const updates = sections.map(s =>
+      supabase
+        .from('program_page_sections')
+        .update({ sort_order: s.sort_order })
+        .eq('id', s.id)
+    );
+    await Promise.all(updates);
+    return { error: null };
+  },
+
+  // Sponsors
+  getSponsors: async (programId: string) => {
+    const { data, error } = await supabase
+      .from('program_sponsors')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  saveSponsor: async (sponsor: any) => {
+    // Simple upsert based on ID existence
+    if (sponsor.id && !sponsor.id.startsWith('temp-')) {
+      const { data, error } = await supabase
+        .from('program_sponsors')
+        .update(sponsor)
+        .eq('id', sponsor.id)
+        .select().single();
+      return { data, error };
+    } else {
+      const { id, ...newSponsor } = sponsor;
+      const { data, error } = await supabase
+        .from('program_sponsors')
+        .insert(newSponsor)
+        .select().single();
+      return { data, error };
+    }
+  },
+
+  deleteSponsor: async (id: string) => {
+    const { error } = await supabase.from('program_sponsors').delete().eq('id', id);
+    return { error };
+  },
+
+  // FAQs
+  getFAQs: async (programId: string) => {
+    const { data, error } = await supabase
+      .from('program_faqs')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  saveFAQ: async (faq: any) => {
+    if (faq.id && !faq.id.startsWith('temp-')) {
+      const { data, error } = await supabase
+        .from('program_faqs')
+        .update(faq)
+        .eq('id', faq.id)
+        .select().single();
+      return { data, error };
+    } else {
+      const { id, ...newFaq } = faq;
+      const { data, error } = await supabase
+        .from('program_faqs')
+        .insert(newFaq)
+        .select().single();
+      return { data, error };
+    }
+  },
+
+  deleteFAQ: async (id: string) => {
+    const { error } = await supabase.from('program_faqs').delete().eq('id', id);
+    return { error };
+  },
+
+  // Milestones
+  getMilestones: async (programId: string) => {
+    const { data, error } = await supabase
+      .from('program_timeline_milestones')
+      .select('*')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  saveMilestone: async (milestone: any) => {
+    if (milestone.id && !milestone.id.startsWith('temp-')) {
+      const { data, error } = await supabase
+        .from('program_timeline_milestones')
+        .update(milestone)
+        .eq('id', milestone.id)
+        .select().single();
+      return { data, error };
+    } else {
+      const { id, ...newMilestone } = milestone;
+      const { data, error } = await supabase
+        .from('program_timeline_milestones')
+        .insert(newMilestone)
+        .select().single();
+      return { data, error };
+    }
+  },
+
+  deleteMilestone: async (id: string) => {
+    const { error } = await supabase.from('program_timeline_milestones').delete().eq('id', id);
+    return { error };
   },
 };
 

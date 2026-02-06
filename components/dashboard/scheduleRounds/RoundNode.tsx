@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Round, RoundType, RoundEdge, OutputPort } from '../../../types/scheduleRounds';
-import { Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, MoreVertical } from 'lucide-react';
+import RoundType, { Round, RoundEdge, OutputPort } from '../../../types/scheduleRounds';
+import { Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, MoreVertical, Sparkles } from 'lucide-react';
 
 interface RoundNodeData {
   round: Round;
@@ -47,7 +47,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
   // Each individual stream (A, B, C, D) should be available separately
   const availableDataStreams = useMemo(() => {
     const streams = new Set<string>();
-    
+
     incomingEdges.forEach(edge => {
       // Get individual streams from source round's output port
       if (edge.sourceRoundId && edge.sourceHandle) {
@@ -60,14 +60,14 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
           }
         }
       }
-      
+
       // Also check edge.dataStream directly for backward compatibility
       if (edge.dataStream) {
         const streamList = edge.dataStream.split(',').map(s => s.trim()).filter(s => s && s !== 'all');
         streamList.forEach(stream => streams.add(stream));
       }
     });
-    
+
     return Array.from(streams).sort();
   }, [incomingEdges, allRounds]);
 
@@ -79,10 +79,10 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
     }
     // Always create a default output port, even if no inputs yet
     // Default name and empty streams array - will be configured when inputs are connected
-    return [{ 
-      id: 'output-0', 
-      name: 'Output 1', 
-      dataStreams: availableDataStreams.length > 0 ? availableDataStreams : [] 
+    return [{
+      id: 'output-0',
+      name: 'Output 1',
+      dataStreams: availableDataStreams.length > 0 ? availableDataStreams : []
     }];
   }, [round.outputPorts, availableDataStreams]);
 
@@ -97,14 +97,16 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
 
   const getRoundTypeIcon = (type: RoundType) => {
     switch (type) {
-      case 'jury':
+      case 'Nomination':
         return <Users className="w-3.5 h-3.5" />;
-      case 'public':
-        return <Globe className="w-3.5 h-3.5" />;
-      case 'hybrid':
-        return <Users className="w-3.5 h-3.5" />;
-      case 'compliance':
+      case 'Shortlisting':
         return <Shield className="w-3.5 h-3.5" />;
+      case 'Public Voting':
+        return <Globe className="w-3.5 h-3.5" />;
+      case 'Public Rating':
+        return <Sparkles className="w-3.5 h-3.5" />;
+      case 'Announce':
+        return <CheckCircle2 className="w-3.5 h-3.5" />;
       default:
         return <Settings className="w-3.5 h-3.5" />;
     }
@@ -150,8 +152,8 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
               left: `${(index + 1) * (100 / (inputPorts.length + 1))}%`,
             }}
             className={`!w-3 !h-3 !border-2 !border-white !rounded-full !shadow-sm transition-all
-              ${isUsed 
-                ? '!bg-indigo-500 ring-2 ring-indigo-200' 
+              ${isUsed
+                ? '!bg-indigo-500 ring-2 ring-indigo-200'
                 : '!bg-slate-200 hover:!bg-indigo-400'
               } -mt-1.5`}
             onClick={(e) => {
@@ -241,8 +243,8 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
               left: `${(index + 1) * (100 / (outputPorts.length + 1))}%`,
             }}
             className={`!w-3 !h-3 !border-2 !border-white !rounded-full !shadow-lg transition-all -mb-1.5
-              ${isUsed 
-                ? '!bg-indigo-500 ring-2 ring-indigo-200' 
+              ${isUsed
+                ? '!bg-indigo-500 ring-2 ring-indigo-200'
                 : '!bg-indigo-400 hover:!bg-indigo-600 ring-1 ring-indigo-100'
               }`}
             onClick={(e) => {

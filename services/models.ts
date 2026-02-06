@@ -67,6 +67,7 @@ export interface Submission {
   date: string;
   image: string;
   assignedJudges?: string[]; // Array of Judge IDs
+  votes?: number;
 }
 
 export interface Judge {
@@ -80,18 +81,7 @@ export interface Judge {
   completedCount: number;
 }
 
-export interface Contact {
-  id: string;
-  name: string;
-  email: string;
-  role: string; // Linked to Role.name
-  status: 'Active' | 'Inactive';
-  lastActive: string;
-  avatar: string;
-  source: string;
-  surveyAnswer: string;
-  joinedDate: string;
-}
+
 
 // Organization/team member (comes from `organization_members` + `profiles` + `roles`)
 export interface TeamMember {
@@ -106,16 +96,7 @@ export interface TeamMember {
   joinedDate: string;
 }
 
-// Message is used for the sidebar thread list (inbox-like UI).
-export interface Message {
-  id: string;
-  sender: string;
-  senderAvatar: string;
-  content: string;
-  time: string;
-  unread: boolean;
-  threadId: string;
-}
+
 
 export interface SocialAccount {
   id: string;
@@ -162,10 +143,8 @@ export const PERMISSIONS = {
   VIEW_JUDGING: 'view_judging',
   MANAGE_JUDGING: 'manage_judging', // Assign judges, config
   MANAGE_FORMS: 'manage_forms',
-  VIEW_MESSAGES: 'view_messages',
-  MANAGE_REACH: 'manage_reach', // Social, Campaigns
+  MANAGE_REACH: 'manage_reach',
   VIEW_ANALYTICS: 'view_analytics',
-  MANAGE_CRM: 'manage_crm',
   MANAGE_TEAMS: 'manage_teams', // Roles & Invites
   VIEW_LOGS: 'view_logs',
   MANAGE_SETTINGS: 'manage_settings',

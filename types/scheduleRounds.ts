@@ -1,6 +1,7 @@
 // Core Data Models for Schedule & Rounds Workflow Engine
 
-export type RoundType = 'jury' | 'public' | 'hybrid' | 'compliance' | 'custom';
+type RoundType = 'Nomination' | 'Shortlisting' | 'Public Voting' | 'Public Rating' | 'Announce';
+export default RoundType;
 
 export type EvaluationLogic =
   | 'scoring'

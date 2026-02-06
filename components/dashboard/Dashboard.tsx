@@ -7,8 +7,6 @@ import { FormBuilderView } from './FormBuilderView';
 import { SubmissionTable } from './SubmissionTable';
 import { JudgingView } from './JudgingView';
 import { AnalyticsView } from './AnalyticsView';
-import { CRMView } from './CRMView';
-import { MessagesView } from './MessagesView';
 import { SettingsView } from './SettingsView';
 import { ReachView } from './ReachView';
 import { TeamsView } from './TeamsView';
@@ -17,6 +15,7 @@ import { CategoriesView } from './CategoriesView';
 import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
 import { ProgramDetailsView } from './ProgramDetailsView';
+import { PageBuilder } from './builder/PageBuilder';
 import { ScheduleRoundsView } from './scheduleRounds/ScheduleRoundsView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
@@ -48,6 +47,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     switch (currentView) {
       case 'overview':
         return <DashboardOverview activeEvent={activeEvent} />;
+      case 'builder':
+        return activeEvent ? <PageBuilder programId={activeEvent.id} /> : null;
       case 'schedule':
         return <ScheduleView activeEvent={activeEvent} />;
       case 'schedule-rounds':
@@ -66,12 +67,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <ReachView />;
       case 'analytics':
         return <AnalyticsView />;
-      case 'users':
-        return <CRMView />;
       case 'teams':
         return <TeamsView />;
-      case 'messages':
-        return <MessagesView />;
       case 'logs':
         return <AuditLogsView />;
       case 'settings':
@@ -117,7 +114,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       onChangeView={setCurrentView}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
-      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'submission-setup' || currentView === 'schedule-rounds'}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'submission-setup' || currentView === 'schedule-rounds' || currentView === 'builder'}
+      hideHeader={currentView === 'builder'}
     >
       <motion.div
         key={currentView}

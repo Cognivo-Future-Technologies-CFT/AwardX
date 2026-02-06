@@ -12,7 +12,7 @@ import ReactFlow, {
   Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Round, RoundEdge, RoundType } from '../../../types/scheduleRounds';
+import RoundType, { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
 import { ConnectionModal } from './ConnectionModal';
 import { RoundNode } from './RoundNode';
@@ -152,14 +152,14 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
     const roundNodes = rounds.map((round, index) => {
       const incoming = edges.filter(e => e.targetRoundId === round.id);
       const outgoing = edges.filter(e => e.sourceRoundId === round.id);
-      
+
       // Use saved position or calculate default position
       const savedPosition = round.position;
       const defaultPosition = {
         x: (index % 3) * 400 + 100,
         y: Math.floor(index / 3) * 400 + 100,
       };
-      
+
       return {
         id: round.id,
         type: 'roundNode',
@@ -202,7 +202,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   const handleNodesChange = useCallback(
     (changes: any[]) => {
       onNodesChange(changes);
-      
+
       // Save position when node is moved
       changes.forEach((change) => {
         if (change.type === 'position' && change.position) {
@@ -227,7 +227,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
     setNodes((currentNodes) => {
       // Create a map of current node positions (preserve user's current layout)
       const positionMap = new Map(currentNodes.map(n => [n.id, n.position]));
-      
+
       // Merge saved positions with current positions
       return initialNodes.map(node => ({
         ...node,
@@ -291,7 +291,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
         condition: edgeData.condition !== undefined ? edgeData.condition : editingEdge.condition,
         name: edgeData.name !== undefined ? edgeData.name : editingEdge.name,
       };
-      
+
       // Trigger edge update through parent
       onEdgeUpdate(updatedEdge);
       setEditingEdge(null);
@@ -317,10 +317,10 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
     // Create new edge with defaults
     const sourceRound = rounds.find(r => r.id === pendingConnection.source);
     const sourceOutputPorts = sourceRound?.outputPorts || [];
-    const defaultOutput = sourceOutputPorts.find(p => p.id === (pendingConnection.sourceHandle || 'output-0')) 
-      || sourceOutputPorts[0] 
+    const defaultOutput = sourceOutputPorts.find(p => p.id === (pendingConnection.sourceHandle || 'output-0'))
+      || sourceOutputPorts[0]
       || { id: 'output-0', name: 'Output 1', dataStreams: [] };
-    
+
     const newEdge: RoundEdge = {
       id: `edge-${Date.now()}`,
       programId,
@@ -337,7 +337,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
 
     onEdgeCreate(newEdge);
     setPendingConnection(null);
-      }, [pendingConnection, editingEdge, programId, edges, onEdgeCreate, onEdgeUpdate, rounds, onRoundUpdate]);
+  }, [pendingConnection, editingEdge, programId, edges, onEdgeCreate, onEdgeUpdate, rounds, onRoundUpdate]);
 
   const handleUseDefaults = useCallback(() => {
     if (!pendingConnection) return;
@@ -363,11 +363,11 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
       }
     });
     const defaultStreams = Array.from(sourceAvailableStreams).sort();
-    
+
     const sourceOutputPorts = sourceRound.outputPorts || [];
     let defaultSourceHandle = 'output-0';
     let defaultDataStream = defaultStreams.join(',');
-    
+
     if (sourceOutputPorts.length > 0) {
       defaultSourceHandle = sourceOutputPorts[0].id;
       defaultDataStream = sourceOutputPorts[0].dataStreams.join(',');
@@ -489,7 +489,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
       {selectedRound && (() => {
         // Get incoming edges for this round to determine available data streams
         const roundIncomingEdges = edges.filter(e => e.targetRoundId === selectedRound.id);
-        
+
         return (
           <RoundConfigurationPanel
             round={selectedRound}
@@ -513,7 +513,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
           setPendingConnection(null);
           return null;
         }
-        
+
         return (
           <ConnectionModal
             isOpen={!!pendingConnection}

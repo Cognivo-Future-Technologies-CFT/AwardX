@@ -24,6 +24,7 @@ import { Dashboard } from './components/dashboard/Dashboard';
 import { AuthCallback } from './components/AuthCallback';
 import { WorkflowPage } from './components/pages/WorkflowPage';
 import { FormSubmissionPage } from './components/pages/FormSubmissionPage';
+import { PublicProgramPage } from './components/pages/PublicProgramPage';
 import { auth } from './services/supabase';
 
 const CTASection = () => (
@@ -38,15 +39,15 @@ const CTASection = () => (
         {/* Background Patterns */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/30 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/30 rounded-full blur-[100px] pointer-events-none"></div>
-        
+
         {/* Branding Watermark */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15rem] font-black text-white opacity-[0.03] select-none pointer-events-none font-display">
-            AWARDX
+          AWARDX
         </div>
-        
+
         <div className="relative z-10">
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-8 tracking-tight font-display">
-            Ready to launch your <br/>awards program?
+            Ready to launch your <br />awards program?
           </h2>
           <p className="text-lg md:text-xl text-slate-300 mb-12 max-w-2xl mx-auto">
             Join 2,000+ organizations using AwardX to celebrate excellence, manage entries, and grow their community.
@@ -72,6 +73,9 @@ const App: React.FC = () => {
       if (params.get('page') === 'form' && params.get('formId')) {
         return 'form-submission';
       }
+      if (params.get('page') === 'program') {
+        return 'public-program';
+      }
       return 'home';
     } catch (e) {
       console.error('Error reading URL params:', e);
@@ -86,14 +90,24 @@ const App: React.FC = () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const isFormPage = params.get('page') === 'form' && params.get('formId');
-        
+        const isPublicProgramPage = params.get('page') === 'program';
+
         const { session, error } = await auth.getSession();
         if (error) {
           console.error('Error checking auth:', error);
           setIsCheckingAuth(false);
           return;
         }
-        
+
+        // Public Program Page is accessible to everyone
+        if (isPublicProgramPage) {
+          if (currentPage !== 'public-program') {
+            setCurrentPage('public-program');
+          }
+          setIsCheckingAuth(false);
+          return;
+        }
+
         if (isFormPage) {
           // If trying to access form page, check authentication
           if (!session) {
@@ -113,15 +127,16 @@ const App: React.FC = () => {
             return;
           }
         }
-        
+
         if (session) {
           // User is authenticated, redirect to dashboard if on home/login/signup
           // But don't redirect if already on form-submission page
-          if (currentPage === 'form-submission') {
+          // But don't redirect if already on form-submission page
+          if (currentPage === 'form-submission' || currentPage === 'public-program') {
             setIsCheckingAuth(false);
             return;
           }
-          
+
           // Only redirect to dashboard if on home/login/signup
           if (['home', 'login', 'signup'].includes(currentPage)) {
             setCurrentPage('dashboard');
@@ -152,7 +167,8 @@ const App: React.FC = () => {
           // Only redirect to dashboard if not on a form page
           const params = new URLSearchParams(window.location.search);
           const isFormPage = params.get('page') === 'form' && params.get('formId');
-          if (!isFormPage && currentPage !== 'form-submission') {
+          const isPublicProgramPage = params.get('page') === 'program';
+          if (!isFormPage && !isPublicProgramPage && currentPage !== 'form-submission' && currentPage !== 'public-program') {
             setCurrentPage('dashboard');
           }
         }
@@ -160,7 +176,8 @@ const App: React.FC = () => {
         // Only redirect away if not on a form page
         const params = new URLSearchParams(window.location.search);
         const isFormPage = params.get('page') === 'form' && params.get('formId');
-        if (!isFormPage) {
+        const isPublicProgramPage = params.get('page') === 'program';
+        if (!isFormPage && !isPublicProgramPage) {
           setCurrentPage('home');
         }
       }
@@ -179,9 +196,9 @@ const App: React.FC = () => {
 
   // Handle OAuth callback
   useEffect(() => {
-    const isCallback = window.location.hash.includes('access_token') || 
-                       window.location.hash.includes('error');
-    
+    const isCallback = window.location.hash.includes('access_token') ||
+      window.location.hash.includes('error');
+
     if (isCallback && currentPage === 'home') {
       setCurrentPage('auth-callback');
     }
@@ -195,6 +212,8 @@ const App: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const formId = params.get('formId');
         return <FormSubmissionPage onNavigate={setCurrentPage} formId={formId || undefined} />;
+      case 'public-program':
+        return <PublicProgramPage onNavigate={setCurrentPage} />;
       case 'features':
         return <FeaturesPage />;
       case 'how-it-works':
@@ -227,10 +246,10 @@ const App: React.FC = () => {
 
   // Show loading state while checking auth (especially important for form pages)
   // Only show this if we're not already on login/signup/form-submission page
-  if (isCheckingAuth && !['login', 'signup', 'form-submission', 'auth-callback'].includes(currentPage)) {
+  if (isCheckingAuth && !['login', 'signup', 'form-submission', 'auth-callback', 'public-program'].includes(currentPage)) {
     const params = new URLSearchParams(window.location.search);
     const isFormPage = params.get('page') === 'form' && params.get('formId');
-    
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -303,7 +322,7 @@ const App: React.FC = () => {
   if (currentPage === 'login') {
     return <LoginPage onNavigate={setCurrentPage} />;
   }
-  
+
   // Render Workflow page without Header/Footer wrapping
   if (currentPage === 'workflow') {
     return <WorkflowPage />;
@@ -333,23 +352,26 @@ const App: React.FC = () => {
     }
   }
 
-  // Render Demo/Dashboard without Header/Footer wrapping
-  if (currentPage === 'demo' || currentPage === 'dashboard') {
+  // Render Demo/Dashboard/Public Program without Header/Footer wrapping
+  if (currentPage === 'demo' || currentPage === 'dashboard' || currentPage === 'public-program') {
+    if (currentPage === 'public-program') {
+      return <PublicProgramPage onNavigate={setCurrentPage} />;
+    }
     return (
-      <Dashboard 
+      <Dashboard
         onLogout={async () => {
           await auth.signOut();
           setCurrentPage('home');
-        }} 
+        }}
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-500/30 selection:text-indigo-900">
-      <Header 
-        onNavigate={setCurrentPage} 
-        currentPage={currentPage} 
+      <Header
+        onNavigate={setCurrentPage}
+        currentPage={currentPage}
         onLogout={async () => {
           await auth.signOut();
           setCurrentPage('home');

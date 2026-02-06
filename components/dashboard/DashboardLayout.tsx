@@ -8,7 +8,18 @@ import {
   UserCog, Edit, Workflow
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Program, Category, PERMISSIONS, Contact } from '../../services/models';
+import { Program, Category, PERMISSIONS } from '../../services/models';
+
+interface DashboardUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: 'Active' | 'Inactive';
+  lastActive: string;
+  avatar: string;
+  joinedDate: string;
+}
 import { db as databaseService } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { Modal } from '../Modal';
@@ -22,6 +33,7 @@ interface DashboardLayoutProps {
   onLogout: () => void;
   onSwitchEvent: () => void;
   noPadding?: boolean;
+  hideHeader?: boolean;
 }
 
 interface SidebarItemProps {
@@ -134,7 +146,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onChangeView,
   onLogout,
   onSwitchEvent,
-  noPadding = false
+  noPadding = false,
+  hideHeader = false
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
@@ -148,7 +161,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [newCategoryName, setNewCategoryName] = useState('');
 
   // User & Permissions
-  const [currentUser, setCurrentUser] = useState<Contact>({
+  const [currentUser, setCurrentUser] = useState<DashboardUser>({
     id: '',
     name: 'Loading...',
     email: '',
@@ -156,11 +169,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     status: 'Active',
     lastActive: 'Now',
     avatar: '',
-    source: 'Internal',
-    surveyAnswer: '',
     joinedDate: new Date().toISOString().split('T')[0],
   });
-  const [allUsers, setAllUsers] = useState<Contact[]>([]);
+  const [allUsers, setAllUsers] = useState<DashboardUser[]>([]);
   const [permissionsReady, setPermissionsReady] = useState(false);
 
   useEffect(() => {
@@ -184,8 +195,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               status: 'Active',
               lastActive: 'Now',
               avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`,
-              source: 'Internal',
-              surveyAnswer: '',
               joinedDate: new Date().toISOString().split('T')[0],
             });
           }
@@ -204,8 +213,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               status: 'Active',
               lastActive: 'Now',
               avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`,
-              source: 'Internal',
-              surveyAnswer: '',
               joinedDate: new Date().toISOString().split('T')[0],
             });
           }
@@ -248,6 +255,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Define Nav items with Permissions
   const leftNavItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
+    { id: 'builder', label: 'Overview Page', icon: Sparkles, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'program-details', label: 'Program Details', icon: Edit, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule', label: 'Schedule', icon: CalendarClock, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule-rounds', label: 'Schedule & Rounds', icon: Workflow, permission: PERMISSIONS.MANAGE_PROGRAMS },
@@ -256,13 +264,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'judging', label: 'Judging', icon: Gavel, permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards', label: 'Awards', icon: Trophy, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'templates', label: 'Form Builder', icon: LayoutTemplate, permission: PERMISSIONS.MANAGE_FORMS },
-    { id: 'messages', label: 'Messages', icon: MessageSquare, permission: PERMISSIONS.VIEW_MESSAGES },
   ];
 
   const rightNavItems = [
     { id: 'reach', label: 'Reach', icon: Share2, permission: PERMISSIONS.MANAGE_REACH },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, permission: PERMISSIONS.VIEW_ANALYTICS },
-    { id: 'users', label: 'CRM', icon: Users, permission: PERMISSIONS.MANAGE_CRM },
     { id: 'teams', label: 'Teams & Roles', icon: Shield, permission: PERMISSIONS.MANAGE_TEAMS },
     { id: 'logs', label: 'Audit Logs', icon: Activity, permission: PERMISSIONS.VIEW_LOGS },
     { id: 'settings', label: 'Settings', icon: Settings, permission: PERMISSIONS.MANAGE_SETTINGS },
@@ -400,52 +406,54 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         `}
       >
         {/* Top Header Mobile/Desktop Mix */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-              <Menu />
-            </button>
-            <div className="hidden md:flex items-center gap-2 text-sm">
-              <span className="text-slate-400 cursor-pointer hover:text-slate-600" onClick={onSwitchEvent}>Event Hub</span>
-              <ChevronRight className="w-4 h-4 text-slate-300" />
-              <span className="text-slate-600 font-medium">{activeEvent?.title}</span>
-              <ChevronRight className="w-4 h-4 text-slate-300" />
-              <span className="font-semibold text-slate-900 capitalize bg-slate-100 px-2 py-1 rounded-md text-xs">{currentView}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 lg:gap-6">
-            {/* Header Actions Portal Target */}
-            <div id="dashboard-header-actions" className="flex items-center gap-2" />
-
-            {/* PRD 4.8 Test Mode Toggle */}
-            <div
-              onClick={() => setIsTestMode(!isTestMode)}
-              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors border ${isTestMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${isTestMode ? 'bg-amber-400' : 'bg-slate-300'}`}>
-                <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isTestMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+        {!hideHeader && (
+          <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                <Menu />
+              </button>
+              <div className="hidden md:flex items-center gap-2 text-sm">
+                <span className="text-slate-400 cursor-pointer hover:text-slate-600" onClick={onSwitchEvent}>Event Hub</span>
+                <ChevronRight className="w-4 h-4 text-slate-300" />
+                <span className="text-slate-600 font-medium">{activeEvent?.title}</span>
+                <ChevronRight className="w-4 h-4 text-slate-300" />
+                <span className="font-semibold text-slate-900 capitalize bg-slate-100 px-2 py-1 rounded-md text-xs">{currentView}</span>
               </div>
-              <span className={`text-xs font-bold uppercase tracking-wide ${isTestMode ? 'text-amber-700' : 'text-slate-500'}`}>
-                {isTestMode ? 'Sandbox' : 'Live'}
-              </span>
             </div>
 
-            <div className="hidden sm:flex relative group">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search workspace..."
-                className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 lg:w-64 transition-all hover:bg-white hover:border-slate-300"
-              />
-            </div>
+            <div className="flex items-center gap-4 lg:gap-6">
+              {/* Header Actions Portal Target */}
+              <div id="dashboard-header-actions" className="flex items-center gap-2" />
 
-            <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white ring-1 ring-white"></span>
-            </button>
-          </div>
-        </header>
+              {/* PRD 4.8 Test Mode Toggle */}
+              <div
+                onClick={() => setIsTestMode(!isTestMode)}
+                className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors border ${isTestMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
+              >
+                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${isTestMode ? 'bg-amber-400' : 'bg-slate-300'}`}>
+                  <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isTestMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                </div>
+                <span className={`text-xs font-bold uppercase tracking-wide ${isTestMode ? 'text-amber-700' : 'text-slate-500'}`}>
+                  {isTestMode ? 'Sandbox' : 'Live'}
+                </span>
+              </div>
+
+              <div className="hidden sm:flex relative group">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search workspace..."
+                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 lg:w-64 transition-all hover:bg-white hover:border-slate-300"
+                />
+              </div>
+
+              <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white ring-1 ring-white"></span>
+              </button>
+            </div>
+          </header>
+        )}
 
         {/* Scrollable Content */}
         <main className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>

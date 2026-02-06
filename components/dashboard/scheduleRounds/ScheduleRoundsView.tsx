@@ -153,7 +153,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       id: `round-${Date.now()}`,
       programId: activeEvent.id,
       name: 'New Round',
-      type: 'jury',
+      type: 'Nomination',
       evaluationLogic: 'scoring',
       evaluatorStrategy: 'all_judges',
       blindEvaluation: false,
@@ -334,7 +334,22 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             onRoundSelect={setSelectedRoundId}
             onRoundUpdate={handleRoundUpdate}
             onRoundDelete={handleRoundDelete}
-            onRoundReorder={(reorderedRounds) => setRounds(reorderedRounds)}
+            onRoundReorder={async (reorderedRounds) => {
+              setRounds(reorderedRounds);
+              // Persist the new order to database
+              try {
+                await Promise.all(
+                  reorderedRounds.map(round =>
+                    scheduleRoundsService.updateRound({
+                      ...round,
+                      updatedAt: new Date().toISOString(),
+                    })
+                  )
+                );
+              } catch (error) {
+                console.error('Failed to persist round order:', error);
+              }
+            }}
             programId={activeEvent.id}
           />
         )}
