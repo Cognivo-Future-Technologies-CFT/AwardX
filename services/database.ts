@@ -746,9 +746,9 @@ class DatabaseService {
     });
   }
 
-  async assignJudgesToSubmissions(submissionIds: string[], judgeIds: string[]) {
+  async assignJudgesToSubmissions(submissionIds: string[], judgeIds: string[], options?: { replaceExisting?: boolean }) {
     for (const submissionId of submissionIds) {
-      const { error } = await submissions.assignJudges(submissionId, judgeIds);
+      const { error } = await submissions.assignJudges(submissionId, judgeIds, options?.replaceExisting);
       if (error) throw new Error(error.message || 'Failed to assign judges');
     }
     await this.safeAuditLog({
@@ -777,6 +777,32 @@ class DatabaseService {
       assignedCount: j.assigned_count || 0,
       completedCount: j.completed_count || 0,
     }));
+  }
+
+  async createJudge(payload: { name: string; email: string; bio?: string }) {
+    const { data, error } = await judges.create(payload);
+    if (error) throw new Error(error.message || 'Failed to add judge');
+    await this.safeAuditLog({
+      action: 'Added judge',
+      actionType: 'create',
+      resourceType: 'judge',
+      resourceId: (data as any)?.id,
+      details: payload.email,
+    });
+    return data;
+  }
+
+  async inviteJudge(payload: { name: string; email: string }) {
+    const { data, error } = await judges.invite(payload.email, payload.name);
+    if (error) throw new Error(error.message || 'Failed to invite judge');
+    await this.safeAuditLog({
+      action: 'Invited judge',
+      actionType: 'create',
+      resourceType: 'judge',
+      resourceId: (data as any)?.id,
+      details: payload.email,
+    });
+    return data;
   }
 
   private mapJudgeStatus(status: string): string {

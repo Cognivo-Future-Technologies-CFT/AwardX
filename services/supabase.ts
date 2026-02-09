@@ -997,7 +997,13 @@ export const submissions = {
     return { error };
   },
 
-  assignJudges: async (submissionId: string, judgeIds: string[]) => {
+  assignJudges: async (submissionId: string, judgeIds: string[], replaceExisting = false) => {
+    if (replaceExisting) {
+      await supabase
+        .from('submission_judges')
+        .delete()
+        .eq('submission_id', submissionId);
+    }
     const assignments = judgeIds.map(judgeId => ({
       submission_id: submissionId,
       judge_id: judgeId,
