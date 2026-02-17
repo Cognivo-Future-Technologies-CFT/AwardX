@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
    Trophy, Gavel, HandCoins, Building2, Palette, MapPin,
    Store, Briefcase, Sparkles, Calendar, ArrowRight,
-   LogOut, Bell, Search, RefreshCw
+   LogOut, Bell, Search, RefreshCw, Plus
 } from 'lucide-react';
 import { Program, EventType } from '../../services/models';
 import { auth } from '../../services/supabase';
@@ -64,12 +64,14 @@ const ExistingEventCard: React.FC<{ event: Program; onClick: () => void }> = ({ 
 );
 
 export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelectEvent, onLogout }) => {
+   const createSectionRef = React.useRef<HTMLElement>(null);
    const [events, setEvents] = useState<Program[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedType, setSelectedType] = useState<EventType | null>(null);
    const [newEvent, setNewEvent] = useState({ title: '', category: 'General', deadline: '' });
    const [isLoading, setIsLoading] = useState(true);
    const [isRefreshing, setIsRefreshing] = useState(false);
+   const [isCreating, setIsCreating] = useState(false);
    const [userData, setUserData] = useState<UserData>({
       name: 'Loading...',
       avatar: '',
@@ -146,11 +148,11 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
       };
 
       fetchUserData();
-      
+
       // Refresh programs when component becomes visible or window gains focus
       let visibilityTimeout: NodeJS.Timeout;
       let focusTimeout: NodeJS.Timeout;
-      
+
       const handleVisibilityChange = () => {
          if (!document.hidden) {
             clearTimeout(visibilityTimeout);
@@ -159,24 +161,24 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
             }, 100); // Small delay to avoid rapid refreshes
          }
       };
-      
+
       const handleFocus = () => {
          clearTimeout(focusTimeout);
          focusTimeout = setTimeout(() => {
             loadPrograms(false);
          }, 200); // Slightly longer delay for focus to avoid conflicts
       };
-      
+
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('focus', handleFocus);
-      
+
       // Set up periodic refresh (every 20 seconds when visible)
       const refreshInterval = setInterval(() => {
          if (!document.hidden) {
             loadPrograms(false);
          }
       }, 20000);
-      
+
       return () => {
          document.removeEventListener('visibilitychange', handleVisibilityChange);
          window.removeEventListener('focus', handleFocus);
@@ -191,59 +193,67 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
       setIsModalOpen(true);
    };
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEvent.title || !newEvent.deadline || !selectedType) return;
-    
-    // Save event data before clearing
-    const eventData = { ...newEvent };
-    const eventType = selectedType;
-    
-    // Optimistic update - add event immediately to UI
-    const optimisticEvent: Program = {
-      id: `temp-${Date.now()}`,
-      title: eventData.title,
-      category: eventData.category,
-      type: eventType,
-      status: 'Draft',
-      deadline: eventData.deadline,
-      entriesCount: 0,
-      paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
-    };
-    
-    // Add optimistic event immediately
-    setEvents(prev => [optimisticEvent, ...prev]);
-    setIsModalOpen(false);
-    setNewEvent({ title: '', category: 'General', deadline: '' });
-    
-    try {
-      // Ensure database is initialized before creating
-      await databaseService.initialize();
-      
-      const created = await databaseService.addProgram({
-        ...eventData,
-        type: eventType,
-        status: 'Draft',
-        paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
-      });
-      
-      // Replace optimistic event with real one
-      setEvents(prev => prev.map(e => e.id === optimisticEvent.id ? created : e));
-      
-      // Automatically enter the new event
-      onSelectEvent(created);
-    } catch (error: any) {
-      console.error('Failed to create program:', error);
-      // Remove optimistic event on error
-      setEvents(prev => prev.filter(e => e.id !== optimisticEvent.id));
-      const errorMessage = error?.message || 'Failed to create program. Please try again.';
-      alert(errorMessage);
-      // Reopen modal on error
-      setIsModalOpen(true);
-      setSelectedType(eventType);
-      setNewEvent(eventData);
-    }
-  };
+   const scrollToCreate = () => {
+      createSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+   };
+
+   const handleCreate = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newEvent.title || !newEvent.deadline || !selectedType || isCreating) return;
+
+      setIsCreating(true);
+
+      // Save event data before clearing
+      const eventData = { ...newEvent };
+      const eventType = selectedType;
+
+      // Optimistic update - add event immediately to UI
+      const optimisticEvent: Program = {
+         id: `temp-${Date.now()}`,
+         title: eventData.title,
+         category: eventData.category,
+         type: eventType,
+         status: 'Draft',
+         deadline: eventData.deadline,
+         entriesCount: 0,
+         paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
+      };
+
+      // Add optimistic event immediately
+      setEvents(prev => [optimisticEvent, ...prev]);
+      setIsModalOpen(false);
+      setNewEvent({ title: '', category: 'General', deadline: '' });
+
+      try {
+         // Ensure database is initialized before creating
+         await databaseService.initialize();
+
+         const created = await databaseService.addProgram({
+            ...eventData,
+            type: eventType,
+            status: 'Draft',
+            paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
+         });
+
+         // Replace optimistic event with real one
+         setEvents(prev => prev.map(e => e.id === optimisticEvent.id ? created : e));
+
+         // Automatically enter the new event
+         onSelectEvent(created);
+      } catch (error: any) {
+         console.error('Failed to create program:', error);
+         // Remove optimistic event on error
+         setEvents(prev => prev.filter(e => e.id !== optimisticEvent.id));
+         const errorMessage = error?.message || 'Failed to create program. Please try again.';
+         alert(errorMessage);
+         // Reopen modal on error
+         setIsModalOpen(true);
+         setSelectedType(eventType);
+         setNewEvent(eventData);
+      } finally {
+         setIsCreating(false);
+      }
+   };
 
    return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
@@ -282,12 +292,12 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                         </div>
                      </div>
                      {/* Always visible logout button */}
-                     <button 
-                        onClick={onLogout} 
+                     <button
+                        onClick={onLogout}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 hover:border-red-200"
                         title="Sign Out"
                      >
-                        <LogOut className="w-4 h-4" /> 
+                        <LogOut className="w-4 h-4" />
                         <span className="hidden sm:inline">Sign Out</span>
                      </button>
                   </div>
@@ -303,15 +313,24 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                      <h2 className="text-2xl font-bold text-slate-900">Your Events</h2>
                      <p className="text-slate-500">Manage your active programs and competitions.</p>
                   </div>
-                  <button
-                     onClick={() => loadPrograms(true)}
-                     disabled={isRefreshing}
-                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                     title="Refresh events"
-                  >
-                     <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                     {isRefreshing ? 'Refreshing...' : 'Refresh'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                     <button
+                        onClick={scrollToCreate}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 hover:shadow-indigo-300 group"
+                     >
+                        <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                        <span className="hidden sm:inline">New Event</span>
+                     </button>
+                     <button
+                        onClick={() => loadPrograms(true)}
+                        disabled={isRefreshing}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Refresh events"
+                     >
+                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                     </button>
+                  </div>
                </div>
 
                {isLoading ? (
@@ -342,7 +361,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
             </section>
 
             {/* Create New Event Section - Grouped */}
-            <section>
+            <section ref={createSectionRef} className="scroll-mt-24">
                <div className="text-center mb-16">
                   <h2 className="text-3xl font-bold text-slate-900 mb-4">Create New Event</h2>
                   <p className="text-slate-500 max-w-2xl mx-auto text-lg">
@@ -419,12 +438,21 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                <div className="bg-indigo-50 p-4 rounded-xl text-sm text-indigo-700 flex gap-3 items-start mt-4">
                   <Sparkles className="w-5 h-5 shrink-0 mt-0.5" />
                   <p>
-                     AwardX will automatically configure the workspace for a <strong>{selectedType}</strong> workflow, including relevant judging criteria and terminology.
+                     AwardX will automatically configure the workspace for a <strong>{selectedType}</strong> workflow, including optimal judging rounds based on research from {selectedType === 'Award' ? 'A\' Design and iF Design' : selectedType === 'Grant' ? 'NIH and SSHRC' : selectedType === 'Residency' ? 'MacDowell and Yaddo' : 'industry best practices'}.
                   </p>
                </div>
                <div className="pt-6 flex justify-end gap-3">
-                  <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                  <Button type="submit">Initialize Workspace</Button>
+                  <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isCreating}>Cancel</Button>
+                  <Button type="submit" disabled={isCreating}>
+                     {isCreating ? (
+                        <>
+                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                           Creating...
+                        </>
+                     ) : (
+                        'Initialize Workspace'
+                     )}
+                  </Button>
                </div>
             </form>
          </Modal>

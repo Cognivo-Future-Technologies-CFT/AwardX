@@ -374,7 +374,7 @@ class DatabaseService {
     return this.mapProgram(data);
   }
 
-  async addProgram(program: Omit<Program, 'id' | 'entriesCount'>): Promise<Program> {
+  async addProgram(program: Omit<Program, 'id' | 'entriesCount'>, options?: { autoCreateRounds?: boolean }): Promise<Program> {
     // Ensure organization exists
     if (!this.currentOrgId) {
       await this.initialize();
@@ -420,6 +420,85 @@ class DatabaseService {
       details: created.title,
       metadata: { title: created.title },
     });
+
+    // Auto-create default rounds from database template (default: true)
+    const shouldAutoCreate = options?.autoCreateRounds !== false;
+    if (shouldAutoCreate && eventTypeId && created.deadline && supabase) {
+      try {
+        // Query program_templates table for default rounds
+        const { data: template, error: templateError } = await supabase
+          .from('program_templates')
+          .select('default_rounds, default_criteria')
+          .eq('event_type_id', eventTypeId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!templateError && template?.default_rounds) {
+          const roundTemplates = template.default_rounds as Array<{
+            title: string;
+            type: string;
+            description: string;
+            startOffsetDays: number;
+            durationDays: number;
+            reviewerCount?: number;
+          }>;
+
+          const deadlineDate = new Date(created.deadline);
+
+          // Create rounds from template
+          for (const roundTemplate of roundTemplates) {
+            const startDate = new Date(deadlineDate);
+            startDate.setDate(startDate.getDate() + roundTemplate.startOffsetDays);
+
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + roundTemplate.durationDays);
+
+            // Determine status based on current date
+            const now = new Date();
+            let status: 'Upcoming' | 'Active' | 'Completed';
+            if (now < startDate) {
+              status = 'Upcoming';
+            } else if (now >= startDate && now <= endDate) {
+              status = 'Active';
+            } else {
+              status = 'Completed';
+            }
+
+            const round: Omit<Round, 'id'> = {
+              programId: created.id,
+              title: roundTemplate.title,
+              type: roundTemplate.type as Round['type'],
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              status,
+              description: roundTemplate.description,
+            };
+
+            await this.addRound(round);
+          }
+
+          await this.safeAuditLog({
+            action: 'Auto-created default rounds',
+            actionType: 'create',
+            resourceType: 'round',
+            resourceId: created.id,
+            details: `Created ${roundTemplates.length} default rounds for ${created.type} template`,
+            metadata: { programId: created.id, roundCount: roundTemplates.length, template: created.type },
+          });
+        }
+      } catch (roundError) {
+        // Log error but don't fail program creation if round creation fails
+        console.error('Failed to auto-create rounds:', roundError);
+        await this.safeAuditLog({
+          action: 'Failed to auto-create rounds',
+          actionType: 'warning',
+          resourceType: 'round',
+          resourceId: created.id,
+          details: roundError instanceof Error ? roundError.message : 'Unknown error',
+        });
+      }
+    }
+
     return created;
   }
 
