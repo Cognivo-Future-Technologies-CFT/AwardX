@@ -68,7 +68,9 @@ export interface Submission {
   image: string;
   assignedJudges?: string[]; // Array of Judge IDs
   votes?: number;
+  submissionData?: any;
 }
+
 
 export interface Judge {
   id: string;

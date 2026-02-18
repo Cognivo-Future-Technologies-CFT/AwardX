@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from '../Header';
-import { Footer } from '../Footer';
 import { Button } from '../Button';
+
 import { FormField, FormPage, FormTheme } from '../dashboard/FormBuilder';
 import { db } from '../../services/database';
 import { auth } from '../../services/supabase';
@@ -36,7 +35,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
       return propFormId || null;
     }
   };
-  
+
   const [formId, setFormId] = useState<string | null>(() => {
     try {
       return propFormId || getFormIdFromUrl();
@@ -45,7 +44,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
       return propFormId || null;
     }
   });
-  
+
   const [formFields, setFormFields] = useState<FormField[]>([]);
   const [formPages, setFormPages] = useState<FormPage[]>([]);
   const [theme, setTheme] = useState<FormTheme>(defaultTheme);
@@ -65,12 +64,12 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     const checkAuth = async () => {
       try {
         setIsCheckingAuth(true);
-        
+
         // Small delay to ensure session is loaded after redirect
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
         const { session } = await auth.getSession();
-        
+
         setIsAuthenticated(!!session);
         setIsCheckingAuth(false);
       } catch (err) {
@@ -81,7 +80,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     };
 
     checkAuth();
-    
+
     // Also listen for auth state changes
     const { data } = auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
@@ -91,7 +90,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
         setIsAuthenticated(false);
       }
     });
-    
+
     return () => {
       if (data?.subscription) {
         data.subscription.unsubscribe();
@@ -360,8 +359,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
   if (error) {
     return (
       <div className="min-h-screen bg-white">
-        <Header onNavigate={onNavigate} currentPage="home" onLogout={handleLogout} />
-        <div className="min-h-[60vh] pt-24 flex items-center justify-center px-4">
+        <div className="min-h-[60vh] flex items-center justify-center px-4">
           <div className="text-center max-w-md">
             <div className="text-red-500 mb-4">
               <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -373,7 +371,6 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
             <Button onClick={() => onNavigate('home')}>Go Home</Button>
           </div>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -382,8 +379,8 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     try {
       return (
         <div className="min-h-screen bg-white">
-          <Header onNavigate={onNavigate} currentPage="home" onLogout={handleLogout} />
-          <div className="min-h-[60vh] pt-24 flex items-center justify-center px-4">
+          <div className="min-h-[60vh] flex items-center justify-center px-4">
+
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -394,7 +391,6 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
               <p className="text-lg text-slate-600">Your form has been submitted successfully.</p>
             </motion.div>
           </div>
-          <Footer />
         </div>
       );
     } catch (error) {
@@ -414,12 +410,13 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ backgroundColor: theme.backgroundColor }}>
-      <Header onNavigate={onNavigate} currentPage="home" onLogout={handleLogout} />
-      <div className="min-h-[80vh] pt-24 pb-12 px-4">
-        <div className="max-w-3xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden" style={{ borderRadius: theme.borderRadius }}>
+      <div className="min-h-[80vh] flex flex-col justify-center py-12 px-4">
+
+        <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden" style={{ borderRadius: theme.borderRadius }}>
           <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-          <div className="p-8 md:p-12">
+          <div className="p-8 md:p-12 lg:p-16">
             <div className="mb-8">
+
               <h1 className="text-3xl font-bold mb-3" style={{ color: theme.textColor, fontFamily: theme.fontFamily }}>
                 {currentPage?.title || formTitle}
               </h1>
@@ -496,7 +493,6 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
           </div>
         </div>
       </div>
-      <Footer />
     </div>
   );
 };

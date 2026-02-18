@@ -715,8 +715,10 @@ class DatabaseService {
       image: s.cover_image_url || `https://source.unsplash.com/random/50x50?${s.id}`,
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
       votes: s.votes_count || s.submission_data?.votes || 0,
+      submissionData: s.submission_data || {},
     };
   }
+
 
   private mapSubmissionStatus(status: string): string {
     const statusMap: Record<string, string> = {
@@ -1237,23 +1239,44 @@ class DatabaseService {
   async getStats(programId?: string) {
     const submissions = await this.getSubmissions(programId);
     const programs = await this.getPrograms();
-
-    const relevantSubmissions = programId
-      ? submissions.filter(s => {
-        // Would need to track which program each submission belongs to
-        return true; // Simplified for now
-      })
-      : submissions;
+    const judges = await this.getJudges();
 
     const activePrograms = programs.filter(p => p.status === 'Active');
 
+    // Calculate Trends (Last 7 Days)
+    const last7Days = [...Array(7)].map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    const submissionTrend = last7Days.map(date => {
+      const count = submissions.filter(s => s.date === date).length;
+      const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+      return { name: dayName, entries: count };
+    });
+
+    // Calculate Category Split
+    const categoryCounts: Record<string, number> = {};
+    submissions.forEach(s => {
+      categoryCounts[s.category] = (categoryCounts[s.category] || 0) + 1;
+    });
+
+    const categorySplit = Object.entries(categoryCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 4);
+
     return {
-      totalSubmissions: relevantSubmissions.length,
+      totalSubmissions: submissions.length,
       activePrograms: activePrograms.length,
-      pendingReview: relevantSubmissions.filter(s =>
+      pendingReview: submissions.filter(s =>
         s.status === 'Pending' || s.status === 'Under Review'
       ).length,
-      revenue: relevantSubmissions.length * 45, // Mock calculation
+      revenue: submissions.length * 45, // Mock calculation based on entry count
+      activeJudges: judges.filter(j => j.status === 'Active').length,
+      submissionTrend,
+      categorySplit
     };
   }
 

@@ -233,7 +233,8 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
             type: eventType,
             status: 'Draft',
             paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
-         });
+         }, { autoCreateRounds: eventType !== 'Other' });
+
 
          // Replace optimistic event with real one
          setEvents(prev => prev.map(e => e.id === optimisticEvent.id ? created : e));
@@ -345,9 +346,24 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                   </div>
                ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     {/* Create Custom Grid Card */}
+                     <motion.div
+                        whileHover={{ y: -4, boxShadow: '0 10px 25px -5px rgba(99, 102, 241, 0.15)' }}
+                        onClick={() => handleTypeSelect('Other')}
+                        className="flex flex-col items-center justify-center bg-indigo-50/50 border-2 border-dashed border-indigo-200 rounded-2xl p-6 cursor-pointer hover:border-indigo-400 group transition-all h-[200px]"
+                     >
+                        <div className="w-12 h-12 rounded-full bg-white text-indigo-600 flex items-center justify-center mb-3 shadow-sm group-hover:scale-110 transition-transform">
+                           <Plus className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-lg font-bold text-indigo-900 mb-1">Create Custom</h3>
+                        <p className="text-xs text-indigo-600/70 font-medium">Build a unique unit grid</p>
+                     </motion.div>
+
                      {events.map(event => (
                         <ExistingEventCard key={event.id} event={event} onClick={() => onSelectEvent(event)} />
                      ))}
+
+
 
                      {/* Empty State */}
                      {events.length === 0 && !isLoading && (

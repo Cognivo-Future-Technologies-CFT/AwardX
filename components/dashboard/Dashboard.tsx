@@ -17,6 +17,7 @@ import { SubmissionProcessView } from './SubmissionProcessView'; // Import new v
 import { ProgramDetailsView } from './ProgramDetailsView';
 import { PageBuilder } from './builder/PageBuilder';
 import { ScheduleRoundsView } from './scheduleRounds/ScheduleRoundsView';
+import { CustomGridView } from './CustomGridView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
@@ -47,8 +48,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     switch (currentView) {
       case 'overview':
         return <DashboardOverview activeEvent={activeEvent} />;
+      case 'custom-grid':
+        return <CustomGridView />;
       case 'builder':
         return activeEvent ? <PageBuilder programId={activeEvent.id} /> : null;
+
       case 'schedule':
         return <ScheduleView activeEvent={activeEvent} />;
       case 'schedule-rounds':
@@ -60,7 +64,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'templates':
         return <FormBuilderView activeEvent={activeEvent} />;
       case 'submissions':
-        return <SubmissionTable />;
+        return <SubmissionTable activeEvent={activeEvent} />;
+
       case 'judging':
         return <JudgingView />;
       case 'reach':
@@ -76,7 +81,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'program-details':
         return <ProgramDetailsView activeEvent={activeEvent} />;
       default:
-        return <DashboardOverview activeEvent={activeEvent} />;
+        return activeEvent?.type === 'Other' ? <CustomGridView /> : <DashboardOverview activeEvent={activeEvent} />;
     }
   };
 

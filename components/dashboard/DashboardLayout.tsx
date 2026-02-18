@@ -5,8 +5,9 @@ import {
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
-  UserCog, Edit, Workflow
+  UserCog, Edit, Workflow, Layout
 } from 'lucide-react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program, Category, PERMISSIONS } from '../../services/models';
 
@@ -264,7 +265,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'judging', label: 'Judging', icon: Gavel, permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards', label: 'Awards', icon: Trophy, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'templates', label: 'Form Builder', icon: LayoutTemplate, permission: PERMISSIONS.MANAGE_FORMS },
+    ...(activeEvent?.type === 'Other' ? [{ id: 'custom-grid', label: 'Grid Builder', icon: Layout, permission: PERMISSIONS.MANAGE_PROGRAMS }] : []),
   ];
+
 
   const rightNavItems = [
     { id: 'reach', label: 'Reach', icon: Share2, permission: PERMISSIONS.MANAGE_REACH },
