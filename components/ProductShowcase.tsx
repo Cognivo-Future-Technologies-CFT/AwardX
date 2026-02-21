@@ -80,8 +80,8 @@ export const ProductShowcase: React.FC = () => {
                     <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg w-full max-w-[280px] border border-white/50 transform group-hover:-translate-y-2 transition-transform duration-500">
                        <div className="flex -space-x-2 mb-4 justify-center">
                           {[1,2,3,4].map(i => (
-                             <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-slate-200 overflow-hidden">
-                               <img src={`https://i.pravatar.cc/100?img=${i+20}`} alt="" />
+                             <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center">
+                               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                              </div>
                           ))}
                           <div className="w-10 h-10 rounded-full border-2 border-white bg-slate-900 text-white flex items-center justify-center text-xs font-bold">+2</div>

@@ -252,7 +252,13 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                     <td className="p-4 pl-6">
                                         <UserHoverCard user={member}>
                                             <div className="flex items-center gap-3 cursor-pointer group">
-                                                <img src={member.avatar} alt="" className="w-10 h-10 rounded-full border-2 border-slate-100 object-cover group-hover:border-indigo-200 transition-colors" />
+                                                {member.avatar ? (
+                                                   <img src={member.avatar} alt="" className="w-10 h-10 rounded-full border-2 border-slate-100 object-cover group-hover:border-indigo-200 transition-colors" />
+                                                ) : (
+                                                   <div className="w-10 h-10 rounded-full border-2 border-slate-100 group-hover:border-indigo-200 transition-colors bg-indigo-500 flex items-center justify-center text-white text-sm font-bold">
+                                                      {member.name?.charAt(0).toUpperCase() || 'U'}
+                                                   </div>
+                                                )}
                                                 <div>
                                                     <div className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
                                                         {member.name}

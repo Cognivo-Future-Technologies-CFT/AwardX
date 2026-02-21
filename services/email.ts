@@ -17,16 +17,19 @@ type JudgeInvitePayload = {
 };
 
 async function postJson(path: string, payload: Record<string, any>) {
-  try {
-    const url = backendUrl ? `${backendUrl}${path}` : path;
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // Email delivery failures should not block UI flows.
+  const url = backendUrl ? `${backendUrl}${path}` : path;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error || `Email API returned ${resp.status}`);
   }
+
+  return resp.json();
 }
 
 export async function sendTeamInviteEmail(payload: TeamInvitePayload) {

@@ -276,7 +276,13 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                                        {(sub.assignedJudges || []).slice(0, 3).map((jid, i) => {
                                           const j = judges.find(judge => judge.id === jid);
                                           return j ? (
-                                             <img key={i} src={j.avatar} className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-slate-100 shadow-sm object-cover" title={j.name} alt="" />
+                                             j.avatar ? (
+                                                <img key={i} src={j.avatar} className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-slate-100 shadow-sm object-cover" title={j.name} alt="" />
+                                             ) : (
+                                                <div key={i} className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-slate-100 shadow-sm bg-indigo-500 flex items-center justify-center text-white text-[10px] font-bold" title={j.name}>
+                                                   {j.name?.charAt(0).toUpperCase() || 'J'}
+                                                </div>
+                                             )
                                           ) : null;
                                        })}
                                        {(sub.assignedJudges || []).length > 3 && (
@@ -471,7 +477,13 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                      <label key={judge.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50/80 cursor-pointer transition-all hover:border-indigo-100 group">
                         <div className="flex items-center gap-4">
                            <div className="relative">
-                              <img src={judge.avatar} alt="" className="w-10 h-10 rounded-xl shadow-sm border border-slate-200 group-hover:border-indigo-200 transition-colors" />
+                              {judge.avatar ? (
+                                 <img src={judge.avatar} alt="" className="w-10 h-10 rounded-xl shadow-sm border border-slate-200 group-hover:border-indigo-200 transition-colors" />
+                              ) : (
+                                 <div className="w-10 h-10 rounded-xl shadow-sm border border-slate-200 group-hover:border-indigo-200 transition-colors bg-indigo-500 flex items-center justify-center text-white text-sm font-bold">
+                                    {judge.name?.charAt(0).toUpperCase() || 'J'}
+                                 </div>
+                              )}
                               <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
                            </div>
                            <div>

@@ -1248,6 +1248,41 @@ export const judges = {
       .single();
     return { data, error };
   },
+
+  delete: async (id: string) => {
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return { error: { message: 'Not authenticated' } };
+
+    // Remove submission_judges assignments first
+    await supabase.from('submission_judges').delete().eq('judge_id', id);
+
+    const { error } = await supabase
+      .from('judges')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', orgId);
+    return { error };
+  },
+
+  deleteAll: async (programId?: string) => {
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return { error: { message: 'Not authenticated' } };
+
+    // Get all judge IDs first to clean up submission_judges
+    let query = supabase.from('judges').select('id').eq('organization_id', orgId);
+    if (programId) query = query.eq('program_id', programId);
+    const { data: judgeRows } = await query;
+    const judgeIds = (judgeRows || []).map((j: any) => j.id);
+
+    if (judgeIds.length > 0) {
+      await supabase.from('submission_judges').delete().in('judge_id', judgeIds);
+    }
+
+    let deleteQuery = supabase.from('judges').delete().eq('organization_id', orgId);
+    if (programId) deleteQuery = deleteQuery.eq('program_id', programId);
+    const { error } = await deleteQuery;
+    return { error };
+  },
 };
 
 // Judging Criteria

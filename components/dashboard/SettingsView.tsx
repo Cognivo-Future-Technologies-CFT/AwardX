@@ -43,7 +43,7 @@ export const SettingsView: React.FC = () => {
 
   const email = useMemo(() => profile?.email || '', [profile]);
   const avatarUrl = useMemo(
-    () => profile?.avatar_url || `https://i.pravatar.cc/150?u=${profile?.id || email || 'user'}`,
+    () => profile?.avatar_url || '',
     [profile, email]
   );
 
@@ -149,7 +149,13 @@ export const SettingsView: React.FC = () => {
                    <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Profile Information</h2>
                    
                    <div className="flex items-center gap-4 mb-6">
-                      <img src={avatarUrl} alt="" className="w-20 h-20 rounded-full border-4 border-slate-100 object-cover" />
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="" className="w-20 h-20 rounded-full border-4 border-slate-100 object-cover" />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full border-4 border-slate-100 bg-indigo-600 flex items-center justify-center">
+                          <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        </div>
+                      )}
                       <div>
                          <Button variant="outline" size="sm" disabled>
                            Change Avatar

@@ -195,7 +195,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               role: 'Admin',
               status: 'Active',
               lastActive: 'Now',
-              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`,
+              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
               joinedDate: new Date().toISOString().split('T')[0],
             });
           }
@@ -213,7 +213,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               role: 'Admin',
               status: 'Active',
               lastActive: 'Now',
-              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`,
+              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
               joinedDate: new Date().toISOString().split('T')[0],
             });
           }
@@ -352,11 +352,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* User Profile (Left Bottom) */}
         <div className="p-3 border-t border-slate-100 relative group">
           <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${isLeftCollapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
-            <img
-              src={currentUser.avatar}
-              alt="User"
-              className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover shrink-0"
-            />
+            {currentUser.avatar ? (
+              <img
+                src={currentUser.avatar}
+                alt="User"
+                className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                {currentUser.name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            )}
             {!isLeftCollapsed && (
               <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
@@ -374,7 +380,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 onClick={() => handleUserSwitch(u.id)}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm ${currentUser.id === u.id ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-50'}`}
               >
-                <img src={u.avatar} className="w-5 h-5 rounded-full" />
+                {u.avatar ? (
+                  <img src={u.avatar} className="w-5 h-5 rounded-full object-cover" alt="" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                    {u.name?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                )}
                 <span className="truncate">{u.name} ({u.role})</span>
               </button>
             ))}

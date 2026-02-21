@@ -35,7 +35,7 @@ app.post('/api/invites/team', async (req, res) => {
 	const inviteLine = inviteUrl ? `Accept your invite: ${inviteUrl}` : 'Sign in to join your workspace.';
 
 	try {
-		await resend.emails.send({
+		const { data, error: sendError } = await resend.emails.send({
 			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.app>',
 			to: email,
 			subject,
@@ -46,8 +46,15 @@ app.post('/api/invites/team', async (req, res) => {
 				<p>${inviteLine}</p>
 			</div>`,
 		});
-		return res.json({ ok: true });
+
+		if (sendError) {
+			console.error('Resend error:', sendError);
+			return res.status(500).json({ error: sendError.message || 'Resend rejected the email' });
+		}
+
+		return res.json({ ok: true, id: data?.id });
 	} catch (error: any) {
+		console.error('Team invite error:', error);
 		return res.status(500).json({ error: error?.message || 'Failed to send invite' });
 	}
 });
@@ -67,7 +74,7 @@ app.post('/api/invites/judge', async (req, res) => {
 	const actionUrl = inviteUrl || 'https://awardstuff.vercel.app/';
 
 	try {
-		await resend.emails.send({
+		const { data, error: sendError } = await resend.emails.send({
 			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.app>',
 			to: email,
 			subject,
@@ -105,8 +112,15 @@ app.post('/api/invites/judge', async (req, res) => {
 	</body>
 </html>`,
 		});
-		return res.json({ ok: true });
+
+		if (sendError) {
+			console.error('Resend error:', sendError);
+			return res.status(500).json({ error: sendError.message || 'Resend rejected the email' });
+		}
+
+		return res.json({ ok: true, id: data?.id });
 	} catch (error: any) {
+		console.error('Judge invite error:', error);
 		return res.status(500).json({ error: error?.message || 'Failed to send invite' });
 	}
 });

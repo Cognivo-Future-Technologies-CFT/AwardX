@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
 import { Judge, Program, Submission } from '../../services/models';
-import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar } from 'lucide-react';
+import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
@@ -24,6 +24,8 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [judgeMode, setJudgeMode] = useState<'invite' | 'add'>('invite');
    const [judgeForm, setJudgeForm] = useState({ name: '', email: '', bio: '' });
    const [isSavingJudge, setIsSavingJudge] = useState(false);
+   const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
+   const [isRemovingAll, setIsRemovingAll] = useState(false);
   const [criteria, setCriteria] = useState([
      { id: 1, name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.' },
      { id: 2, name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
@@ -52,6 +54,39 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const refreshJudges = async () => {
       const judgeData = await db.getJudges(activeEvent?.id);
       setJudges(judgeData);
+   };
+
+   const handleRemoveJudge = async (judgeId: string) => {
+      if (!confirm('Remove this judge? This will also remove all their submission assignments.')) return;
+      setIsRemovingJudge(judgeId);
+      try {
+         await db.deleteJudge(judgeId);
+         await refreshJudges();
+         // Refresh submissions to update assigned judges
+         const submissionData = await db.getSubmissions(activeEvent?.id);
+         setSubmissions(shortlistOnly ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+      } catch (error) {
+         console.error('Failed to remove judge:', error);
+         alert('Failed to remove judge. Please try again.');
+      } finally {
+         setIsRemovingJudge(null);
+      }
+   };
+
+   const handleRemoveAllJudges = async () => {
+      if (!confirm(`Remove ALL ${judges.length} judges from this program? This will also remove all submission assignments. This cannot be undone.`)) return;
+      setIsRemovingAll(true);
+      try {
+         await db.deleteAllJudges(activeEvent?.id);
+         await refreshJudges();
+         const submissionData = await db.getSubmissions(activeEvent?.id);
+         setSubmissions(shortlistOnly ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+      } catch (error) {
+         console.error('Failed to remove all judges:', error);
+         alert('Failed to remove judges. Please try again.');
+      } finally {
+         setIsRemovingAll(false);
+      }
    };
 
    const toggleSelection = (id: string) => {
@@ -188,6 +223,17 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            >
                               <Mail className="w-4 h-4" /> Invite Judge
                            </Button>
+                           {judges.length > 0 && (
+                              <Button
+                                 size="sm"
+                                 variant="outline"
+                                 className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                                 onClick={handleRemoveAllJudges}
+                                 disabled={isRemovingAll}
+                              >
+                                 <Trash2 className="w-4 h-4" /> {isRemovingAll ? 'Removing...' : 'Remove All Invites'}
+                              </Button>
+                           )}
                       </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -195,7 +241,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                   <div key={judge.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow group">
                      <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-4">
-                           <img src={judge.avatar} alt={judge.name} className="w-12 h-12 rounded-full border-2 border-slate-100" />
+                           {judge.avatar ? (
+                              <img src={judge.avatar} alt={judge.name} className="w-12 h-12 rounded-full border-2 border-slate-100" />
+                           ) : (
+                              <div className="w-12 h-12 rounded-full border-2 border-slate-100 bg-indigo-500 flex items-center justify-center text-white text-lg font-bold">
+                                 {judge.name?.charAt(0).toUpperCase() || 'J'}
+                              </div>
+                           )}
                            <div>
                               <div className="font-bold text-slate-900">{judge.name}</div>
                               <div className="text-xs text-slate-500">{judge.email}</div>
@@ -227,6 +279,18 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         </button>
                         <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100">
                            <Mail className="w-4 h-4" />
+                        </button>
+                        <button
+                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-100 transition-colors"
+                           onClick={() => handleRemoveJudge(judge.id)}
+                           disabled={isRemovingJudge === judge.id}
+                           title="Remove invite"
+                        >
+                           {isRemovingJudge === judge.id ? (
+                              <div className="w-4 h-4 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />
+                           ) : (
+                              <UserX className="w-4 h-4" />
+                           )}
                         </button>
                      </div>
                   </div>
@@ -416,7 +480,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                   {judges.map(judge => (
                      <label key={judge.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
                         <div className="flex items-center gap-3">
-                           <img src={judge.avatar} alt="" className="w-8 h-8 rounded-full" />
+                           {judge.avatar ? (
+                              <img src={judge.avatar} alt="" className="w-8 h-8 rounded-full" />
+                           ) : (
+                              <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                                 {judge.name?.charAt(0).toUpperCase() || 'J'}
+                              </div>
+                           )}
                            <div>
                               <div className="text-sm font-bold text-slate-900">{judge.name}</div>
                               <div className="text-xs text-slate-500">{judge.email}</div>

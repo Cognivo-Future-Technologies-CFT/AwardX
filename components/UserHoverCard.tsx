@@ -47,7 +47,13 @@ export const UserHoverCard: React.FC<UserHoverCardProps> = ({ user, children }) 
             <div className="h-16 bg-gradient-to-r from-indigo-500 to-purple-600 relative">
                <div className="absolute -bottom-6 left-6">
                   <div className="w-16 h-16 rounded-full border-4 border-white bg-white overflow-hidden shadow-sm">
-                     <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                     {user.avatar ? (
+                        <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                     ) : (
+                        <div className="w-full h-full bg-indigo-600 flex items-center justify-center text-white text-xl font-bold">
+                           {user.name?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                     )}
                   </div>
                   <div className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
                </div>

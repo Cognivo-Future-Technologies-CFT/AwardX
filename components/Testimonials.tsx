@@ -9,21 +9,21 @@ const testimonials: Testimonial[] = [
     role: "Director of Awards",
     company: "Design Institute",
     content: "AwardX cut our administrative time by 70%. The WhatsApp integration for notifying nominees was a game changer for our engagement rates.",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80"
+    avatar: ""
   },
   {
     name: "David Chen",
     role: "Event Manager",
     company: "TechGlobal Summit",
     content: "The judging interface is incredibly intuitive. Our 50+ international judges required zero training to get started. Highly recommended.",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80"
+    avatar: ""
   },
   {
     name: "Elena Rodriguez",
     role: "Marketing Lead",
     company: "Creative Arts Council",
     content: "We switched from a custom solution to AwardX. The portfolio generation feature gave our winners valuable exposure we couldn't offer before.",
-    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80"
+    avatar: ""
   }
 ];
 
@@ -53,11 +53,17 @@ export const Testimonials: React.FC = () => {
               </div>
               
               <div className="flex items-center mb-6 relative z-10">
-                <img 
-                  src={t.avatar} 
-                  alt={t.name} 
-                  className="w-14 h-14 rounded-full border-2 border-white shadow-md mr-4 object-cover"
-                />
+                {t.avatar ? (
+                  <img 
+                    src={t.avatar} 
+                    alt={t.name} 
+                    className="w-14 h-14 rounded-full border-2 border-white shadow-md mr-4 object-cover"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-full border-2 border-white shadow-md mr-4 bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold">
+                    {t.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <h4 className="text-slate-900 font-bold font-display">{t.name}</h4>
                   <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide">{t.company}</p>

@@ -87,7 +87,13 @@ export const AuditLogsView: React.FC = () => {
                            {log.user !== 'Unknown' ? (
                               <UserHoverCard user={{ name: log.user, avatar: log.userAvatar, role: 'Team Member' }}>
                                  <div className="flex items-center gap-2 cursor-pointer">
-                                    <img src={log.userAvatar} alt="" className="w-6 h-6 rounded-full border border-slate-200" />
+                                    {log.userAvatar ? (
+                                       <img src={log.userAvatar} alt="" className="w-6 h-6 rounded-full border border-slate-200" />
+                                    ) : (
+                                       <div className="w-6 h-6 rounded-full border border-slate-200 bg-indigo-500 flex items-center justify-center text-white text-[10px] font-bold">
+                                          {log.user?.charAt(0).toUpperCase() || 'U'}
+                                       </div>
+                                    )}
                                     <span className="text-sm text-slate-600 font-medium hover:text-indigo-600 hover:underline">{log.user}</span>
                                  </div>
                               </UserHoverCard>

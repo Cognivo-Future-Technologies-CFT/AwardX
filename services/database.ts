@@ -878,7 +878,7 @@ class DatabaseService {
     return data.map((j: any) => ({
       id: j.id,
       name: j.name,
-      avatar: j.avatar_url || `https://i.pravatar.cc/150?u=${j.id}`,
+      avatar: j.avatar_url || '',
       email: j.email,
       status: this.mapJudgeStatus(j.status) as Judge['status'],
       progress: j.completed_count && j.assigned_count
@@ -913,6 +913,32 @@ class DatabaseService {
       details: payload.email,
     });
     return data;
+  }
+
+  async deleteJudge(judgeId: string): Promise<void> {
+    const { error } = await judges.delete(judgeId);
+    if (error) throw new Error(error.message || 'Failed to remove judge');
+    await this.safeAuditLog({
+      action: 'Removed judge',
+      actionType: 'delete',
+      resourceType: 'judge',
+      resourceId: judgeId,
+      details: `Judge ${judgeId} removed`,
+      metadata: { judgeId },
+    });
+  }
+
+  async deleteAllJudges(programId?: string): Promise<void> {
+    const { error } = await judges.deleteAll(programId);
+    if (error) throw new Error(error.message || 'Failed to remove all judges');
+    await this.safeAuditLog({
+      action: 'Removed all judges',
+      actionType: 'delete',
+      resourceType: 'judge',
+      resourceId: programId || 'all',
+      details: programId ? `All judges removed from program ${programId}` : 'All judges removed',
+      metadata: { programId },
+    });
   }
 
   private mapJudgeStatus(status: string): string {
@@ -1007,7 +1033,7 @@ class DatabaseService {
         role: role.name || 'Member',
         status: (m.status === 'active' ? 'Active' : 'Inactive') as TeamMember['status'],
         lastActive: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—',
-        avatar: profile.avatar_url || `https://i.pravatar.cc/150?u=${profile.id || m.user_id}`,
+        avatar: profile.avatar_url || '',
         joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       };
     });
@@ -1047,7 +1073,7 @@ class DatabaseService {
       id: l.id,
       action: l.action,
       user: l.user_name || 'User',
-      userAvatar: l.user_avatar || `https://i.pravatar.cc/150?u=${l.user_id || l.id}`,
+      userAvatar: l.user_avatar || '',
       details: l.details || '',
       timestamp: l.created_at ? new Date(l.created_at).toLocaleString() : '',
       type: (l.action_type === 'delete' ? 'delete' : l.action_type === 'warning' ? 'warning' : l.action_type === 'create' ? 'create' : 'update') as Log['type'],
@@ -1064,7 +1090,7 @@ class DatabaseService {
       platform: a.platform,
       handle: a.handle,
       status: a.status === 'connected' ? 'Connected' : 'Disconnected',
-      avatar: a.avatar_url || `https://i.pravatar.cc/150?u=${a.handle}`,
+      avatar: a.avatar_url || '',
     }));
   }
 
@@ -1331,7 +1357,7 @@ class DatabaseService {
       role: 'Admin', // Default, would need to check organization_members
       status: 'Active',
       lastActive: 'Now',
-      avatar: profile.avatar_url || `https://i.pravatar.cc/150?u=${user.id}`,
+      avatar: profile.avatar_url || '',
       source: 'Internal',
       surveyAnswer: '',
       joinedDate: profile.created_at ? new Date(profile.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],

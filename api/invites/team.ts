@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
   const inviteLine = inviteUrl ? `Accept your invite: ${inviteUrl}` : 'Sign in to join your workspace.';
 
   try {
-    await resend.emails.send({
+    const { data, error: sendError } = await resend.emails.send({
       from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.app>',
       to: email,
       subject,
@@ -35,8 +35,16 @@ export default async function handler(req: any, res: any) {
         <p>${inviteLine}</p>
       </div>`,
     });
-    res.json({ ok: true });
+
+    if (sendError) {
+      console.error('Resend error:', sendError);
+      res.status(500).json({ error: sendError.message || 'Resend rejected the email' });
+      return;
+    }
+
+    res.json({ ok: true, id: data?.id });
   } catch (error: any) {
+    console.error('Team invite error:', error);
     res.status(500).json({ error: error?.message || 'Failed to send invite' });
   }
 }
