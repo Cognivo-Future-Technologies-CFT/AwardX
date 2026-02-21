@@ -1107,15 +1107,19 @@ export const submissions = {
 
 // Judges
 export const judges = {
-  getAll: async () => {
+  getAll: async (programId?: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('judges')
       .select('*')
       .eq('organization_id', orgId)
       .order('name');
+    if (programId) {
+      query = query.eq('program_id', programId);
+    }
+    const { data, error } = await query;
     return { data, error };
   },
 
@@ -1142,22 +1146,25 @@ export const judges = {
     name: string;
     email: string;
     bio?: string;
+    programId?: string;
   }) => {
+    const { programId, ...judgePayload } = judge;
     const org = await organizations.getCurrent();
     const { data, error } = await supabase
       .from('judges')
       .insert({
-        ...judge,
+        ...judgePayload,
         organization_id: org.data?.id,
+        program_id: programId || null,
       })
       .select()
       .single();
     return { data, error };
   },
 
-  invite: async (email: string, name: string) => {
+  invite: async (email: string, name: string, programId?: string) => {
     // Create judge record and send invite email
-    const { data, error } = await judges.create({ name, email });
+    const { data, error } = await judges.create({ name, email, programId });
     if (!error && data) {
       // Trigger invite email via Supabase Edge Function or similar
       // await supabase.functions.invoke('send-judge-invite', { body: { judgeId: data.id } });
@@ -1287,11 +1294,11 @@ export const scores = {
 
 // Roles
 export const roles = {
-  getAll: async () => {
+  getAll: async (programId?: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('roles')
       .select(`
         *,
@@ -1299,10 +1306,14 @@ export const roles = {
       `)
       .eq('organization_id', orgId)
       .order('name');
+    if (programId) {
+      query = query.eq('program_id', programId);
+    }
+    const { data, error } = await query;
     return { data, error };
   },
 
-  create: async (role: { name: string; color?: string; permissions: string[] }) => {
+  create: async (role: { name: string; color?: string; permissions: string[]; programId?: string }) => {
     const org = await organizations.getCurrent();
     const { data: newRole, error: roleError } = await supabase
       .from('roles')
@@ -1310,6 +1321,7 @@ export const roles = {
         name: role.name,
         color: role.color,
         organization_id: org.data?.id,
+        program_id: role.programId || null,
       })
       .select()
       .single();
@@ -1597,17 +1609,21 @@ export const scheduledPosts = {
 // ============================================================================
 
 export const team = {
-  getMembers: async () => {
+  getMembers: async (programId?: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
 
     // Avoid relying on nested joins here (FK join syntax can vary and RLS can block joined tables).
     // Instead, load membership rows first, then hydrate profiles + roles in separate queries.
-    const { data: memberRows, error } = await supabase
+    let memberQuery = supabase
       .from('organization_members')
       .select('*')
       .eq('organization_id', orgId)
       .order('joined_at', { ascending: false });
+    if (programId) {
+      memberQuery = memberQuery.eq('program_id', programId);
+    }
+    const { data: memberRows, error } = await memberQuery;
 
     if (error || !memberRows) return { data: [], error };
 
@@ -1638,24 +1654,26 @@ export const team = {
     return { data: hydrated, error: null };
   },
 
-  updateMemberRole: async (memberId: string, roleId: string) => {
+  updateMemberRole: async (memberId: string, roleId: string, programId?: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('organization_members')
       .update({ role_id: roleId })
       .eq('id', memberId)
-      .eq('organization_id', orgId)
-      .select()
-      .single();
+      .eq('organization_id', orgId);
+    if (programId) {
+      query = query.eq('program_id', programId);
+    }
+    const { data, error } = await query.select().single();
 
     return { data, error };
   },
 
   // Direct-add user to org by email (no invite flow).
   // Works only if the user already exists (i.e. they have signed up and have a profile row with email set).
-  addMemberByEmail: async (email: string, roleId: string) => {
+  addMemberByEmail: async (email: string, roleId: string, programId?: string) => {
     const orgId = await getCurrentOrgId();
     const addedBy = await getCurrentUserId();
     if (!orgId || !addedBy) return { data: null, error: { message: 'Not authenticated' } };
@@ -1678,13 +1696,14 @@ export const team = {
       .from('organization_members')
       .upsert({
         organization_id: orgId,
+        program_id: programId || null,
         user_id: profile.id,
         role_id: roleId,
         status: 'active',
         invited_by: null,
         invited_at: null,
         joined_at: new Date().toISOString(),
-      }, { onConflict: 'organization_id,user_id' })
+      }, { onConflict: 'organization_id,user_id,program_id' })
       .select()
       .single();
 

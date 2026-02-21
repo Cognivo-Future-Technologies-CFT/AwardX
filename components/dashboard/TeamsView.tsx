@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
-import { PERMISSIONS, Role, TeamMember } from '../../services/models';
+import { PERMISSIONS, Role, TeamMember, Program } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { Plus, UserPlus, Shield, MoreVertical, Search, Filter, Trash2, Edit2, CheckCircle2, UserCog } from 'lucide-react';
 import { Button } from '../Button';
 import { UserHoverCard } from '../UserHoverCard';
 import { Modal } from '../Modal';
+import { sendTeamInviteEmail } from '../../services/email';
 
 const PERMISSION_GROUPS = [
     {
@@ -43,7 +44,11 @@ const PERMISSION_GROUPS = [
     }
 ];
 
-export const TeamsView: React.FC = () => {
+interface TeamsViewProps {
+    activeEvent?: Program | null;
+}
+
+export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [activeTab, setActiveTab] = useState<'members' | 'roles'>('members');
     const [members, setMembers] = useState<TeamMember[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
@@ -63,18 +68,27 @@ export const TeamsView: React.FC = () => {
         color: 'bg-slate-100 text-slate-700'
     });
 
+    if (!activeEvent) {
+        return (
+            <div className="flex items-center justify-center h-full text-slate-500">
+                Select a program to manage team roles.
+            </div>
+        );
+    }
+
     useEffect(() => {
         refreshData();
-    }, []);
+    }, [activeEvent?.id]);
 
     const refreshData = async () => {
         setError(null);
+        if (!activeEvent?.id) return;
         const { user } = await auth.getUser();
         setCurrentUserId(user?.id || null);
 
         const [loadedMembers, loadedRoles] = await Promise.all([
-            db.getTeamMembers(),
-            db.getRoles(),
+            db.getTeamMembers(activeEvent.id),
+            db.getRoles(activeEvent.id),
         ]);
 
         // Derive usersCount by role name
@@ -109,7 +123,8 @@ export const TeamsView: React.FC = () => {
                 await db.createRole({
                     name: editingRole.name,
                     permissions: editingRole.permissions || [],
-                    color: editingRole.color || 'bg-slate-100 text-slate-700',
+                    color: editingRole.color,
+                    programId: activeEvent?.id,
                 });
             }
 
@@ -153,11 +168,18 @@ export const TeamsView: React.FC = () => {
 
         if (emails.length === 0) return;
         if (!inviteRoleId) return;
+        if (!activeEvent?.id) return;
 
         try {
             setError(null);
+            const roleName = roles.find(r => r.id === inviteRoleId)?.name;
             for (const email of emails) {
-                await db.addTeamMemberByEmail(email, inviteRoleId);
+                await db.addTeamMemberByEmail(email, inviteRoleId, activeEvent.id);
+                await sendTeamInviteEmail({
+                    email,
+                    roleName,
+                    programTitle: activeEvent.title || 'your workspace',
+                });
             }
             setInviteEmails('');
             setIsInviteModalOpen(false);

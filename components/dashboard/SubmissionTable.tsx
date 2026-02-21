@@ -67,7 +67,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
       const load = async () => {
          const [subs, js] = await Promise.all([
             db.getSubmissions(activeEvent?.id),
-            db.getJudges()
+            db.getJudges(activeEvent?.id)
          ]);
          setSubmissions(subs);
          setJudges(js);

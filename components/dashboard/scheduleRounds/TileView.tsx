@@ -111,8 +111,8 @@ export const TileView: React.FC<TileViewProps> = ({
                 evaluationLogic: 'scoring',
                 evaluatorStrategy: 'all_judges',
                 blindEvaluation: false,
-                startCondition: { type: 'manual_trigger' },
-                endCondition: { type: 'manual_close' },
+                startCondition: { type: 'fixed_datetime', datetime: new Date().toISOString() },
+                endCondition: { type: 'fixed_datetime', datetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() },
                 shortlistConfig: {
                   enabled: false,
                   method: 'percentage',
@@ -151,8 +151,8 @@ export const TileView: React.FC<TileViewProps> = ({
                   evaluationLogic: 'scoring',
                   evaluatorStrategy: 'all_judges',
                   blindEvaluation: false,
-                  startCondition: { type: 'manual_trigger' },
-                  endCondition: { type: 'manual_close' },
+                  startCondition: { type: 'fixed_datetime', datetime: new Date().toISOString() },
+                  endCondition: { type: 'fixed_datetime', datetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() },
                   shortlistConfig: {
                     enabled: false,
                     method: 'percentage',

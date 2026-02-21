@@ -112,7 +112,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ activeEvent }) => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeEvent || !newRound.title || !newRound.startDate) return;
+    if (!activeEvent || !newRound.title || !newRound.startDate || !newRound.endDate) return;
 
     await db.addRound({
       programId: activeEvent.id,

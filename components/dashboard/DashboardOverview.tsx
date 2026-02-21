@@ -8,13 +8,16 @@ import { db as databaseService } from '../../services/database';
 
 interface DashboardOverviewProps {
   activeEvent?: Program | null;
+  onNavigate?: (view: string) => void;
 }
 
-const StatCard = ({ title, value, change, isPositive, icon: Icon, color }: any) => (
-  <motion.div
+const StatCard = ({ title, value, change, isPositive, icon: Icon, color, onClick }: any) => (
+  <motion.button
+    type="button"
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
-    className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow"
+    onClick={onClick}
+    className={`bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow text-left w-full ${onClick ? 'hover:border-indigo-200' : ''}`}
   >
     <div className="flex justify-between items-start mb-4">
       <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
@@ -27,10 +30,10 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, color }: any) 
     </div>
     <div className="text-slate-500 text-sm font-medium mb-1">{title}</div>
     <div className="text-2xl font-bold text-slate-900">{value}</div>
-  </motion.div>
+  </motion.button>
 );
 
-export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEvent }) => {
+export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEvent, onNavigate }) => {
 
   const [stats, setStats] = useState<{
     totalSubmissions: number;
@@ -91,10 +94,42 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title={activeEvent?.type === 'Grant' ? "Applications" : "Total Submissions"} value={stats.totalSubmissions} change="+Demo" isPositive={true} icon={FileCheck} color="text-indigo-600 bg-indigo-600" />
-        <StatCard title="Est. Revenue" value={`$${stats.revenue}`} change="+Demo" isPositive={true} icon={DollarSign} color="text-emerald-600 bg-emerald-600" />
-        <StatCard title="Active Judges" value={stats.activeJudges} change="Online" isPositive={true} icon={Users} color="text-purple-600 bg-purple-600" />
-        <StatCard title="Pending Review" value={stats.pendingReview} change="Action Needed" isPositive={false} icon={Clock} color="text-orange-600 bg-orange-600" />
+        <StatCard
+          title={activeEvent?.type === 'Grant' ? "Applications" : "Total Submissions"}
+          value={stats.totalSubmissions}
+          change="+Demo"
+          isPositive={true}
+          icon={FileCheck}
+          color="text-indigo-600 bg-indigo-600"
+          onClick={() => onNavigate?.('submissions')}
+        />
+        <StatCard
+          title="Est. Revenue"
+          value={`$${stats.revenue}`}
+          change="+Demo"
+          isPositive={true}
+          icon={DollarSign}
+          color="text-emerald-600 bg-emerald-600"
+          onClick={() => onNavigate?.('program-details')}
+        />
+        <StatCard
+          title="Active Judges"
+          value={stats.activeJudges}
+          change="Online"
+          isPositive={true}
+          icon={Users}
+          color="text-purple-600 bg-purple-600"
+          onClick={() => onNavigate?.('judging')}
+        />
+        <StatCard
+          title="Pending Review"
+          value={stats.pendingReview}
+          change="Action Needed"
+          isPositive={false}
+          icon={Clock}
+          color="text-orange-600 bg-orange-600"
+          onClick={() => onNavigate?.('schedule-rounds')}
+        />
       </div>
 
       {/* Charts Section */}

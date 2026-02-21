@@ -98,6 +98,18 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   };
 
   const handleSave = async () => {
+    if (formData.startCondition.type !== 'fixed_datetime' || formData.endCondition.type !== 'fixed_datetime') {
+      setError('Start and end time are required. Please set fixed start and end dates.');
+      return;
+    }
+    if (!formData.startCondition.datetime || !formData.endCondition.datetime) {
+      setError('Start and end time are required.');
+      return;
+    }
+    if (new Date(formData.endCondition.datetime) <= new Date(formData.startCondition.datetime)) {
+      setError('End time must be after the start time.');
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {

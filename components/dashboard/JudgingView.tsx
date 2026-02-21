@@ -1,12 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
-import { Judge, Submission } from '../../services/models';
+import { Judge, Program, Submission } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
+import { sendJudgeInviteEmail } from '../../services/email';
 
-export const JudgingView: React.FC = () => {
+interface JudgingViewProps {
+   activeEvent?: Program | null;
+}
+
+export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [activeTab, setActiveTab] = useState<'overview' | 'panel' | 'scorecard' | 'assignments'>('overview');
   const [judges, setJudges] = useState<Judge[]>([]);
    const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -23,21 +29,28 @@ export const JudgingView: React.FC = () => {
      { id: 2, name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
      { id: 3, name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.' },
   ]);
+  const [shortlistOnly, setShortlistOnly] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-         const [judgeData, submissionData] = await Promise.all([
-            db.getJudges(),
-            db.getSubmissions()
+   useEffect(() => {
+      const load = async () => {
+         if (!activeEvent) return;
+         const [judgeData, submissionData, rounds] = await Promise.all([
+            db.getJudges(activeEvent.id),
+            db.getSubmissions(activeEvent.id),
+            scheduleRoundsService.getRounds(activeEvent.id),
          ]);
+         const shortlistActive = rounds.some(round =>
+            round.shortlistConfig?.enabled && (round.status === 'active' || round.status === 'completed')
+         );
+         setShortlistOnly(shortlistActive);
          setJudges(judgeData);
-         setSubmissions(submissionData);
-    };
-    load();
-  }, []);
+         setSubmissions(shortlistActive ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+      };
+      load();
+   }, [activeEvent]);
 
    const refreshJudges = async () => {
-      const judgeData = await db.getJudges();
+      const judgeData = await db.getJudges(activeEvent?.id);
       setJudges(judgeData);
    };
 
@@ -58,15 +71,24 @@ export const JudgingView: React.FC = () => {
    const handleAssignJudges = async () => {
       if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
          await db.assignJudgesToSubmissions(selectedIds, selectedJudgesForBulk, { replaceExisting: replaceAssignments });
-         setSubmissions(await db.getSubmissions());
+         const submissionsData = await db.getSubmissions(activeEvent?.id);
+         setSubmissions(shortlistOnly ? submissionsData.filter(s => s.status === 'Shortlisted') : submissionsData);
          setIsAssignModalOpen(false);
          setSelectedJudgesForBulk([]);
          setSelectedIds([]);
       }
    };
 
-  const totalProgress = Math.round(judges.reduce((acc, curr) => acc + curr.progress, 0) / (judges.length || 1));
-  const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+   const totalProgress = Math.round(judges.reduce((acc, curr) => acc + curr.progress, 0) / (judges.length || 1));
+   const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+
+   if (!activeEvent) {
+      return (
+         <div className="flex items-center justify-center h-full text-slate-500">
+            Select a program to manage judging.
+         </div>
+      );
+   }
 
   return (
     <div className="space-y-8">
@@ -434,12 +456,22 @@ export const JudgingView: React.FC = () => {
                   setIsSavingJudge(true);
                   try {
                      if (judgeMode === 'invite') {
-                        await db.inviteJudge({ name: judgeForm.name.trim(), email: judgeForm.email.trim() });
+                        await db.inviteJudge({
+                           name: judgeForm.name.trim(),
+                           email: judgeForm.email.trim(),
+                           programId: activeEvent?.id,
+                        });
+                        await sendJudgeInviteEmail({
+                           email: judgeForm.email.trim(),
+                           name: judgeForm.name.trim(),
+                           programTitle: activeEvent?.title || 'your workspace',
+                        });
                      } else {
                         await db.createJudge({
                            name: judgeForm.name.trim(),
                            email: judgeForm.email.trim(),
                            bio: judgeForm.bio.trim() || undefined,
+                           programId: activeEvent?.id,
                         });
                      }
                      await refreshJudges();

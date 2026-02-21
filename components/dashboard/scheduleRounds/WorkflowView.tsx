@@ -116,7 +116,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
       evaluatorStrategy: 'all_judges',
       blindEvaluation: false,
       startCondition: { type: 'after_previous', roundId: parentRoundId },
-      endCondition: { type: 'manual_close' },
+      endCondition: { type: 'fixed_datetime', datetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() },
       shortlistConfig: {
         enabled: false,
         method: 'percentage',

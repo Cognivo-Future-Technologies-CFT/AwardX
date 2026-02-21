@@ -163,6 +163,7 @@ CREATE TABLE public.judge_comments (
 CREATE TABLE public.judges (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   organization_id uuid,
+  program_id uuid,
   user_id uuid,
   name character varying NOT NULL,
   email character varying NOT NULL,
@@ -175,6 +176,7 @@ CREATE TABLE public.judges (
   completed_count integer DEFAULT 0,
   CONSTRAINT judges_pkey PRIMARY KEY (id),
   CONSTRAINT judges_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT judges_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
   CONSTRAINT judges_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.judging_criteria (
@@ -219,6 +221,7 @@ CREATE TABLE public.messages (
 CREATE TABLE public.organization_invites (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   organization_id uuid NOT NULL,
+  program_id uuid,
   email character varying NOT NULL,
   role_id uuid,
   invited_by uuid,
@@ -228,12 +231,14 @@ CREATE TABLE public.organization_invites (
   accepted_at timestamp with time zone,
   CONSTRAINT organization_invites_pkey PRIMARY KEY (id),
   CONSTRAINT organization_invites_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_invites_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
   CONSTRAINT organization_invites_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id),
   CONSTRAINT organization_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.organization_members (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   organization_id uuid,
+  program_id uuid,
   user_id uuid,
   role_id uuid,
   status character varying DEFAULT 'active'::character varying,
@@ -241,7 +246,9 @@ CREATE TABLE public.organization_members (
   invited_at timestamp with time zone,
   joined_at timestamp with time zone DEFAULT now(),
   CONSTRAINT organization_members_pkey PRIMARY KEY (id),
+  CONSTRAINT organization_members_org_user_program_key UNIQUE (organization_id, user_id, program_id),
   CONSTRAINT organization_members_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
+  CONSTRAINT organization_members_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
   CONSTRAINT organization_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
   CONSTRAINT organization_members_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id),
   CONSTRAINT organization_members_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id)
@@ -285,12 +292,14 @@ CREATE TABLE public.pricing_tiers (
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
   organization_id uuid,
+  program_id uuid,
   full_name character varying,
   avatar_url text,
   phone character varying,
   timezone character varying DEFAULT 'UTC'::character varying,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  ,CONSTRAINT roles_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
   email character varying,
   job_title character varying,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),

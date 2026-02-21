@@ -193,6 +193,7 @@ export const programPages = {
 
 class DatabaseService {
   private currentOrgId: string | null = null;
+  private currentProgramId: string | null = null;
   private cachedPermissions: Set<string> | null = null;
   private cachedRoleName: string | null = null;
 
@@ -283,6 +284,11 @@ class DatabaseService {
     await this.refreshPermissionCache();
   }
 
+  async setActiveProgram(programId: string | null) {
+    this.currentProgramId = programId;
+    await this.refreshPermissionCache();
+  }
+
   private async refreshPermissionCache() {
     this.cachedPermissions = null;
     this.cachedRoleName = null;
@@ -298,12 +304,15 @@ class DatabaseService {
     if (!this.currentOrgId) return;
 
     // Find membership
-    const { data: member } = await supabase
+    let memberQuery = supabase
       .from('organization_members')
       .select('role_id')
       .eq('organization_id', this.currentOrgId)
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .eq('user_id', user.id);
+    if (this.currentProgramId) {
+      memberQuery = memberQuery.eq('program_id', this.currentProgramId);
+    }
+    const { data: member } = await memberQuery.maybeSingle();
 
     if (!member?.role_id) return;
 
@@ -842,8 +851,8 @@ class DatabaseService {
   }
 
   // Judges
-  async getJudges(): Promise<Judge[]> {
-    const { data, error } = await judges.getAll();
+  async getJudges(programId?: string): Promise<Judge[]> {
+    const { data, error } = await judges.getAll(programId);
     if (error || !data) return [];
 
     return data.map((j: any) => ({
@@ -860,7 +869,7 @@ class DatabaseService {
     }));
   }
 
-  async createJudge(payload: { name: string; email: string; bio?: string }) {
+  async createJudge(payload: { name: string; email: string; bio?: string; programId?: string }) {
     const { data, error } = await judges.create(payload);
     if (error) throw new Error(error.message || 'Failed to add judge');
     await this.safeAuditLog({
@@ -873,8 +882,8 @@ class DatabaseService {
     return data;
   }
 
-  async inviteJudge(payload: { name: string; email: string }) {
-    const { data, error } = await judges.invite(payload.email, payload.name);
+  async inviteJudge(payload: { name: string; email: string; programId?: string }) {
+    const { data, error } = await judges.invite(payload.email, payload.name, payload.programId);
     if (error) throw new Error(error.message || 'Failed to invite judge');
     await this.safeAuditLog({
       action: 'Invited judge',
@@ -897,8 +906,8 @@ class DatabaseService {
 
 
   // Roles
-  async getRoles(): Promise<Role[]> {
-    const { data, error } = await roles.getAll();
+  async getRoles(programId?: string): Promise<Role[]> {
+    const { data, error } = await roles.getAll(programId);
     if (error || !data) return [];
 
     return data.map((r: any) => ({
@@ -910,7 +919,7 @@ class DatabaseService {
     }));
   }
 
-  async createRole(role: { name: string; permissions: string[]; color?: string }) {
+  async createRole(role: { name: string; permissions: string[]; color?: string; programId?: string }) {
     const { data, error } = await roles.create(role);
     if (error) throw new Error(error.message || 'Failed to create role');
     await this.safeAuditLog({
@@ -919,7 +928,7 @@ class DatabaseService {
       resourceType: 'role',
       resourceId: (data as any)?.id,
       details: role.name,
-      metadata: { name: role.name, permissions: role.permissions },
+      metadata: { name: role.name, permissions: role.permissions, programId: role.programId },
     });
     return data;
   }
@@ -963,8 +972,8 @@ class DatabaseService {
   }
 
   // Team members (organization_members)
-  async getTeamMembers(): Promise<TeamMember[]> {
-    const { data, error } = await team.getMembers();
+  async getTeamMembers(programId?: string): Promise<TeamMember[]> {
+    const { data, error } = await team.getMembers(programId);
     if (error || !data) return [];
 
     return (data as any[]).map((m: any) => {
@@ -984,8 +993,8 @@ class DatabaseService {
     });
   }
 
-  async updateTeamMemberRole(memberId: string, roleId: string) {
-    const { error } = await team.updateMemberRole(memberId, roleId);
+  async updateTeamMemberRole(memberId: string, roleId: string, programId?: string) {
+    const { error } = await team.updateMemberRole(memberId, roleId, programId);
     if (error) throw new Error(error.message || 'Failed to update member role');
     await this.safeAuditLog({
       action: 'Updated team member role',
@@ -996,15 +1005,15 @@ class DatabaseService {
     });
   }
 
-  async addTeamMemberByEmail(email: string, roleId: string) {
-    const { error } = await team.addMemberByEmail(email, roleId);
+  async addTeamMemberByEmail(email: string, roleId: string, programId?: string) {
+    const { error } = await team.addMemberByEmail(email, roleId, programId);
     if (error) throw new Error(error.message || 'Failed to add team member');
     await this.safeAuditLog({
       action: 'Added team member',
       actionType: 'create',
       resourceType: 'organization_member',
       details: email,
-      metadata: { email, roleId },
+      metadata: { email, roleId, programId },
     });
   }
 
@@ -1239,7 +1248,7 @@ class DatabaseService {
   async getStats(programId?: string) {
     const submissions = await this.getSubmissions(programId);
     const programs = await this.getPrograms();
-    const judges = await this.getJudges();
+    const judges = await this.getJudges(programId);
 
     const activePrograms = programs.filter(p => p.status === 'Active');
 

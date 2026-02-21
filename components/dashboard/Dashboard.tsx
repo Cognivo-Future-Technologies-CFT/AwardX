@@ -44,10 +44,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     initialize();
   }, []);
 
+  useEffect(() => {
+    databaseService.setActiveProgram(activeEvent?.id || null);
+  }, [activeEvent]);
+
   const renderView = () => {
     switch (currentView) {
       case 'overview':
-        return <DashboardOverview activeEvent={activeEvent} />;
+        return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
       case 'custom-grid':
         return <CustomGridView />;
       case 'builder':
@@ -67,13 +71,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <SubmissionTable activeEvent={activeEvent} />;
 
       case 'judging':
-        return <JudgingView />;
+        return <JudgingView activeEvent={activeEvent} />;
       case 'reach':
         return <ReachView />;
       case 'analytics':
         return <AnalyticsView />;
       case 'teams':
-        return <TeamsView />;
+        return <TeamsView activeEvent={activeEvent} />;
       case 'logs':
         return <AuditLogsView />;
       case 'settings':
