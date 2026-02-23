@@ -20,7 +20,8 @@ import { ScheduleRoundsView } from './scheduleRounds/ScheduleRoundsView';
 import { CustomGridView } from './CustomGridView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
-import { db as databaseService } from '../../services/database';
+import { db as databaseService, workspaceState } from '../../services/database';
+import { auth } from '../../services/supabase';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -31,12 +32,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [currentView, setCurrentView] = useState('overview');
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // Restore workspace state on init
   useEffect(() => {
     const initialize = async () => {
       try {
         await databaseService.initialize();
+
+        // Restore persisted workspace state
+        const { user } = await auth.getUser();
+        if (user) {
+          const { data: ws } = await workspaceState.get(user.id);
+          if (ws) {
+            if (ws.current_view) setCurrentView(ws.current_view);
+            if (ws.active_program_id) {
+              // Load the program
+              const programs = await databaseService.getPrograms();
+              const restored = programs.find(p => p.id === ws.active_program_id);
+              if (restored) setActiveEvent(restored);
+            }
+          }
+        }
       } catch (error) {
-        console.error('Failed to initialize database:', error);
+        console.error('Failed to initialize dashboard:', error);
       } finally {
         setIsInitializing(false);
       }
@@ -44,9 +61,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     initialize();
   }, []);
 
+  // Persist workspace state on change
   useEffect(() => {
     databaseService.setActiveProgram(activeEvent?.id || null);
-  }, [activeEvent]);
+
+    const persistState = async () => {
+      try {
+        const { user } = await auth.getUser();
+        if (user) {
+          await workspaceState.save(user.id, {
+            active_program_id: activeEvent?.id || null,
+            current_view: currentView,
+          });
+        }
+      } catch {
+        // Non-critical — don't block UI
+      }
+    };
+    persistState();
+  }, [activeEvent, currentView]);
 
   const renderView = () => {
     switch (currentView) {
@@ -75,7 +108,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'reach':
         return <ReachView />;
       case 'analytics':
-        return <AnalyticsView />;
+        return <AnalyticsView activeEvent={activeEvent} />;
       case 'teams':
         return <TeamsView activeEvent={activeEvent} />;
       case 'logs':

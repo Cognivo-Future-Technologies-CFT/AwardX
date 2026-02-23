@@ -3,7 +3,7 @@ import {
   GripVertical, Trash2, Settings, Eye, Save, Plus, Type, FileText,
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
   MoreVertical, ArrowUp, ArrowDown, X, AlertCircle, Palette, Layers,
-  ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown
+  ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award
 } from 'lucide-react';
 import { Button } from '../Button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -78,6 +78,7 @@ const fieldTypes = [
       { type: 'file', label: 'File Upload', icon: ImageIcon, description: 'Images, Docs, PDF' },
       { type: 'url', label: 'Website', icon: Link2, description: 'External links' },
       { type: 'number', label: 'Number', icon: Layout, description: 'Quantities, scores' },
+      { type: 'award_selector', label: 'Award Selector', icon: Award, description: 'Pick award category' },
     ]
   }
 ];
@@ -112,7 +113,6 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState<string>(pages[0]?.id || 'page-1');
 
-  const [activeTab, setActiveTab] = useState<'build' | 'design' | 'settings'>('build');
   const [isPreview, setIsPreview] = useState(false);
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
@@ -170,6 +170,8 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       pageId: selectedPageId,
       ...(type === 'select' || type === 'radio' || type === 'checkbox'
         ? { options: ['Option 1', 'Option 2', 'Option 3'] }
+        : type === 'award_selector'
+        ? { options: ['Best Picture', 'Best Director', 'Best Actor'] }
         : {}),
     };
     setFields([...fields, newField]);
@@ -352,6 +354,23 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG or GIF (max. 5MB)</p>
           </div>
         );
+      case 'award_selector':
+        return (
+          <div className="relative">
+            <select
+              disabled={isReadOnly}
+              className="w-full p-3 pr-10 border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              style={style}
+            >
+              <option value="" disabled>{field.placeholder || 'Select award category...'}</option>
+              {field.options?.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1">
+              <Award className="w-4 h-4 text-amber-500" />
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            </div>
+          </div>
+        );
       default:
         return <input type={field.type} disabled={isReadOnly} className="w-full p-3 border rounded-md bg-white/50 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" placeholder={field.placeholder} style={style} />;
     }
@@ -450,24 +469,97 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                 >
                   <div className="p-6">
                     <div className="mb-3 flex justify-between items-start">
-                    <div>
+                    <div className="flex-1 min-w-0">
+                        {selectedFieldId === field.id ? (
+                          <input
+                            value={field.label}
+                            onChange={e => { e.stopPropagation(); updateField(field.id, { label: e.target.value }); }}
+                            onClick={e => e.stopPropagation()}
+                            className="text-sm font-semibold text-slate-800 block mb-1 w-full bg-transparent border-b-2 border-indigo-400 outline-none focus:border-indigo-600 pb-0.5"
+                            placeholder="Field label..."
+                            autoFocus
+                          />
+                        ) : (
                         <label className="text-sm font-semibold text-slate-800 block mb-1">
                           {field.label}
                           {field.required && <span className="text-red-500 ml-0.5">*</span>}
                         </label>
-                        {field.helpText && <p className="text-xs text-slate-500">{field.helpText}</p>}
+                        )}
+                        {selectedFieldId !== field.id && field.helpText && <p className="text-xs text-slate-500">{field.helpText}</p>}
                     </div>
 
                       {selectedFieldId === field.id && (
-                        <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-100 text-slate-400">
-                          <button onClick={(e) => duplicateField(field, e)} className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
-                          <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-100 text-slate-400 ml-2 shrink-0">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); updateField(field.id, { required: !field.required }); }}
+                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'}`}
+                            title={field.required ? 'Mark optional' : 'Mark required'}
+                          >
+                            <span className="text-[10px] px-0.5">{field.required ? 'REQ' : 'OPT'}</span>
+                          </button>
+                          <button onClick={(e) => duplicateField(field, e)} className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all" title="Duplicate"><Edit3 className="w-3.5 h-3.5" /></button>
+                          <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
                       )}
             </div>
+
+                    {selectedFieldId === field.id ? (
+                      <div className="space-y-3" onClick={e => e.stopPropagation()}>
+                        <div>
+                          <input
+                            value={field.placeholder || ''}
+                            onChange={e => updateField(field.id, { placeholder: e.target.value })}
+                            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            placeholder="Placeholder text..."
+                          />
+                        </div>
+                        <div>
+                          <input
+                            value={field.helpText || ''}
+                            onChange={e => updateField(field.id, { helpText: e.target.value })}
+                            className="w-full p-2 border border-dashed border-slate-200 rounded-lg text-xs text-slate-500 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            placeholder="Help text (optional)..."
+                          />
+                        </div>
+                        {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' || field.type === 'award_selector') && (
+                          <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Options</span>
+                            {field.options?.map((opt, i) => (
+                              <div key={i} className="flex gap-1.5">
+                                <input
+                                  value={opt}
+                                  onChange={e => {
+                                    const newOpts = [...(field.options || [])];
+                                    newOpts[i] = e.target.value;
+                                    updateField(field.id, { options: newOpts });
+                                  }}
+                                  className="flex-1 p-1.5 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                                />
+                                <button
+                                  onClick={() => {
+                                    const newOpts = field.options?.filter((_, idx) => idx !== i);
+                                    updateField(field.id, { options: newOpts });
+                                  }}
+                                  className="p-1.5 text-slate-300 hover:text-red-500 rounded"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => updateField(field.id, { options: [...(field.options || []), `Option ${(field.options?.length || 0) + 1}`] })}
+                              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 mt-1"
+                            >
+                              <Plus className="w-3 h-3" /> Add Option
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                     <div className="pointer-events-none opacity-75">
                       {renderFieldInput(field)}
-        </div>
+                    </div>
+                    )}
       </div>
 
                   {/* Drag Handle Indicator */}
@@ -513,7 +605,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
     return (
       <div className="max-w-2xl mx-auto my-10 bg-white shadow-2xl rounded-2xl overflow-hidden min-h-[600px] flex flex-col" style={{ borderRadius: theme.borderRadius }}>
-        <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+        <div className="h-2" style={{ background: `linear-gradient(to right, ${theme.primaryColor}, ${theme.secondaryColor})` }} />
         <div className="p-8 md:p-12 flex-1">
           <div className="mb-10">
             <h2 className="text-3xl font-bold mb-3" style={{ color: theme.textColor, fontFamily: theme.fontFamily }}>{currentPage.title}</h2>
@@ -622,19 +714,8 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       <div className="flex-1 flex flex-col min-w-0 bg-[#F8FAFC]">
         {/* Toolbar */}
         <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-sm z-10">
-          <div className="flex bg-slate-100 p-1 rounded-lg">
-                          <button
-              onClick={() => setActiveTab('build')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'build' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                          >
-              Builder
-                          </button>
-                          <button
-              onClick={() => { setActiveTab('design'); setSelectedFieldId(null); }}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'design' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                          >
-              Design & Theme
-                          </button>
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-bold text-slate-700">Form Builder</h3>
           </div>
 
           <div className="flex items-center gap-3">
@@ -677,12 +758,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       <div className="w-80 bg-white border-l border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50">
         <div className="p-5 border-b border-slate-100">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
-            {activeTab === 'design' ? 'Theme Settings' : selectedFieldId ? 'Field Properties' : 'Page Settings'}
+            Theme Settings
           </h2>
                   </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'design' ? (
             <div className="space-y-6">
                   <div className="space-y-3">
                 <label className="text-xs font-semibold text-slate-500 uppercase">Brand Colors</label>
@@ -695,10 +775,38 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                     </div>
                   </div>
                   <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Secondary</label>
+                    <div className="flex items-center gap-2 border p-2 rounded-lg">
+                      <input type="color" value={theme.secondaryColor} onChange={e => setTheme({ ...theme, secondaryColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
+                      <span className="text-xs font-mono">{theme.secondaryColor}</span>
+                    </div>
+                  </div>
+                  <div>
                     <label className="text-xs text-slate-400 mb-1 block">Background</label>
                     <div className="flex items-center gap-2 border p-2 rounded-lg">
                       <input type="color" value={theme.backgroundColor} onChange={e => setTheme({ ...theme, backgroundColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
                       <span className="text-xs font-mono">{theme.backgroundColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Text</label>
+                    <div className="flex items-center gap-2 border p-2 rounded-lg">
+                      <input type="color" value={theme.textColor} onChange={e => setTheme({ ...theme, textColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
+                      <span className="text-xs font-mono">{theme.textColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Border</label>
+                    <div className="flex items-center gap-2 border p-2 rounded-lg">
+                      <input type="color" value={theme.borderColor} onChange={e => setTheme({ ...theme, borderColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
+                      <span className="text-xs font-mono">{theme.borderColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Button Text</label>
+                    <div className="flex items-center gap-2 border p-2 rounded-lg">
+                      <input type="color" value={theme.buttonTextColor} onChange={e => setTheme({ ...theme, buttonTextColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
+                      <span className="text-xs font-mono">{theme.buttonTextColor}</span>
                     </div>
                   </div>
                     </div>
@@ -744,100 +852,6 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                     </div>
               </div>
             </div>
-          ) : selectedFieldId ? (
-            // Field Properties
-            (() => {
-              const field = fields.find(f => f.id === selectedFieldId);
-              if (!field) return null;
-              return (
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Label</label>
-                      <input
-                        value={field.label}
-                      onChange={e => updateField(field.id, { label: e.target.value })}
-                      className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                      />
-                    </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Placeholder</label>
-                      <input
-                      value={field.placeholder}
-                      onChange={e => updateField(field.id, { placeholder: e.target.value })}
-                      className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                      />
-                    </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Help Text</label>
-                    <textarea
-                      value={field.helpText}
-                      onChange={e => updateField(field.id, { helpText: e.target.value })}
-                      className="w-full p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all min-h-[80px]"
-                    />
-                  </div>
-
-                  {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Options</label>
-                      <div className="space-y-2">
-                        {field.options?.map((opt, i) => (
-                          <div key={i} className="flex gap-2">
-                            <input
-                              value={opt}
-                              onChange={e => {
-                                const newOpts = [...(field.options || [])];
-                                newOpts[i] = e.target.value;
-                                updateField(field.id, { options: newOpts });
-                              }}
-                              className="flex-1 p-2 border border-slate-200 rounded-lg text-sm"
-                            />
-                            <button
-                              onClick={() => {
-                                const newOpts = field.options?.filter((_, idx) => idx !== i);
-                                updateField(field.id, { options: newOpts });
-                              }}
-                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          onClick={() => updateField(field.id, { options: [...(field.options || []), `Option ${(field.options?.length || 0) + 1}`] })}
-                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 mt-2"
-                        >
-                          <Plus className="w-3 h-3" /> Add Option
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pt-6 border-t border-slate-100">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${field.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
-                        {field.required && <CheckSquare className="w-3 h-3 text-white" />}
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="hidden"
-                        checked={field.required}
-                        onChange={e => updateField(field.id, { required: e.target.checked })}
-                      />
-                      <span className="text-sm text-slate-700 group-hover:text-indigo-700 transition-colors">Required Field</span>
-                    </label>
-                  </div>
-                  </div>
-              );
-            })()
-          ) : (
-            // Page Properties
-            <div className="text-center py-10 opacity-50">
-              <Settings className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-              <p className="text-sm text-slate-500">Select a field to edit its properties, or switch to the Design tab to customize the theme.</p>
-          </div>
-      )}
         </div>
       </div>
     </div>

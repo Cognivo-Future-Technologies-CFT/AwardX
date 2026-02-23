@@ -1,8 +1,7 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
 
@@ -34,6 +33,44 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, color, onClick
 );
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEvent, onNavigate }) => {
+  const [quickActionOpen, setQuickActionOpen] = useState(false);
+  const quickActionRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (quickActionRef.current && !quickActionRef.current.contains(e.target as Node)) {
+        setQuickActionOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleExportReport = async () => {
+    try {
+      const submissions = await databaseService.getSubmissions(activeEvent?.id);
+      if (!submissions || submissions.length === 0) {
+        alert('No submissions to export.');
+        return;
+      }
+      const headers = ['Title', 'Category', 'Status', 'Applicant', 'Date'];
+      const rows = submissions.map((s: any) => [
+        s.title || '', s.category || '', s.status || '', s.applicant || '', s.date || ''
+      ]);
+      const csv = [headers.join(','), ...rows.map(r => r.map((v: string) => `"${v.replace(/"/g, '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${activeEvent?.title || 'submissions'}-report.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export report.');
+    }
+  };
 
   const [stats, setStats] = useState<{
     totalSubmissions: number;
@@ -83,12 +120,43 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
           </p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 font-medium text-sm transition-colors">
+          <button 
+            onClick={handleExportReport}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 font-medium text-sm transition-colors"
+          >
             <Download className="w-4 h-4" /> Report
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium text-sm shadow-lg shadow-slate-900/20 transition-all">
-            <Plus className="w-4 h-4" /> Quick Action
-          </button>
+          <div className="relative" ref={quickActionRef}>
+            <button 
+              onClick={() => setQuickActionOpen(!quickActionOpen)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium text-sm shadow-lg shadow-slate-900/20 transition-all"
+            >
+              <Plus className="w-4 h-4" /> Quick Action <ChevronDown className={`w-3 h-3 transition-transform ${quickActionOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {quickActionOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-2 overflow-hidden"
+                >
+                  <button onClick={() => { setQuickActionOpen(false); onNavigate?.('form-builder'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
+                    <FileCheck className="w-4 h-4" /> New Form Link
+                  </button>
+                  <button onClick={() => { setQuickActionOpen(false); onNavigate?.('categories'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
+                    <Calendar className="w-4 h-4" /> Add Category
+                  </button>
+                  <button onClick={() => { setQuickActionOpen(false); onNavigate?.('judging'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
+                    <Users className="w-4 h-4" /> Invite Judge
+                  </button>
+                  <button onClick={() => { setQuickActionOpen(false); onNavigate?.('overview-builder'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Edit Overview Page
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 

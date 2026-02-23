@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { programPages } from '../../../services/supabase';
+import { programPages, programs } from '../../../services/supabase';
 import { sectionDefs, SectionPreview, DEFAULT_TEMPLATE } from './SectionBlocks';
 import { PropertyPanel } from './PropertyPanel';
 import { Save, Plus, GripVertical, Rocket, Eye, Monitor, Smartphone, Tablet, LayoutTemplate, Link2, Check } from 'lucide-react';
@@ -19,6 +19,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     const [previewMode, setPreviewMode] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
     const [isPublished, setIsPublished] = useState(false);
     const [shareCopied, setShareCopied] = useState(false);
+    const [programSlug, setProgramSlug] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -27,13 +28,18 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [configRes, sectionsRes] = await Promise.all([
+            const [configRes, sectionsRes, programRes] = await Promise.all([
                 programPages.getConfig(programId),
-                programPages.getSections(programId)
+                programPages.getSections(programId),
+                programs.getById(programId)
             ]);
 
             setConfig(configRes.data || { theme_settings: {} });
             setIsPublished(!!configRes.data?.is_published);
+            
+            if (programRes.data?.slug) {
+                setProgramSlug(programRes.data.slug);
+            }
 
             // Auto-populate if empty
             if (!sectionsRes.data || sectionsRes.data.length === 0) {
@@ -178,7 +184,9 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
 
     const handleCopyShareLink = async () => {
         const baseUrl = window.location.origin;
-        const shareUrl = `${baseUrl}/?page=program&id=${programId}`;
+        const shareUrl = programSlug 
+            ? `${baseUrl}/program/${encodeURIComponent(programSlug)}`
+            : `${baseUrl}/?page=program&id=${programId}`;
 
         try {
             await navigator.clipboard.writeText(shareUrl);
@@ -204,10 +212,10 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     return (
         <div className="flex flex-col h-[calc(100vh-64px)] min-h-0 bg-slate-100">
             {/* Top Bar */}
-            <div className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center shadow-sm z-10">
+            <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-3 flex flex-wrap justify-between items-center gap-2 shadow-sm z-10">
                 <h1 className="text-lg font-bold text-slate-800">Page Builder</h1>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4 flex-wrap">
                     {/* Preview Toggles */}
                     <div className="flex bg-slate-100 rounded-lg p-1 mr-4">
                         <button
@@ -233,7 +241,12 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                         </button>
                     </div>
 
-                    <Button variant="outline" className="mr-2" onClick={() => window.open(`/?page=program&id=${programId}`, '_blank')}>
+                    <Button variant="outline" className="mr-2" onClick={() => {
+                        const previewUrl = programSlug 
+                            ? `/program/${encodeURIComponent(programSlug)}`
+                            : `/?page=program&id=${programId}`;
+                        window.open(previewUrl, '_blank');
+                    }}>
                         <Eye className="w-4 h-4 mr-2" /> Live Preview
                     </Button>
 
@@ -262,7 +275,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
 
             <div className="flex flex-1 min-h-0 overflow-hidden">
                 {/* Left Sidebar - Toolbox */}
-                <div className="w-64 bg-white border-r border-slate-200 overflow-y-auto flex-shrink-0 min-h-0">
+                <div className="hidden md:block w-64 bg-white border-r border-slate-200 overflow-y-auto flex-shrink-0 min-h-0">
                     <div className="p-4">
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Add Section</h3>
                         <div className="grid grid-cols-1 gap-3">
@@ -282,10 +295,10 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                 </div>
 
                 {/* Center - Canvas */}
-                <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100 p-8 flex justify-center">
+                <div className="flex-1 min-h-0 overflow-y-auto bg-slate-100 p-4 md:p-8 flex justify-center">
                     <div
-                        className={`bg-white shadow-xl min-h-[800px] transition-all duration-300 ${previewMode === 'mobile' ? 'w-[375px]' :
-                            previewMode === 'tablet' ? 'w-[768px]' :
+                        className={`bg-white shadow-xl min-h-[800px] transition-all duration-300 ${previewMode === 'mobile' ? 'max-w-[375px] w-full' :
+                            previewMode === 'tablet' ? 'max-w-[768px] w-full' :
                                 'w-full max-w-5xl'
                             }`}
                     >
@@ -321,7 +334,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                 </div>
 
                 {/* Right Sidebar - Properties */}
-                <div className="w-80 bg-white border-l border-slate-200 flex-shrink-0 min-h-0">
+                <div className="hidden lg:block w-80 bg-white border-l border-slate-200 flex-shrink-0 min-h-0">
                     <PropertyPanel
                         section={selectedSection}
                         onChange={handleUpdateSection}

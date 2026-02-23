@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
+import { judgingConfig } from '../../services/database';
 import { Judge, Program, Submission } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { sendJudgeInviteEmail } from '../../services/email';
+import { supabase } from '../../services/supabase';
 
 interface JudgingViewProps {
    activeEvent?: Program | null;
@@ -26,11 +28,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [isSavingJudge, setIsSavingJudge] = useState(false);
    const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
    const [isRemovingAll, setIsRemovingAll] = useState(false);
-  const [criteria, setCriteria] = useState([
-     { id: 1, name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.' },
-     { id: 2, name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
-     { id: 3, name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.' },
-  ]);
+  const [criteria, setCriteria] = useState<{id: any; name: string; weight: number; description: string}[]>([]);
   const [shortlistOnly, setShortlistOnly] = useState(false);
 
    useEffect(() => {
@@ -47,6 +45,41 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
          setShortlistOnly(shortlistActive);
          setJudges(judgeData);
          setSubmissions(shortlistActive ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+
+         // Load criteria from DB
+         try {
+           if (supabase) {
+             const { data: dbCriteria } = await supabase
+               .from('judging_criteria')
+               .select('*')
+               .eq('program_id', activeEvent.id)
+               .order('sort_order');
+             if (dbCriteria && dbCriteria.length > 0) {
+               setCriteria(dbCriteria.map(c => ({
+                 id: c.id,
+                 name: c.name,
+                 weight: c.weight || 100,
+                 description: c.description || '',
+               })));
+             } else {
+               // Default criteria if none configured
+               setCriteria([
+                 { id: 'default-1', name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.' },
+                 { id: 'default-2', name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
+                 { id: 'default-3', name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.' },
+               ]);
+             }
+           }
+         } catch {
+           // Keep defaults if criteria load fails
+           if (criteria.length === 0) {
+             setCriteria([
+               { id: 'default-1', name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.' },
+               { id: 'default-2', name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
+               { id: 'default-3', name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.' },
+             ]);
+           }
+         }
       };
       load();
    }, [activeEvent]);
@@ -526,15 +559,22 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                   setIsSavingJudge(true);
                   try {
                      if (judgeMode === 'invite') {
-                        await db.inviteJudge({
+                        const judgeData = await db.inviteJudge({
                            name: judgeForm.name.trim(),
                            email: judgeForm.email.trim(),
                            programId: activeEvent?.id,
                         });
+                        // Build magic link URL with the invite token
+                        const siteUrl = window.location.origin;
+                        const inviteToken = judgeData?.invite_token;
+                        const magicLinkUrl = inviteToken
+                           ? `${siteUrl}/?page=judge-portal&token=${inviteToken}`
+                           : siteUrl;
                         await sendJudgeInviteEmail({
                            email: judgeForm.email.trim(),
                            name: judgeForm.name.trim(),
                            programTitle: activeEvent?.title || 'your workspace',
+                           inviteUrl: magicLinkUrl,
                         });
                      } else {
                         await db.createJudge({

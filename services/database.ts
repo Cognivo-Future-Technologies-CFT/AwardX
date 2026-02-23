@@ -191,6 +191,173 @@ export const programPages = {
   }
 };
 
+// --- Workspace State Service ---
+export const workspaceState = {
+  async get(userId: string) {
+    const { data, error } = await supabase
+      .from('user_workspace_state')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return { data, error };
+  },
+
+  async save(userId: string, state: {
+    active_program_id?: string | null;
+    current_view?: string;
+    sidebar_collapsed?: boolean;
+    selected_form_ids?: Record<string, string>;
+    preferences?: Record<string, any>;
+  }) {
+    const { data, error } = await supabase
+      .from('user_workspace_state')
+      .upsert({
+        user_id: userId,
+        ...state,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' })
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
+// --- Submission Drafts Service ---
+export const submissionDrafts = {
+  async get(formId: string, userId?: string, sessionId?: string) {
+    let query = supabase
+      .from('submission_drafts')
+      .select('*')
+      .eq('form_id', formId);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    } else if (sessionId) {
+      query = query.eq('session_id', sessionId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+    return { data, error };
+  },
+
+  async save(draft: {
+    form_id: string;
+    user_id?: string;
+    session_id?: string;
+    draft_data: Record<string, any>;
+    current_page: number;
+  }) {
+    const { data, error } = await supabase
+      .from('submission_drafts')
+      .upsert({
+        ...draft,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async delete(formId: string, userId?: string) {
+    let query = supabase
+      .from('submission_drafts')
+      .delete()
+      .eq('form_id', formId);
+    if (userId) query = query.eq('user_id', userId);
+    return await query;
+  },
+};
+
+// --- Judging Config Service ---
+export const judgingConfig = {
+  async get(programId: string) {
+    const { data, error } = await supabase
+      .from('judging_config')
+      .select('*')
+      .eq('program_id', programId)
+      .maybeSingle();
+    return { data, error };
+  },
+
+  async save(programId: string, config: {
+    scoring_system?: string;
+    pass_threshold?: number;
+    blind_judging?: boolean;
+    allow_comments?: boolean;
+    auto_assign?: boolean;
+    max_judges_per_submission?: number;
+  }) {
+    const { data, error } = await supabase
+      .from('judging_config')
+      .upsert({
+        program_id: programId,
+        ...config,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'program_id' })
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
+// --- Slug History Service ---
+export const slugHistory = {
+  async getByOldSlug(slug: string) {
+    const { data, error } = await supabase
+      .from('slug_history')
+      .select('*')
+      .eq('old_slug', slug)
+      .order('changed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return { data, error };
+  },
+};
+
+// --- Form Analytics Service ---
+export const formAnalytics = {
+  async track(event: {
+    form_id: string;
+    event_type: 'view' | 'start' | 'complete' | 'abandon';
+    user_id?: string;
+    session_id?: string;
+    page_reached?: number;
+    metadata?: Record<string, any>;
+  }) {
+    const { data, error } = await supabase
+      .from('form_analytics')
+      .insert(event)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  async getStats(formId: string) {
+    const { data, error } = await supabase
+      .from('form_analytics')
+      .select('event_type')
+      .eq('form_id', formId);
+
+    if (error || !data) return { data: null, error };
+
+    const views = data.filter(e => e.event_type === 'view').length;
+    const starts = data.filter(e => e.event_type === 'start').length;
+    const completes = data.filter(e => e.event_type === 'complete').length;
+    const abandons = data.filter(e => e.event_type === 'abandon').length;
+
+    return {
+      data: {
+        views,
+        starts,
+        completes,
+        abandons,
+        completionRate: starts > 0 ? Math.round((completes / starts) * 100) : 0,
+      },
+      error: null,
+    };
+  },
+};
+
 class DatabaseService {
   private currentOrgId: string | null = null;
   private currentProgramId: string | null = null;
@@ -902,7 +1069,7 @@ class DatabaseService {
     return data;
   }
 
-  async inviteJudge(payload: { name: string; email: string; programId?: string }) {
+  async inviteJudge(payload: { name: string; email: string; programId?: string }): Promise<any> {
     const { data, error } = await judges.invite(payload.email, payload.name, payload.programId);
     if (error) throw new Error(error.message || 'Failed to invite judge');
     await this.safeAuditLog({
@@ -912,7 +1079,7 @@ class DatabaseService {
       resourceId: (data as any)?.id,
       details: payload.email,
     });
-    return data;
+    return data; // Includes invite_token for magic link
   }
 
   async deleteJudge(judgeId: string): Promise<void> {
@@ -1328,11 +1495,28 @@ class DatabaseService {
       pendingReview: submissions.filter(s =>
         s.status === 'Pending' || s.status === 'Under Review'
       ).length,
-      revenue: submissions.length * 45, // Mock calculation based on entry count
+      revenue: await this.calculateRevenue(programId),
       activeJudges: judges.filter(j => j.status === 'Active').length,
       submissionTrend,
       categorySplit
     };
+  }
+
+  // Calculate real revenue from paid submissions
+  private async calculateRevenue(programId?: string): Promise<number> {
+    if (!supabase) return 0;
+    try {
+      let query = supabase
+        .from('submissions')
+        .select('payment_amount')
+        .eq('payment_status', 'paid');
+      if (programId) query = query.eq('program_id', programId);
+      const { data } = await query;
+      if (!data || data.length === 0) return 0;
+      return data.reduce((sum, s) => sum + (Number(s.payment_amount) || 0), 0);
+    } catch {
+      return 0;
+    }
   }
 
   // Current User (from auth)
@@ -1350,11 +1534,31 @@ class DatabaseService {
 
     if (!profile) return null;
 
+    // Look up actual role from organization_members
+    let roleName = 'Member';
+    try {
+      if (this.cachedRoleName) {
+        roleName = this.cachedRoleName;
+      } else if (this.currentOrgId) {
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('roles(name)')
+          .eq('user_id', user.id)
+          .eq('organization_id', this.currentOrgId)
+          .maybeSingle();
+        if (membership?.roles && (membership.roles as any).name) {
+          roleName = (membership.roles as any).name;
+        }
+      }
+    } catch {
+      // Fall back to default
+    }
+
     return {
       id: user.id,
       name: profile.full_name || user.email || 'User',
       email: user.email || '',
-      role: 'Admin', // Default, would need to check organization_members
+      role: roleName,
       status: 'Active',
       lastActive: 'Now',
       avatar: profile.avatar_url || '',

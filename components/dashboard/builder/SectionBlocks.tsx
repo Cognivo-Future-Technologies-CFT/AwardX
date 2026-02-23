@@ -511,6 +511,12 @@ export const SectionPreview: React.FC<{ section: any; onNavigate?: (page: string
             }
         } else if (url.startsWith('http')) {
             window.open(url, '_blank');
+        } else if (url.startsWith('?') || url.startsWith('/?')) {
+            // Handle internal query string URLs like ?page=form&formId=xxx
+            window.location.href = url.startsWith('/') ? url : `/${url}`;
+        } else if (url.startsWith('/')) {
+            // Handle internal paths like /program/my-slug
+            window.location.href = url;
         } else if (onNavigate) {
             onNavigate(url);
         }

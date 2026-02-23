@@ -1,112 +1,196 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-   PieChart, Pie, Cell, LineChart, Line 
+   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
+import { Loader2 } from 'lucide-react';
+import { db as databaseService } from '../../services/database';
+import { Program } from '../../services/models';
 
-const revenueData = [
-  { name: 'Jan', revenue: 4000 },
-  { name: 'Feb', revenue: 3000 },
-  { name: 'Mar', revenue: 2000 },
-  { name: 'Apr', revenue: 2780 },
-  { name: 'May', revenue: 1890 },
-  { name: 'Jun', revenue: 2390 },
-  { name: 'Jul', revenue: 3490 },
-];
+interface AnalyticsViewProps {
+  activeEvent?: Program | null;
+}
 
-const deviceData = [
-  { name: 'Desktop', value: 65 },
-  { name: 'Mobile', value: 25 },
-  { name: 'Tablet', value: 10 },
-];
+const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b'];
 
-const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4'];
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ activeEvent }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<{
+    totalSubmissions: number;
+    activePrograms: number;
+    pendingReview: number;
+    revenue: number;
+    activeJudges: number;
+    submissionTrend: { name: string; entries: number }[];
+    categorySplit: { name: string; value: number }[];
+    statusSplit: { name: string; value: number }[];
+  }>({
+    totalSubmissions: 0,
+    activePrograms: 0,
+    pendingReview: 0,
+    revenue: 0,
+    activeJudges: 0,
+    submissionTrend: [],
+    categorySplit: [],
+    statusSplit: [],
+  });
 
-export const AnalyticsView: React.FC = () => {
+  useEffect(() => {
+    const loadAnalytics = async () => {
+      setIsLoading(true);
+      try {
+        const baseStats = await databaseService.getStats(activeEvent?.id) as any;
+        
+        // Also compute status breakdown from submissions
+        const submissions = await databaseService.getSubmissions(activeEvent?.id);
+        const statusCounts: Record<string, number> = {};
+        submissions.forEach((s: any) => {
+          const status = s.status || 'Unknown';
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        });
+        const statusSplit = Object.entries(statusCounts)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value);
+
+        setStats({ ...baseStats, statusSplit });
+      } catch (error) {
+        console.error('Failed to load analytics:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAnalytics();
+    const interval = setInterval(loadAnalytics, 10000);
+    return () => clearInterval(interval);
+  }, [activeEvent]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
        <div>
           <h1 className="text-2xl font-bold text-slate-900">Analytics & Reports</h1>
-          <p className="text-slate-500">Deep dive into your program performance and revenue.</p>
+          <p className="text-slate-500">
+            {activeEvent 
+              ? `Live data for "${activeEvent.title}"`
+              : 'Deep dive into your program performance.'}
+          </p>
        </div>
 
-       {/* Revenue Chart */}
+       {/* Stat Cards */}
+       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+         {[
+           { label: 'Total Submissions', value: stats.totalSubmissions, color: 'text-indigo-600 bg-indigo-50' },
+           { label: 'Pending Review', value: stats.pendingReview, color: 'text-orange-600 bg-orange-50' },
+           { label: 'Active Judges', value: stats.activeJudges, color: 'text-purple-600 bg-purple-50' },
+           { label: 'Est. Revenue', value: `$${stats.revenue}`, color: 'text-emerald-600 bg-emerald-50' },
+         ].map((stat, i) => (
+           <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+             <div className="text-sm font-medium text-slate-500 mb-2">{stat.label}</div>
+             <div className="text-3xl font-bold text-slate-900">{stat.value}</div>
+           </div>
+         ))}
+       </div>
+
+       {/* Submission Trends */}
        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-900 mb-6">Revenue Growth</h3>
-          <div className="h-[300px] w-full">
-             <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData}>
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} prefix="$" />
-                   <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} />
-                   <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </BarChart>
-             </ResponsiveContainer>
-          </div>
+          <h3 className="text-lg font-bold text-slate-900 mb-6">Submission Trends (Last 7 Days)</h3>
+          {stats.submissionTrend.length > 0 && stats.submissionTrend.some(d => d.entries > 0) ? (
+            <div className="h-[300px] w-full">
+               <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={stats.submissionTrend}>
+                     <defs>
+                       <linearGradient id="colorAnalytics" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                       </linearGradient>
+                     </defs>
+                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                     <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'}} />
+                     <Area type="monotone" dataKey="entries" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorAnalytics)" />
+                  </AreaChart>
+               </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-slate-400">
+              <p>No submission data available for the selected period.</p>
+            </div>
+          )}
        </div>
 
        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Device Breakdown */}
+          {/* Category Breakdown */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-             <h3 className="text-lg font-bold text-slate-900 mb-6">Submission Source</h3>
-             <div className="h-[300px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                   <PieChart>
-                      <Pie
-                        data={deviceData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={80}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {deviceData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                   </PieChart>
-                </ResponsiveContainer>
-             </div>
-             <div className="flex justify-center gap-6">
-                {deviceData.map((entry, index) => (
-                   <div key={index} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }}></div>
-                      <span className="text-sm text-slate-600">{entry.name} ({entry.value}%)</span>
-                   </div>
-                ))}
-             </div>
+             <h3 className="text-lg font-bold text-slate-900 mb-6">Category Breakdown</h3>
+             {stats.categorySplit.length > 0 ? (
+               <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                     <BarChart data={stats.categorySplit} layout="vertical" barSize={20}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '8px'}} />
+                        <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} background={{fill: '#f8fafc'}} />
+                     </BarChart>
+                  </ResponsiveContainer>
+               </div>
+             ) : (
+               <div className="h-[300px] flex items-center justify-center text-slate-400">
+                 <p>No category data available.</p>
+               </div>
+             )}
           </div>
 
-          {/* Geo/Demographics Placeholder */}
+          {/* Status Breakdown */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-             <h3 className="text-lg font-bold text-slate-900 mb-6">Top Regions</h3>
-             <div className="space-y-4">
-                {[
-                   { country: "United States", count: 1240, percent: 45 },
-                   { country: "United Kingdom", count: 850, percent: 30 },
-                   { country: "Germany", count: 420, percent: 15 },
-                   { country: "Canada", count: 210, percent: 8 },
-                   { country: "Others", count: 80, percent: 2 },
-                ].map((item, i) => (
-                   <div key={i} className="flex items-center gap-4">
-                      <div className="w-8 text-sm font-bold text-slate-400">#{i+1}</div>
-                      <div className="flex-1">
-                         <div className="flex justify-between mb-1">
-                            <span className="text-sm font-medium text-slate-700">{item.country}</span>
-                            <span className="text-sm text-slate-500">{item.count}</span>
-                         </div>
-                         <div className="w-full bg-slate-100 rounded-full h-1.5">
-                            <div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${item.percent}%` }}></div>
-                         </div>
-                      </div>
-                   </div>
-                ))}
-             </div>
+             <h3 className="text-lg font-bold text-slate-900 mb-6">Status Distribution</h3>
+             {stats.statusSplit.length > 0 ? (
+               <>
+                 <div className="h-[250px] w-full flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                       <PieChart>
+                          <Pie
+                            data={stats.statusSplit}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={70}
+                            outerRadius={95}
+                            fill="#8884d8"
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {stats.statusSplit.map((_entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                       </PieChart>
+                    </ResponsiveContainer>
+                 </div>
+                 <div className="flex flex-wrap justify-center gap-4 mt-4">
+                    {stats.statusSplit.map((entry, index) => (
+                       <div key={index} className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                          <span className="text-sm text-slate-600">{entry.name} ({entry.value})</span>
+                       </div>
+                    ))}
+                 </div>
+               </>
+             ) : (
+               <div className="h-[300px] flex items-center justify-center text-slate-400">
+                 <p>No status data available.</p>
+               </div>
+             )}
           </div>
        </div>
     </div>

@@ -25,6 +25,7 @@ import { AuthCallback } from './components/AuthCallback';
 import { WorkflowPage } from './components/pages/WorkflowPage';
 import { FormSubmissionPage } from './components/pages/FormSubmissionPage';
 import { PublicProgramPage } from './components/pages/PublicProgramPage';
+import { JudgePortalPage } from './components/pages/JudgePortalPage';
 import { auth } from './services/supabase';
 
 const CTASection = () => (
@@ -76,6 +77,14 @@ const App: React.FC = () => {
       if (params.get('page') === 'program') {
         return 'public-program';
       }
+      if (params.get('page') === 'judge-portal' && params.get('token')) {
+        return 'judge-portal';
+      }
+      // Check for slug-based program URL: /program/my-slug
+      const pathname = window.location.pathname;
+      if (pathname.startsWith('/program/') && pathname.length > '/program/'.length) {
+        return 'public-program';
+      }
       return 'home';
     } catch (e) {
       console.error('Error reading URL params:', e);
@@ -90,7 +99,8 @@ const App: React.FC = () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const isFormPage = params.get('page') === 'form' && params.get('formId');
-        const isPublicProgramPage = params.get('page') === 'program';
+        const isPublicProgramPage = params.get('page') === 'program' || window.location.pathname.startsWith('/program/');
+        const isJudgePortalPage = params.get('page') === 'judge-portal' && params.get('token');
 
         const { session, error } = await auth.getSession();
         if (error) {
@@ -103,6 +113,15 @@ const App: React.FC = () => {
         if (isPublicProgramPage) {
           if (currentPage !== 'public-program') {
             setCurrentPage('public-program');
+          }
+          setIsCheckingAuth(false);
+          return;
+        }
+
+        // Judge Portal is accessible to everyone with a valid token
+        if (isJudgePortalPage) {
+          if (currentPage !== 'judge-portal') {
+            setCurrentPage('judge-portal');
           }
           setIsCheckingAuth(false);
           return;
@@ -132,7 +151,7 @@ const App: React.FC = () => {
           // User is authenticated, redirect to dashboard if on home/login/signup
           // But don't redirect if already on form-submission page
           // But don't redirect if already on form-submission page
-          if (currentPage === 'form-submission' || currentPage === 'public-program') {
+          if (currentPage === 'form-submission' || currentPage === 'public-program' || currentPage === 'judge-portal') {
             setIsCheckingAuth(false);
             return;
           }
@@ -167,8 +186,9 @@ const App: React.FC = () => {
           // Only redirect to dashboard if not on a form page
           const params = new URLSearchParams(window.location.search);
           const isFormPage = params.get('page') === 'form' && params.get('formId');
-          const isPublicProgramPage = params.get('page') === 'program';
-          if (!isFormPage && !isPublicProgramPage && currentPage !== 'form-submission' && currentPage !== 'public-program') {
+          const isPublicProgramPage = params.get('page') === 'program' || window.location.pathname.startsWith('/program/');
+          const isJudgePortal = params.get('page') === 'judge-portal';
+          if (!isFormPage && !isPublicProgramPage && !isJudgePortal && currentPage !== 'form-submission' && currentPage !== 'public-program' && currentPage !== 'judge-portal') {
             setCurrentPage('dashboard');
           }
         }
@@ -176,8 +196,9 @@ const App: React.FC = () => {
         // Only redirect away if not on a form page
         const params = new URLSearchParams(window.location.search);
         const isFormPage = params.get('page') === 'form' && params.get('formId');
-        const isPublicProgramPage = params.get('page') === 'program';
-        if (!isFormPage && !isPublicProgramPage) {
+        const isPublicProgramPage = params.get('page') === 'program' || window.location.pathname.startsWith('/program/');
+        const isJudgePortal = params.get('page') === 'judge-portal';
+        if (!isFormPage && !isPublicProgramPage && !isJudgePortal) {
           setCurrentPage('home');
         }
       }
@@ -212,6 +233,8 @@ const App: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const formId = params.get('formId');
         return <FormSubmissionPage onNavigate={setCurrentPage} formId={formId || undefined} />;
+      case 'judge-portal':
+        return <JudgePortalPage onNavigate={setCurrentPage} />;
       case 'public-program':
         return <PublicProgramPage onNavigate={setCurrentPage} />;
       case 'features':
@@ -246,7 +269,7 @@ const App: React.FC = () => {
 
   // Show loading state while checking auth (especially important for form pages)
   // Only show this if we're not already on login/signup/form-submission page
-  if (isCheckingAuth && !['login', 'signup', 'form-submission', 'auth-callback', 'public-program'].includes(currentPage)) {
+  if (isCheckingAuth && !['login', 'signup', 'form-submission', 'auth-callback', 'public-program', 'judge-portal'].includes(currentPage)) {
     const params = new URLSearchParams(window.location.search);
     const isFormPage = params.get('page') === 'form' && params.get('formId');
 
@@ -260,7 +283,7 @@ const App: React.FC = () => {
     );
   }
 
-  // Check if Supabase is configured - show error if not
+  // Check if Supabase is configured
   const checkSupabaseConfig = () => {
     const url = import.meta.env.VITE_SUPABASE_URL;
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -350,6 +373,11 @@ const App: React.FC = () => {
         </div>
       );
     }
+  }
+
+  // Render Judge Portal page (no auth required, handles its own layout)
+  if (currentPage === 'judge-portal') {
+    return <JudgePortalPage onNavigate={setCurrentPage} />;
   }
 
   // Render Demo/Dashboard/Public Program without Header/Footer wrapping

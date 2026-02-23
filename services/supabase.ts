@@ -600,6 +600,43 @@ export const programs = {
     return { data, error };
   },
 
+  getBySlug: async (slug: string) => {
+    // No org check needed for public page
+    if (!supabase) return { data: null, error: { message: 'Supabase not configured' } };
+
+    const { data, error } = await supabase
+      .from('programs')
+      .select(`
+        *,
+        event_types(*),
+        categories(*),
+        rounds(*),
+        program_payment_configs(*),
+        judging_criteria(*),
+        organization:organizations(id, name, logo_url, industry, website)
+      `)
+      .eq('slug', slug)
+      .single();
+
+    // If not found, check slug_history for renamed slugs
+    if (error && !data) {
+      const { data: history } = await supabase
+        .from('slug_history')
+        .select('program_id, new_slug')
+        .eq('old_slug', slug)
+        .order('changed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (history?.new_slug) {
+        // Recursive call with the new slug
+        return programs.getBySlug(history.new_slug);
+      }
+    }
+
+    return { data, error };
+  },
+
   getStats: async (programId?: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
@@ -618,7 +655,7 @@ export const programs = {
       const { data, error } = await supabase
         .from('program_stats')
         .select('*')
-        .eq('id', programId)
+        .eq('program_id', programId)
         .single();
       return { data, error };
     }
@@ -634,7 +671,7 @@ export const programs = {
     const { data, error } = await supabase
       .from('program_stats')
       .select('*')
-      .in('id', programIds);
+      .in('program_id', programIds);
     return { data, error };
   },
 };
@@ -1220,18 +1257,15 @@ export const judges = {
         organization_id: org.data?.id,
         program_id: programId || null,
       })
-      .select()
+      .select('*, invite_token')
       .single();
     return { data, error };
   },
 
   invite: async (email: string, name: string, programId?: string) => {
-    // Create judge record and send invite email
+    // Create judge record with auto-generated invite_token
     const { data, error } = await judges.create({ name, email, programId });
-    if (!error && data) {
-      // Trigger invite email via Supabase Edge Function or similar
-      // await supabase.functions.invoke('send-judge-invite', { body: { judgeId: data.id } });
-    }
+    // data now includes invite_token for constructing the magic link
     return { data, error };
   },
 

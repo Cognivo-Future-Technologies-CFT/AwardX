@@ -3,9 +3,10 @@ import { Button } from '../Button';
 
 import { FormField, FormPage, FormTheme } from '../dashboard/FormBuilder';
 import { db } from '../../services/database';
+import { submissionDrafts, formAnalytics } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { supabase } from '../../services/supabase';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FormSubmissionPageProps {
@@ -174,6 +175,51 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     loadForm();
   }, [isCheckingAuth, formId]);
 
+  // Restore draft data after form loads
+  useEffect(() => {
+    if (!formId || isLoading || formFields.length === 0) return;
+    const restoreDraft = async () => {
+      try {
+        const { user } = await auth.getUser();
+        const sessionId = sessionStorage.getItem('draft_session') || `anon-${Date.now()}`;
+        if (!sessionStorage.getItem('draft_session')) sessionStorage.setItem('draft_session', sessionId);
+
+        const { data: draft } = await submissionDrafts.get(formId, user?.id, user ? undefined : sessionId);
+        if (draft?.draft_data && Object.keys(draft.draft_data).length > 0) {
+          setFormData(draft.draft_data);
+          if (draft.current_page > 0) setCurrentPageIdx(draft.current_page);
+        }
+
+        // Track form view
+        formAnalytics.track({ form_id: formId, event_type: 'view', user_id: user?.id, session_id: sessionId }).catch(() => {});
+      } catch {
+        // Non-critical
+      }
+    };
+    restoreDraft();
+  }, [formId, isLoading, formFields.length]);
+
+  // Auto-save draft on data change (debounced)
+  useEffect(() => {
+    if (!formId || isLoading || isSubmitted || Object.keys(formData).length === 0) return;
+    const timer = setTimeout(async () => {
+      try {
+        const { user } = await auth.getUser();
+        const sessionId = sessionStorage.getItem('draft_session');
+        await submissionDrafts.save({
+          form_id: formId,
+          user_id: user?.id,
+          session_id: user ? undefined : (sessionId || undefined),
+          draft_data: formData,
+          current_page: currentPageIdx,
+        });
+      } catch {
+        // Non-critical
+      }
+    }, 2000); // 2s debounce
+    return () => clearTimeout(timer);
+  }, [formData, currentPageIdx, formId, isLoading, isSubmitted]);
+
   const currentPage = formPages[currentPageIdx] || formPages[0];
   const pageFields = formFields.filter(f => f.pageId === currentPage?.id);
   const isLastPage = currentPageIdx === formPages.length - 1;
@@ -228,6 +274,12 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
       setIsSubmitting(true);
       // Submit form data to backend - saved in submissions table
       await db.submitFormResponse(currentFormId, formData);
+
+      // Track completion and clean up draft
+      const { user } = await auth.getUser();
+      formAnalytics.track({ form_id: currentFormId, event_type: 'complete', user_id: user?.id }).catch(() => {});
+      submissionDrafts.delete(currentFormId, user?.id).catch(() => {});
+
       setIsSubmitted(true);
       setIsSubmitting(false);
     } catch (err: any) {
@@ -315,6 +367,27 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
                 <span style={{ color: theme.textColor }}>{opt}</span>
               </label>
             ))}
+          </div>
+        );
+      case 'award_selector':
+        return (
+          <div className="relative">
+            <select
+              value={value}
+              onChange={(e) => handleInputChange(field.id, e.target.value)}
+              required={field.required}
+              className="w-full p-3 pr-10 border rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+              style={style}
+            >
+              <option value="">{field.placeholder || 'Select award category...'}</option>
+              {field.options?.map((opt, i) => (
+                <option key={i} value={opt}>{opt}</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1">
+              <Award className="w-4 h-4 text-amber-500" />
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            </div>
           </div>
         );
       default:
@@ -413,7 +486,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
       <div className="min-h-[80vh] flex flex-col justify-center py-12 px-4">
 
         <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden" style={{ borderRadius: theme.borderRadius }}>
-          <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          <div className="h-2" style={{ background: `linear-gradient(to right, ${theme.primaryColor}, ${theme.secondaryColor})` }} />
           <div className="p-8 md:p-12 lg:p-16">
             <div className="mb-8">
 

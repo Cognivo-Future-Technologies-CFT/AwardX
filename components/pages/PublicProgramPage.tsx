@@ -63,16 +63,30 @@ export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate
             try {
                 const params = new URLSearchParams(window.location.search);
                 const id = propProgramId || params.get('id');
+                
+                // Check for slug-based URL: /program/my-slug
+                const pathname = window.location.pathname;
+                const slugMatch = pathname.match(/^\/program\/(.+)$/);
+                const slug = slugMatch ? decodeURIComponent(slugMatch[1]) : null;
 
-                if (!id) {
+                if (!id && !slug) {
                     setError('Program ID is required');
                     setIsLoading(false);
                     return;
                 }
 
+                let programResult;
+                if (slug) {
+                    programResult = await programs.getBySlug(slug);
+                } else {
+                    programResult = await programs.getPublicById(id!);
+                }
+
                 const [programData, sectionsData] = await Promise.all([
-                    programs.getPublicById(id),
-                    programPages.getSections(id)
+                    Promise.resolve(programResult),
+                    programResult.data?.id 
+                        ? programPages.getSections(programResult.data.id)
+                        : Promise.resolve({ data: null })
                 ]);
 
                 if (programData.error) throw programData.error;
