@@ -6,6 +6,7 @@ import { Judge, Program, Submission } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { useConfirm } from '../ConfirmDialog';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { sendJudgeInviteEmail } from '../../services/email';
 import { supabase, realtime } from '../../services/supabase';
@@ -15,6 +16,7 @@ interface JudgingViewProps {
 }
 
 export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
+   const { confirm, ConfirmDialogNode } = useConfirm();
    const [activeTab, setActiveTab] = useState<'overview' | 'panel' | 'scorecard' | 'assignments'>('overview');
   const [judges, setJudges] = useState<Judge[]>([]);
    const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -109,7 +111,12 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    };
 
    const handleRemoveJudge = async (judgeId: string) => {
-      if (!confirm('Remove this judge? This will also remove all their submission assignments.')) return;
+      const ok = await confirm({
+        title: 'Remove judge?',
+        description: 'This will also remove all their submission assignments. Their scored data will be preserved.',
+        confirmLabel: 'Remove judge',
+      });
+      if (!ok) return;
       setIsRemovingJudge(judgeId);
       try {
          await db.deleteJudge(judgeId);
@@ -126,7 +133,12 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    };
 
    const handleRemoveAllJudges = async () => {
-      if (!confirm(`Remove ALL ${judges.length} judges from this program? This will also remove all submission assignments. This cannot be undone.`)) return;
+      const ok = await confirm({
+        title: `Remove all ${judges.length} judges?`,
+        description: 'This will remove all submission assignments. This cannot be undone. Existing scores will be preserved.',
+        confirmLabel: 'Remove all judges',
+      });
+      if (!ok) return;
       setIsRemovingAll(true);
       try {
          await db.deleteAllJudges(activeEvent?.id);
@@ -187,6 +199,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
   return (
     <div className="space-y-8">
+      {ConfirmDialogNode}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Judging Management</h1>

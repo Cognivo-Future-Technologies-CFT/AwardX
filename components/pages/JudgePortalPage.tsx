@@ -307,7 +307,7 @@ export const JudgePortalPage: React.FC = () => {
                     <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">{c.weight}%</span>
                   </div>
                   {c.description && <p className="text-sm text-slate-500 mb-2">{c.description}</p>}
-                  <p className="text-xs text-slate-400">Score range: {c.minScore} - {c.maxScore}</p>
+                  <p className="text-xs text-slate-500">Score range: {c.minScore} – {c.maxScore}</p>
                 </div>
               ))}
             </div>
@@ -416,8 +416,8 @@ export const JudgePortalPage: React.FC = () => {
 
         {/* Footer note */}
         <div className="mt-12 text-center pb-8">
-          <p className="text-sm text-slate-400">
-            Powered by <strong className="text-slate-500">AwardX</strong> &middot; Questions? Contact the program organizer.
+          <p className="text-sm text-slate-500">
+            Powered by <strong className="text-slate-700">AwardX</strong> &middot; Questions? Contact the program organizer.
           </p>
         </div>
       </main>

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, MessageSquare, ExternalLink, Calendar, MapPin } from 'lucide-react';
+import { Mail, Calendar } from 'lucide-react';
 
 interface UserHoverCardProps {
   user: {
@@ -9,6 +9,7 @@ interface UserHoverCardProps {
     avatar: string;
     role?: string;
     email?: string;
+    joinedDate?: string;
   };
   children: React.ReactNode;
 }
@@ -61,38 +62,24 @@ export const UserHoverCard: React.FC<UserHoverCardProps> = ({ user, children }) 
 
             {/* Content */}
             <div className="pt-8 px-6 pb-6">
-               <div className="flex justify-between items-start mb-2">
-                  <div>
-                     <h4 className="text-lg font-bold text-slate-900 leading-tight">{user.name}</h4>
-                     <p className="text-xs text-slate-500 font-medium">{user.role || 'Member'}</p>
-                  </div>
-                  <button className="text-indigo-600 hover:text-indigo-700 bg-indigo-50 p-2 rounded-lg transition-colors">
-                     <MessageSquare className="w-4 h-4" />
-                  </button>
+               <div className="mb-2">
+                  <h4 className="text-lg font-bold text-slate-900 leading-tight">{user.name}</h4>
+                  <p className="text-xs text-slate-500 font-medium">{user.role || 'Member'}</p>
                </div>
 
                <div className="space-y-3 mt-4">
-                  <div className="flex items-center text-xs text-slate-500 gap-2">
-                     <Mail className="w-3.5 h-3.5" />
-                     {user.email || 'email@nomify.com'}
-                  </div>
-                  <div className="flex items-center text-xs text-slate-500 gap-2">
-                     <MapPin className="w-3.5 h-3.5" />
-                     San Francisco, CA
-                  </div>
-                  <div className="flex items-center text-xs text-slate-500 gap-2">
-                     <Calendar className="w-3.5 h-3.5" />
-                     Joined Oct 2024
-                  </div>
-               </div>
-
-               <div className="mt-5 pt-4 border-t border-slate-50 flex gap-2">
-                  <button className="flex-1 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors">
-                     View Profile
-                  </button>
-                  <button className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors">
-                     <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+                  {user.email && (
+                     <div className="flex items-center text-xs text-slate-500 gap-2">
+                        <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">{user.email}</span>
+                     </div>
+                  )}
+                  {user.joinedDate && (
+                     <div className="flex items-center text-xs text-slate-500 gap-2">
+                        <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                        Joined {new Date(user.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                     </div>
+                  )}
                </div>
             </div>
           </motion.div>

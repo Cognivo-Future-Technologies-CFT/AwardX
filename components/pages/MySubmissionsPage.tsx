@@ -1,8 +1,29 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApplicantDraftItem, db, MySubmissionPortalItem } from '../../services/database';
-import { AlertCircle, ChevronDown, ChevronUp, Clock3, CreditCard, FileText, MessageSquareText, PencilLine, Trash2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Clock, Clock3, CheckCircle, XCircle, Star, CreditCard, Eye, FileText, MessageSquareText, MinusCircle, PencilLine, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useConfirm } from '../ConfirmDialog';
+
+const statusBadgeConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending: { label: 'Pending', color: 'border-slate-200 bg-slate-50 text-slate-600', icon: <Clock className="h-3 w-3" /> },
+  under_review: { label: 'Under Review', color: 'border-blue-200 bg-blue-50 text-blue-700', icon: <Eye className="h-3 w-3" /> },
+  shortlisted: { label: 'Shortlisted', color: 'border-purple-200 bg-purple-50 text-purple-700', icon: <Star className="h-3 w-3" /> },
+  accepted: { label: 'Accepted', color: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: <CheckCircle className="h-3 w-3" /> },
+  rejected: { label: 'Rejected', color: 'border-rose-200 bg-rose-50 text-rose-700', icon: <XCircle className="h-3 w-3" /> },
+  withdrawn: { label: 'Withdrawn', color: 'border-slate-200 bg-slate-100 text-slate-500', icon: <MinusCircle className="h-3 w-3" /> },
+};
+
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  const cfg = statusBadgeConfig[key] || { label: status, color: 'border-slate-200 bg-slate-50 text-slate-600', icon: <Clock className="h-3 w-3" /> };
+  return (
+    <span className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${cfg.color}`}>
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  );
+};
 
 const toTitleCase = (value: string) =>
   (value || '')
@@ -12,6 +33,7 @@ const toTitleCase = (value: string) =>
 export const MySubmissionsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { confirm, ConfirmDialogNode } = useConfirm();
   const [expandedSubmissionId, setExpandedSubmissionId] = React.useState<string | null>(null);
   const [withdrawError, setWithdrawError] = React.useState<string | null>(null);
 
@@ -40,12 +62,18 @@ export const MySubmissionsPage: React.FC = () => {
   };
 
   const handleWithdraw = async (submission: MySubmissionPortalItem) => {
-    const reason = window.prompt('Optional withdrawal reason (visible to your team). Leave blank to continue.') || undefined;
-    await withdrawMutation.mutateAsync({ submissionId: submission.id, reason });
+    const ok = await confirm({
+      title: `Withdraw "${submission.title}"?`,
+      description: 'This will withdraw your entry from the program. This action cannot be undone.',
+      confirmLabel: 'Withdraw entry',
+    });
+    if (!ok) return;
+    await withdrawMutation.mutateAsync({ submissionId: submission.id });
   };
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
+      {ConfirmDialogNode}
       <div className="mx-auto max-w-5xl">
         <div className="mb-8">
           <h1 className="text-3xl font-black text-slate-900">My Submissions</h1>
@@ -69,7 +97,7 @@ export const MySubmissionsPage: React.FC = () => {
               {drafts.map((draft) => (
                 <div key={draft.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{draft.programTitle}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{draft.programTitle}</p>
                     <p className="mt-1 font-semibold text-slate-800">{draft.formTitle}</p>
                     <p className="text-xs text-slate-500 mt-1">
                       Last saved {new Date(draft.updatedAt).toLocaleString()} | Page {draft.currentPage + 1} | {draft.fieldCount} field{draft.fieldCount === 1 ? '' : 's'} completed
@@ -109,20 +137,18 @@ export const MySubmissionsPage: React.FC = () => {
                   <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">{submission.programTitle}</p>
                   <h3 className="mt-1 text-lg font-extrabold text-slate-900">{submission.title}</h3>
                 </div>
-                <span className="inline-flex w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                  {toTitleCase(submission.status)}
-                </span>
+                <StatusBadge status={submission.status} />
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1">
                     <Clock3 className="h-3.5 w-3.5" /> Submitted
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">{new Date(submission.submittedAt).toLocaleString()}</p>
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1">
                     <CreditCard className="h-3.5 w-3.5" /> Payment
                   </p>
                   <p className="mt-1 font-semibold text-slate-700">

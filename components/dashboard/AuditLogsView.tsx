@@ -163,14 +163,14 @@ export const AuditLogsView: React.FC = () => {
                         </div>
                       </UserHoverCard>
                     ) : (
-                      <div className="flex items-center gap-2 text-slate-400 italic text-sm">
+                      <div className="flex items-center gap-2 text-slate-500 italic text-sm">
                         <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">?</div>
                         Unknown
                       </div>
                     )}
                   </td>
                   <td className="p-4 text-sm text-slate-500 font-mono">{log.details}</td>
-                  <td className="p-4 text-right text-xs text-slate-400">{log.timestamp}</td>
+                  <td className="p-4 text-right text-xs text-slate-500">{log.timestamp}</td>
                 </tr>
               ))}
               {!isLoading && logs.length === 0 && (

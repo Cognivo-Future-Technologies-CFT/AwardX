@@ -14,12 +14,12 @@ interface SubmissionDetailModalProps {
 export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ isOpen, onClose, submission }) => {
     if (!submission) return null;
 
-    const statusColors: any = {
-        'Shortlisted': 'text-purple-600 bg-purple-50 border-purple-100',
-        'Accepted': 'text-green-600 bg-green-50 border-green-100',
-        'Rejected': 'text-red-600 bg-red-50 border-red-100',
-        'Pending': 'text-slate-600 bg-slate-50 border-slate-100',
-        'Under Review': 'text-blue-600 bg-blue-50 border-blue-100',
+    const statusConfig: any = {
+        'Shortlisted': { color: 'text-purple-600 bg-purple-50 border-purple-100', icon: <Gavel className="w-3 h-3" /> },
+        'Accepted': { color: 'text-green-600 bg-green-50 border-green-100', icon: <CheckCircle className="w-3 h-3" /> },
+        'Rejected': { color: 'text-red-600 bg-red-50 border-red-100', icon: <XCircle className="w-3 h-3" /> },
+        'Pending': { color: 'text-slate-600 bg-slate-50 border-slate-100', icon: <Clock className="w-3 h-3" /> },
+        'Under Review': { color: 'text-blue-600 bg-blue-50 border-blue-100', icon: <Clock className="w-3 h-3" /> },
     };
 
     const responses = submission.submissionData?.responses || {};
@@ -40,7 +40,8 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
                     </div>
                     <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-3 flex-wrap">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${statusColors[submission.status]}`}>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${(statusConfig[submission.status] || statusConfig['Pending']).color}`}>
+                                {(statusConfig[submission.status] || statusConfig['Pending']).icon}
                                 {submission.status}
                             </span>
                             <span className="text-xs text-slate-400 font-medium">#{submission.id.split('-')[1]}</span>

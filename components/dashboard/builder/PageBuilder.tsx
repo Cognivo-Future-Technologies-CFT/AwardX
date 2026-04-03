@@ -4,12 +4,14 @@ import { sectionDefs, SectionPreview, DEFAULT_TEMPLATE } from './SectionBlocks';
 import { PropertyPanel } from './PropertyPanel';
 import { Save, Plus, GripVertical, Rocket, Eye, Monitor, Smartphone, Tablet, LayoutTemplate, Link2, Check } from 'lucide-react';
 import { Button } from '../../Button';
+import { useConfirm } from '../../ConfirmDialog';
 
 interface PageBuilderProps {
     programId: string;
 }
 
 export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
+    const { confirm, ConfirmDialogNode } = useConfirm();
     const [sections, setSections] = useState<any[]>([]);
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -92,7 +94,8 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     };
 
     const handleDeleteSection = async (id: string) => {
-        if (confirm('Are you sure you want to delete this section?')) {
+        const ok = await confirm({ title: 'Delete section?', description: 'This section will be removed from your page.', confirmLabel: 'Delete section' });
+        if (ok) {
             // If it's a temp ID, just remove from state
             if (id.startsWith('temp-')) {
                 setSections(sections.filter(s => s.id !== id));
@@ -211,6 +214,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
 
     return (
         <div className="flex flex-col h-[calc(100vh-64px)] min-h-0 bg-slate-100">
+            {ConfirmDialogNode}
             {/* Top Bar */}
             <div className="bg-white border-b border-slate-200 px-3 md:px-6 py-3 flex flex-wrap justify-between items-center gap-2 shadow-sm z-10">
                 <h1 className="text-lg font-bold text-slate-800">Page Builder</h1>
@@ -304,8 +308,8 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                     >
                         {/* Empty State */}
                         {sections.length === 0 && (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-12 border-2 border-dashed border-slate-200 m-8 rounded-xl">
-                                <LayoutTemplate className="w-12 h-12 mb-4" />
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500 p-12 border-2 border-dashed border-slate-200 m-8 rounded-xl">
+                                <LayoutTemplate className="w-12 h-12 mb-4 text-slate-300" />
                                 <p>Your page is empty. Add sections from the sidebar.</p>
                             </div>
                         )}

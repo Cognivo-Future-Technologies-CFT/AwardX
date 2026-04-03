@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award
 } from 'lucide-react';
 import { Button } from '../Button';
+import { useConfirm } from '../ConfirmDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export interface FormField {
@@ -95,12 +96,13 @@ const defaultTheme: FormTheme = {
 };
 
 export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
-  onSave, 
+  onSave,
   initialFields = [],
   initialPages,
   initialTheme = defaultTheme,
   isSaving = false
 }, ref) => {
+  const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
   // --- State ---
   const [fields, setFields] = useState<FormField[]>(initialFields);
   const [pages, setPages] = useState<FormPage[]>(
@@ -216,9 +218,14 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     setSelectedPageId(newPage.id);
   };
 
-  const deletePage = (pageId: string) => {
+  const deletePage = async (pageId: string) => {
     if (pages.length <= 1) return;
-    if (!confirm('Delete page? Fields will move to the first page.')) return;
+    const ok = await confirmDialog({
+      title: 'Delete page?',
+      description: 'All fields on this page will be moved to the first page.',
+      confirmLabel: 'Delete page',
+    });
+    if (!ok) return;
 
     const remaining = pages.filter(p => p.id !== pageId);
     const firstId = remaining[0].id;
@@ -479,7 +486,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                     }
                   }}
                   draggable={!isTouchDevice}
-                  onDragStart={(e: React.DragEvent) => {
+                  onDragStartCapture={(e: React.DragEvent) => {
                     if (isTouchDevice) return;
                     handleDragStart(e, field.id);
                   }}
@@ -736,6 +743,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
   return (
     <div className="flex h-full bg-slate-50 font-sans">
+      {ConfirmDialogNode}
       {/* 1. Left Sidebar: Toolkit */}
       <div className="w-72 bg-white border-r border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50">
         <div className="p-5 border-b border-slate-100">

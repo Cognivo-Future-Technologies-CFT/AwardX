@@ -1,5 +1,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useConfirm } from '../ConfirmDialog';
 import { Filter, Download, Eye, Calendar, Search, ChevronDown, User, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles } from 'lucide-react';
 
 import { db } from '../../services/database';
@@ -57,6 +58,7 @@ interface SubmissionTableProps {
 
 export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent }) => {
    const queryClient = useQueryClient();
+   const { confirm, ConfirmDialogNode } = useConfirm();
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -64,6 +66,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
    const [newSub, setNewSub] = useState({ title: '', applicant: '', category: 'General', status: 'Pending' as const });
    const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
+   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
    const [searchTerm, setSearchTerm] = useState('');
    const [debouncedSearch, setDebouncedSearch] = useState('');
    const [page, setPage] = useState(1);
@@ -173,19 +176,26 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
       }
 
       if (action === 'Delete') {
-         if (confirm(`Are you sure you want to delete ${selectedIds.length} submissions?`)) {
-            await db.deleteSubmissions(selectedIds);
-         }
-      } else {
-         const statusMap: any = {
-            'Accept': 'Accepted',
-            'Reject': 'Rejected',
-            'Shortlist': 'Shortlisted'
-         };
-         await db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] } as any);
+         const ok = await confirm({
+           title: `Delete ${selectedIds.length} submission${selectedIds.length > 1 ? 's' : ''}?`,
+           description: 'This action cannot be undone. All associated data including scores and judge comments will be removed.',
+           confirmLabel: `Delete ${selectedIds.length} submission${selectedIds.length > 1 ? 's' : ''}`,
+         });
+         if (!ok) return;
       }
 
-      await refreshSubmissions();
+      setIsBulkProcessing(true);
+      try {
+         if (action === 'Delete') {
+            await db.deleteSubmissions(selectedIds);
+         } else {
+            const statusMap: any = { 'Accept': 'Accepted', 'Reject': 'Rejected', 'Shortlist': 'Shortlisted' };
+            await db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] } as any);
+         }
+         await refreshSubmissions();
+      } finally {
+         setIsBulkProcessing(false);
+      }
    };
 
    const handleAssignJudges = async () => {
@@ -238,6 +248,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
 
    return (
       <div className="space-y-8 relative pb-24">
+         {ConfirmDialogNode}
          {/* Enhanced Header Section */}
          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
             <div className="space-y-1">
@@ -322,17 +333,17 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
 
                      <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded-lg border border-slate-100 bg-slate-50 p-2">
-                           <p className="font-bold uppercase tracking-wide text-slate-400">Category</p>
+                           <p className="font-bold uppercase tracking-wide text-slate-500">Category</p>
                            <p className="mt-1 font-semibold text-slate-700">{sub.category}</p>
                         </div>
                         <div className="rounded-lg border border-slate-100 bg-slate-50 p-2">
-                           <p className="font-bold uppercase tracking-wide text-slate-400">Score</p>
+                           <p className="font-bold uppercase tracking-wide text-slate-500">Score</p>
                            <p className="mt-1 font-semibold text-slate-700">{sub.score ? `${sub.score}/100` : '--'}</p>
                         </div>
                      </div>
 
                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-[11px] text-slate-500">
                            {(sub.assignedJudges || []).length} judge{(sub.assignedJudges || []).length === 1 ? '' : 's'} assigned
                         </p>
                         <button
@@ -363,7 +374,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
             <div className="hidden md:block overflow-x-auto">
                <table className="w-full text-left border-collapse min-w-[1000px]">
                   <thead>
-                     <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">
+                     <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase tracking-[0.1em]">
                         <th className="p-5 w-16 text-center">
                            <div className="flex justify-center">
                               <input
@@ -408,7 +419,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                               </div>
                            </td>
                            <td className="p-5">
-                              <span className="font-mono text-xs text-slate-400 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
+                              <span className="font-mono text-xs text-slate-500 px-2 py-1 bg-slate-50 rounded-md border border-slate-100">
                                  {sub.id.split('-')[1]}
                               </span>
                            </td>
@@ -594,21 +605,27 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                     <button onClick={() => handleBulkAction('Accept')} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-emerald-400 flex items-center gap-2 group">
+                     {isBulkProcessing && (
+                        <svg className="w-4 h-4 animate-spin text-slate-400" viewBox="0 0 24 24" fill="none">
+                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                     )}
+                     <button onClick={() => handleBulkAction('Accept')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-emerald-400 flex items-center gap-2 group disabled:opacity-40">
                         <CheckCircle className="w-4 h-4 group-hover:scale-110 transition-transform" /> ACCEPT
                      </button>
-                     <button onClick={() => handleBulkAction('Reject')} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-rose-400 flex items-center gap-2 group">
+                     <button onClick={() => handleBulkAction('Reject')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-rose-400 flex items-center gap-2 group disabled:opacity-40">
                         <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" /> REJECT
                      </button>
-                     <button onClick={() => handleBulkAction('Shortlist')} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-purple-400 flex items-center gap-2 group">
+                     <button onClick={() => handleBulkAction('Shortlist')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-purple-400 flex items-center gap-2 group disabled:opacity-40">
                         <Gavel className="w-4 h-4 group-hover:scale-110 transition-transform" /> SHORTLIST
                      </button>
                      <div className="w-px h-6 bg-slate-800 mx-3"></div>
-                     <button onClick={() => handleBulkAction('AssignJudge')} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-blue-400 flex items-center gap-2 group">
+                     <button onClick={() => handleBulkAction('AssignJudge')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-blue-400 flex items-center gap-2 group disabled:opacity-40">
                         <User className="w-4 h-4 group-hover:scale-110 transition-transform" /> ASSIGN JUDGES
                      </button>
                      <div className="w-px h-6 bg-slate-800 mx-3"></div>
-                     <button onClick={() => handleBulkAction('Delete')} className="px-4 py-2 hover:bg-rose-950/30 rounded-xl transition-all text-xs font-black text-slate-500 hover:text-rose-400 flex items-center gap-2 group">
+                     <button onClick={() => handleBulkAction('Delete')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-rose-950/30 rounded-xl transition-all text-xs font-black text-slate-500 hover:text-rose-400 flex items-center gap-2 group disabled:opacity-40">
                         <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" /> DELETE
                      </button>
                   </div>

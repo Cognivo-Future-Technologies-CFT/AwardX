@@ -63,7 +63,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
     try {
       const submissions = await databaseService.getSubmissions(activeEvent?.id);
       if (!submissions || submissions.length === 0) {
-        alert('No submissions to export.');
         return;
       }
       const headers = ['Title', 'Category', 'Status', 'Applicant', 'Date'];

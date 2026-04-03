@@ -6,6 +6,7 @@ import { Program } from '../../services/models';
 import { Save, FileText, Plus, Trash2, CheckCircle2, XCircle, X, Link2, Copy, Check } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { useConfirm } from '../ConfirmDialog';
 
 interface FormBuilderViewProps {
   activeEvent: Program | null;
@@ -50,6 +51,7 @@ const mapFormFieldToDbPayload = (f: FormField, idx: number) => ({
 });
 
 export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent }) => {
+  const { confirm, ConfirmDialogNode } = useConfirm();
   const [savedForms, setSavedForms] = useState<SavedForm[]>([]);
   const [currentForm, setCurrentForm] = useState<FormField[]>([]);
   const [currentPages, setCurrentPages] = useState<FormPage[]>([]);
@@ -112,8 +114,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         await db.replaceFormFields(selectedFormId, fields.map(mapFormFieldToDbPayload));
         await loadSavedForms();
         setSaveMessage({ type: 'success', text: 'Form saved successfully!' });
-        // Clear message after 3 seconds
-        setTimeout(() => setSaveMessage(null), 3000);
+        setTimeout(() => setSaveMessage(null), 5000);
       } catch (error: any) {
         setSaveMessage({ type: 'error', text: error?.message || 'Failed to save form. Please try again.' });
         setTimeout(() => setSaveMessage(null), 5000);
@@ -147,7 +148,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       setSelectedFormId((newForm as any).id);
       await loadSavedForms();
       setSaveMessage({ type: 'success', text: `Form "${formName}" saved successfully!` });
-      setTimeout(() => setSaveMessage(null), 3000);
+      setTimeout(() => setSaveMessage(null), 5000);
     } catch (error: any) {
       setSaveMessage({ type: 'error', text: error?.message || 'Failed to save form. Please try again.' });
       setTimeout(() => setSaveMessage(null), 5000);
@@ -167,11 +168,17 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   };
 
   const handleDeleteForm = async (formId: string) => {
-    if (!window.confirm('Are you sure you want to delete this form?')) return;
+    const name = savedForms.find(f => f.id === formId)?.name || 'this form';
+    const ok = await confirm({
+      title: `Delete "${name}"?`,
+      description: 'This removes all form fields and settings. Existing submissions are not affected.',
+      confirmLabel: 'Delete form',
+    });
+    if (!ok) return;
 
     setDeleteMessage(null);
     try {
-      const formName = savedForms.find(f => f.id === formId)?.name || 'this form';
+      const formName = name;
       await db.deleteForm(formId);
 
       if (selectedFormId === formId) {
@@ -180,7 +187,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       }
       await loadSavedForms();
       setDeleteMessage({ type: 'success', text: `Form "${formName}" deleted successfully!` });
-      setTimeout(() => setDeleteMessage(null), 3000);
+      setTimeout(() => setDeleteMessage(null), 5000);
     } catch (error: any) {
       setDeleteMessage({ type: 'error', text: error?.message || 'Failed to delete form. Please try again.' });
       setTimeout(() => setDeleteMessage(null), 5000);
@@ -230,7 +237,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         type: 'success',
         text: targetForm.isActive ? 'Form unpublished.' : 'Form published.'
       });
-      setTimeout(() => setSaveMessage(null), 3000);
+      setTimeout(() => setSaveMessage(null), 5000);
     } catch (error: any) {
       setSaveMessage({ type: 'error', text: error?.message || 'Failed to update publish status.' });
       setTimeout(() => setSaveMessage(null), 5000);
@@ -274,6 +281,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
   return (
     <div className="h-full flex flex-col">
+      {ConfirmDialogNode}
       {/* Success/Error Messages */}
       {(saveMessage || deleteMessage) && (
         <div className="px-4 py-2 z-50">
@@ -352,10 +360,10 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {savedForms.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <FileText className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <div className="text-center py-12 text-slate-500">
+                <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p className="text-sm font-medium">No forms found</p>
-                <p className="text-xs opacity-70 mt-1">Create a new form to get started</p>
+                <p className="text-xs text-slate-400 mt-1">Create a new form to get started</p>
               </div>
             ) : (
               savedForms.map((form) => (
@@ -381,7 +389,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
                       <span className="text-[10px] px-1.5 py-0.5 bg-white border border-slate-200 rounded text-slate-500 font-medium">
                         {form.fields.length} Qs
                       </span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-slate-500">
                         {new Date(form.createdAt).toLocaleDateString()}
                       </span>
                     </div>

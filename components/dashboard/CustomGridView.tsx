@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { useConfirm } from '../ConfirmDialog';
 
 interface GridItem {
     id: string;
@@ -36,6 +37,7 @@ const COLORS = [
 ];
 
 export const CustomGridView: React.FC = () => {
+    const { confirm, ConfirmDialogNode } = useConfirm();
     const [items, setItems] = useState<GridItem[]>([
         { id: '1', title: 'Example Unit', description: 'This is a sample grid item you can edit.', iconName: 'Box', color: 'bg-indigo-500' }
     ]);
@@ -78,14 +80,16 @@ export const CustomGridView: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleDelete = (id: string) => {
-        if (confirm('Are you sure you want to delete this unit?')) {
+    const handleDelete = async (id: string) => {
+        const ok = await confirm({ title: 'Delete this unit?', description: 'This action cannot be undone.', confirmLabel: 'Delete' });
+        if (ok) {
             setItems(items.filter(i => i.id !== id));
         }
     };
 
     return (
         <div className="space-y-8 max-w-7xl mx-auto pb-20">
+            {ConfirmDialogNode}
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-2">Custom Grid Builder</h1>

@@ -5,6 +5,7 @@ import { Category, Program } from '../../services/models';
 import { Folder, ChevronRight, Plus, MoreHorizontal, FileText, Trash2, Edit2, ChevronDown, List, Workflow } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { useConfirm } from '../ConfirmDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CategoriesWorkflow } from './CategoriesWorkflow';
 
@@ -49,7 +50,7 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, le
             </div>
 
             <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-               <span className="text-xs text-slate-400 flex items-center gap-1">
+               <span className="text-xs text-slate-500 flex items-center gap-1">
                   <FileText className="w-3 h-3" /> {category.entriesCount}
                </span>
                <button
@@ -63,13 +64,10 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, le
                   <Edit2 className="w-3.5 h-3.5" />
                </button>
                <button
-                  onClick={() => {
-                     if (window.confirm(`Are you sure you want to delete "${category.title}"? This will also delete all its subcategories.`)) {
-                        onDelete(category.id);
-                     }
-                  }}
+                  onClick={() => onDelete(category.id)}
                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
                   title="Delete Category"
+                  aria-label={`Delete ${category.title}`}
                >
                   <Trash2 className="w-3.5 h-3.5" />
                </button>
@@ -156,7 +154,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
                   ))}
                </div>
             ) : (
-               <div className="text-center py-6 text-xs text-slate-400 border-2 border-dashed border-slate-100 rounded-lg m-2">
+               <div className="text-center py-6 text-xs text-slate-500 border-2 border-dashed border-slate-100 rounded-lg m-2">
                   No subcategories yet
                </div>
             )}
@@ -173,6 +171,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
 };
 
 export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) => {
+   const { confirm, ConfirmDialogNode } = useConfirm();
    const [categories, setCategories] = useState<Category[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [newCategory, setNewCategory] = useState({ title: '', parentId: '' });
@@ -213,8 +212,16 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
       setIsModalOpen(true);
    };
 
-   const handleDelete = (categoryId: string) => {
-      db.deleteCategory(categoryId).then(loadCategories); // Reload to reflect changes
+   const handleDelete = async (categoryId: string) => {
+      const category = categories.find(c => c.id === categoryId);
+      const ok = await confirm({
+        title: `Delete "${category?.title || 'category'}"?`,
+        description: 'This will also delete all its subcategories. This cannot be undone.',
+        confirmLabel: 'Delete category',
+      });
+      if (!ok) return;
+      await db.deleteCategory(categoryId);
+      loadCategories();
    };
 
    const rootCategories = categories.filter(c => c.parentId === null);
@@ -222,6 +229,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
 
    return (
       <div className={viewMode === 'list' ? 'p-4 lg:p-8 max-w-7xl mx-auto min-h-full' : 'h-full flex flex-col'}>
+         {ConfirmDialogNode}
          {/* Portal Controls to Header */}
          {portalTarget && createPortal(
             <div className="flex items-center gap-3">

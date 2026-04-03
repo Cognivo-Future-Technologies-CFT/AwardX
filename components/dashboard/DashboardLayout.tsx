@@ -52,6 +52,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ id, label, icon: Icon, curren
   <div className="mb-1">
     <button
       onClick={onClick}
+      aria-current={currentView === id ? 'page' : undefined}
       className={`group w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${currentView === id
         ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100/50'
         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
@@ -332,6 +333,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-slate-900 overflow-hidden">
+      {/* Skip to main content link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[70] focus:bg-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg focus:text-indigo-600 focus:font-semibold focus:text-sm focus:border focus:border-indigo-200"
+      >
+        Skip to content
+      </a>
       {/* Visual Indicator for Test Mode */}
       {isTestMode && (
         <div className="fixed top-0 left-0 w-full h-1 bg-amber-400 z-[60]" />
@@ -339,6 +347,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* LEFT SIDEBAR - Desktop */}
       <aside
+        role="navigation"
+        aria-label="Dashboard navigation"
         className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out ${isLeftCollapsed ? 'w-20' : 'w-64'
           }`}
       >
@@ -578,7 +588,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
 
         {/* Scrollable Content */}
-        <main className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>
+        <main id="main-content" className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>
           {isTestMode && (
             <div className="mb-6 mx-4 lg:mx-8 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
               <Beaker className="w-5 h-5 text-amber-600 mt-0.5" />

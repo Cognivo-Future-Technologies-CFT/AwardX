@@ -1,3 +1,5 @@
+<!-- markdownlint-disable -->
+
 # UX Todo
 _Generated from UX analysis on 2026-04-02. Work top-to-bottom within each priority tier._
 _Check off items as completed. Move done items to the Completed section at the bottom._

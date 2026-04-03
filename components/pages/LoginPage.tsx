@@ -4,6 +4,26 @@ import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff, Gavel, Star, TrendingUp }
 import { auth } from '../../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
+function humanizeAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials') || m.includes('invalid credentials') || m.includes('wrong password')) {
+    return "That email and password combination doesn't match. Check your spelling or reset your password.";
+  }
+  if (m.includes('email not confirmed')) {
+    return "Please check your inbox and click the confirmation link we sent you.";
+  }
+  if (m.includes('user not found') || m.includes('no user found')) {
+    return "We couldn't find an account with that email. Try signing up instead.";
+  }
+  if (m.includes('too many requests') || m.includes('rate limit')) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+  if (m.includes('network') || m.includes('fetch')) {
+    return "Connection error. Check your internet and try again.";
+  }
+  return "Something went wrong. Please try again or contact support.";
+}
+
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -13,17 +33,6 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const AppleIcon = () => (
-  <svg className="w-5 h-5 fill-current text-slate-900" viewBox="0 0 24 24">
-    <path d="M17.05 20.28c-.98.95-2.05.88-3.08.38-1.09-.54-2.08-.53-3.2 0-1.39.69-2.14.34-3.08-.62-4.18-4.38-3.52-11.02 1.34-11.2 1.25-.05 2.22.69 2.92.71.69.02 2.05-.82 3.44-.7 1.17.09 2.58.58 3.32 1.64-2.97 1.77-2.48 6.01.55 7.46-.66 1.64-1.57 3.26-2.21 4.33zm-4.43-16c.33-1.6 1.76-2.9 3.25-2.97.23 1.57-1.33 3.12-3.25 2.97z" />
-  </svg>
-);
-
-const LinkedInIcon = () => (
-  <svg className="w-5 h-5 fill-[#0077b5]" viewBox="0 0 24 24">
-    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-  </svg>
-);
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,7 +48,7 @@ export const LoginPage: React.FC = () => {
       setError(null);
       const { error: authError } = await auth.signInWithProvider('google');
       if (authError) {
-        setError(authError.message);
+        setError(humanizeAuthError(authError.message));
         setIsLoading(false);
       }
       // If successful, redirect will happen via OAuth callback
@@ -57,7 +66,7 @@ export const LoginPage: React.FC = () => {
     try {
       const { error: authError } = await auth.signIn(email, password);
       if (authError) {
-        setError(authError.message);
+        setError(humanizeAuthError(authError.message));
         setIsLoading(false);
       } else {
         // Check if there's a return URL for form submission
@@ -85,8 +94,8 @@ export const LoginPage: React.FC = () => {
       <div className="hidden lg:flex w-1/2 bg-slate-900 relative overflow-hidden items-center justify-center p-12 order-1">
          {/* Abstract Background */}
          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-gradient-to-b from-indigo-500/20 to-purple-500/20 rounded-full blur-[120px] mix-blend-screen -translate-y-1/2 -translate-x-1/2"></div>
-            <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-gradient-to-t from-cyan-500/10 to-blue-500/10 rounded-full blur-[100px] mix-blend-screen translate-y-1/3 translate-x-1/3"></div>
+          <div className="absolute top-0 left-0 w-200 h-200 bg-linear-to-b from-indigo-500/20 to-purple-500/20 rounded-full blur-[120px] mix-blend-screen -translate-y-1/2 -translate-x-1/2"></div>
+          <div className="absolute bottom-0 right-0 w-150 h-150 bg-gradient-to-t from-cyan-500/10 to-blue-500/10 rounded-full blur-[100px] mix-blend-screen translate-y-1/3 translate-x-1/3"></div>
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
          </div>
 
@@ -205,28 +214,14 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {/* Social Auth */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <button 
+          <div className="mb-8">
+            <button
               onClick={handleGoogleLogin}
               disabled={isLoading}
-              className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Sign in with Google"
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold text-slate-700"
             >
                <GoogleIcon />
-            </button>
-            <button 
-              disabled
-              className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none opacity-50 cursor-not-allowed"
-              title="Coming soon"
-            >
-               <AppleIcon />
-            </button>
-             <button 
-              disabled
-              className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none opacity-50 cursor-not-allowed"
-              title="Coming soon"
-            >
-               <LinkedInIcon />
+               Continue with Google
             </button>
           </div>
 
@@ -291,13 +286,7 @@ export const LoginPage: React.FC = () => {
                </div>
              </div>
 
-             <div className="flex items-center justify-between pt-2 pb-2">
-                <div className="flex items-center">
-                  <input id="remember-me" type="checkbox" className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded" />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-600">
-                    Remember me
-                  </label>
-                </div>
+             <div className="flex items-center justify-end pt-2 pb-2">
                 <div className="text-sm">
                   <a href="#" className="font-semibold text-indigo-600 hover:text-indigo-500">Forgot password?</a>
                 </div>
@@ -318,7 +307,7 @@ export const LoginPage: React.FC = () => {
         </motion.div>
         
         <div className="mt-12 text-xs text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} AwardX Inc. Protected by reCAPTCHA.
+          &copy; {new Date().getFullYear()} AwardX Inc.
         </div>
       </div>
 
