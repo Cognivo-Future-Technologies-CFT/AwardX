@@ -12,9 +12,10 @@ import { SubmissionDetailModal } from './SubmissionDetailModal';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TableSkeleton } from '../SkeletonLoader';
 import { realtime } from '../../services/supabase';
+import { queryKeys } from '../../services/queryKeys';
 
 const StatusBadge = ({ status }: { status: string }) => {
-   const variants: any = {
+   const variants: Record<string, { container: string; icon: React.ReactNode; dot: string }> = {
       'Shortlisted': {
          container: 'bg-purple-50 text-purple-700 border-purple-100/50',
          icon: <Gavel className="w-3 h-3" />,
@@ -91,25 +92,27 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
    }, [page]);
 
    const submissionsQuery = useQuery({
-      queryKey: ['submissions', activeEvent?.id || 'all', page, pageSize, debouncedSearch],
+      queryKey: queryKeys.submissions.paginated(activeEvent?.id ?? 'all', page, debouncedSearch),
       queryFn: () => db.getSubmissionsPaginated({
          programId: activeEvent?.id,
          page,
          pageSize,
          search: debouncedSearch,
       }),
+      staleTime: 30_000,
    });
 
    const judgesQuery = useQuery({
-      queryKey: ['judges', activeEvent?.id || 'all'],
+      queryKey: queryKeys.judges.all(activeEvent?.id ?? 'all'),
       queryFn: () => db.getJudges(activeEvent?.id),
+      staleTime: 30_000,
    });
 
    useEffect(() => {
       if (!activeEvent?.id) return;
 
       const channel = realtime.subscribeToSubmissions(activeEvent.id, () => {
-         queryClient.invalidateQueries({ queryKey: ['submissions', activeEvent.id] });
+         queryClient.invalidateQueries({ queryKey: queryKeys.submissions.paginated(activeEvent.id, page, debouncedSearch) });
       });
 
       return () => {
@@ -131,7 +134,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
    }, [page, totalPages]);
 
    const refreshSubmissions = async () => {
-      await queryClient.invalidateQueries({ queryKey: ['submissions', activeEvent?.id || 'all'] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.submissions.paginated(activeEvent?.id ?? 'all', page, debouncedSearch) });
       setSelectedIds([]);
    };
 
