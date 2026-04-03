@@ -1,25 +1,35 @@
 
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { db } from '../../services/database';
 import { judgingConfig } from '../../services/database';
-import { Judge, Program, Submission } from '../../services/models';
+import { Judge, Program, Submission, JudgingCriterion } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
+import { SkeletonLoader } from '../SkeletonLoader';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { sendJudgeInviteEmail } from '../../services/email';
 import { supabase, realtime } from '../../services/supabase';
+import { queryKeys } from '../../services/queryKeys';
+import { JudgeScoringModal } from './JudgeScoringModal';
 
 interface JudgingViewProps {
    activeEvent?: Program | null;
 }
 
+const defaultCriteria: JudgingCriterion[] = [
+   { id: 'default-1', name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.', minScore: 0, maxScore: 100, sortOrder: 0 },
+   { id: 'default-2', name: 'Technical Execution', weight: 30, description: 'Quality of implementation.', minScore: 0, maxScore: 100, sortOrder: 1 },
+   { id: 'default-3', name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.', minScore: 0, maxScore: 100, sortOrder: 2 },
+];
+
 export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const { confirm, ConfirmDialogNode } = useConfirm();
+   const queryClient = useQueryClient();
    const [activeTab, setActiveTab] = useState<'overview' | 'panel' | 'scorecard' | 'assignments'>('overview');
-  const [judges, setJudges] = useState<Judge[]>([]);
-   const [submissions, setSubmissions] = useState<Submission[]>([]);
    const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -30,85 +40,71 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [isSavingJudge, setIsSavingJudge] = useState(false);
    const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
    const [isRemovingAll, setIsRemovingAll] = useState(false);
-  const [criteria, setCriteria] = useState<{id: any; name: string; weight: number; description: string}[]>([]);
-  const [shortlistOnly, setShortlistOnly] = useState(false);
-     const [judgesPage, setJudgesPage] = useState(1);
-     const judgesPerPage = 9;
+   const [shortlistOnly, setShortlistOnly] = useState(false);
+   const [judgesPage, setJudgesPage] = useState(1);
+   const judgesPerPage = 9;
 
-      const refreshAll = async () => {
-         if (!activeEvent) return;
+   // Scoring modal state
+   const [scoringModalOpen, setScoringModalOpen] = useState(false);
+   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
 
-         const [judgeData, submissionData, rounds] = await Promise.all([
-            db.getJudges(activeEvent.id),
-            db.getSubmissions(activeEvent.id),
-            scheduleRoundsService.getRounds(activeEvent.id),
-         ]);
+   // ── React Query data fetching ──────────────────────────────────────────────
+   const { data: judges = [], isLoading: judgesLoading } = useQuery({
+      queryKey: queryKeys.judges.all(activeEvent?.id ?? ''),
+      queryFn: () => db.getJudges(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
 
-         const shortlistActive = rounds.some(round =>
-            round.shortlistConfig?.enabled && (round.status === 'active' || round.status === 'completed')
-         );
+   const { data: allSubmissions = [], isLoading: submissionsLoading } = useQuery({
+      queryKey: queryKeys.submissions.all(activeEvent?.id ?? ''),
+      queryFn: () => db.getSubmissions(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
 
-         setShortlistOnly(shortlistActive);
-         setJudges(judgeData);
-         setSubmissions(shortlistActive ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
-      };
-
-   useEffect(() => {
-      const load = async () => {
-         if (!activeEvent) return;
-            await refreshAll();
-
-         // Load criteria from DB
-         try {
-           if (supabase) {
-             const { data: dbCriteria } = await supabase
-               .from('judging_criteria')
-               .select('*')
-               .eq('program_id', activeEvent.id)
-               .order('sort_order');
-             if (dbCriteria && dbCriteria.length > 0) {
-               setCriteria(dbCriteria.map(c => ({
-                 id: c.id,
-                 name: c.name,
-                 weight: c.weight || 100,
-                 description: c.description || '',
-               })));
-             } else {
-               // Default criteria if none configured
-               setCriteria([
-                 { id: 'default-1', name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.' },
-                 { id: 'default-2', name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
-                 { id: 'default-3', name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.' },
-               ]);
-             }
-           }
-         } catch {
-           // Keep defaults if criteria load fails
-           if (criteria.length === 0) {
-             setCriteria([
-               { id: 'default-1', name: 'Innovation & Creativity', weight: 40, description: 'Originality of the idea.' },
-               { id: 'default-2', name: 'Technical Execution', weight: 30, description: 'Quality of implementation.' },
-               { id: 'default-3', name: 'Impact & Results', weight: 30, description: 'Measurable outcomes.' },
-             ]);
-           }
+   const { data: criteria = [] } = useQuery<JudgingCriterion[]>({
+      queryKey: queryKeys.judging.criteria(activeEvent?.id ?? ''),
+      queryFn: async (): Promise<JudgingCriterion[]> => {
+         if (!supabase || !activeEvent?.id) return defaultCriteria;
+         const { data } = await supabase
+            .from('judging_criteria')
+            .select('*')
+            .eq('program_id', activeEvent.id)
+            .order('sort_order');
+         if (data && data.length > 0) {
+            return data.map((c: Record<string, unknown>) => ({
+               id: String(c.id),
+               name: String(c.name),
+               description: String(c.description || ''),
+               weight: Number(c.weight) || 100,
+               minScore: Number(c.min_score) || 0,
+               maxScore: Number(c.max_score) || 100,
+               sortOrder: Number(c.sort_order) || 0,
+            }));
          }
-      };
-      load();
-   }, [activeEvent]);
+         return defaultCriteria;
+      },
+      enabled: !!activeEvent?.id,
+      staleTime: 5 * 60_000,
+   });
 
+   const submissions = shortlistOnly
+      ? allSubmissions.filter(s => s.status === 'Shortlisted')
+      : allSubmissions;
+
+   const refreshAll = () => {
+      if (!activeEvent?.id) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all(activeEvent.id) });
+   };
+
+   // Realtime judging progress subscription
    useEffect(() => {
       if (!activeEvent?.id) return;
-
-      const channel = realtime.subscribeToJudgingProgress(activeEvent.id, () => {
-         refreshAll();
-      });
-
+      const channel = realtime.subscribeToJudgingProgress(activeEvent.id, refreshAll);
       return () => realtime.unsubscribe(channel);
    }, [activeEvent?.id]);
-
-   const refreshJudges = async () => {
-      await refreshAll();
-   };
 
    const handleRemoveJudge = async (judgeId: string) => {
       const ok = await confirm({
@@ -120,13 +116,10 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       setIsRemovingJudge(judgeId);
       try {
          await db.deleteJudge(judgeId);
-         await refreshJudges();
-         // Refresh submissions to update assigned judges
-         const submissionData = await db.getSubmissions(activeEvent?.id);
-         setSubmissions(shortlistOnly ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+         refreshAll();
       } catch (error) {
          console.error('Failed to remove judge:', error);
-         alert('Failed to remove judge. Please try again.');
+         toast.error('Failed to remove judge. Please try again.');
       } finally {
          setIsRemovingJudge(null);
       }
@@ -142,12 +135,10 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       setIsRemovingAll(true);
       try {
          await db.deleteAllJudges(activeEvent?.id);
-         await refreshJudges();
-         const submissionData = await db.getSubmissions(activeEvent?.id);
-         setSubmissions(shortlistOnly ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+         refreshAll();
       } catch (error) {
          console.error('Failed to remove all judges:', error);
-         alert('Failed to remove judges. Please try again.');
+         toast.error('Failed to remove judges. Please try again.');
       } finally {
          setIsRemovingAll(false);
       }
@@ -170,11 +161,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const handleAssignJudges = async () => {
       if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
          await db.assignJudgesToSubmissions(selectedIds, selectedJudgesForBulk, { replaceExisting: replaceAssignments });
-         const submissionsData = await db.getSubmissions(activeEvent?.id);
-         setSubmissions(shortlistOnly ? submissionsData.filter(s => s.status === 'Shortlisted') : submissionsData);
+         refreshAll();
          setIsAssignModalOpen(false);
          setSelectedJudgesForBulk([]);
          setSelectedIds([]);
+         toast.success('Judges assigned successfully');
       }
    };
 
@@ -200,6 +191,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
   return (
     <div className="space-y-8">
       {ConfirmDialogNode}
+      <JudgeScoringModal
+        isOpen={scoringModalOpen}
+        onClose={() => { setScoringModalOpen(false); setSelectedSubmission(null); }}
+        submission={selectedSubmission}
+        criteria={criteria}
+        onScored={refreshAll}
+      />
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Judging Management</h1>
@@ -270,6 +268,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
       {activeTab === 'panel' && (
          <div className="space-y-6">
+            {judgesLoading && (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map(i => <SkeletonLoader key={i} className="h-48" />)}
+               </div>
+            )}
             <div className="flex justify-between items-center">
                <h2 className="text-lg font-bold text-slate-900">Judge Panel</h2>
                       <div className="flex gap-2">
@@ -347,7 +350,17 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                      </div>
 
                      <div className="flex gap-2">
-                        <button className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-100">
+                        <button
+                           className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-100"
+                           onClick={() => {
+                              // Find a submission assigned to this judge
+                              const assignedSub = submissions.find(s =>
+                                 (s.assignedJudges || []).includes(judge.id)
+                              ) ?? submissions[0] ?? null;
+                              setSelectedSubmission(assignedSub);
+                              setScoringModalOpen(true);
+                           }}
+                        >
                            View Scores
                         </button>
                         <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100">
@@ -507,6 +520,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               <th className="p-4">Status</th>
                               <th className="p-4">Assigned Judges</th>
                               <th className="p-4">Date</th>
+                              <th className="p-4">Action</th>
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -542,6 +556,14 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                                        <Calendar className="w-3 h-3 mr-1.5" />
                                        {sub.date}
                                     </div>
+                                 </td>
+                                 <td className="p-4">
+                                    <button
+                                       onClick={() => { setSelectedSubmission(sub); setScoringModalOpen(true); }}
+                                       className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200"
+                                    >
+                                       Score Entry
+                                    </button>
                                  </td>
                               </tr>
                            ))}
@@ -648,7 +670,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            programId: activeEvent?.id,
                         });
                      }
-                     await refreshJudges();
+                     refreshAll();
                      setIsJudgeModalOpen(false);
                      setJudgeForm({ name: '', email: '', bio: '' });
                   } finally {

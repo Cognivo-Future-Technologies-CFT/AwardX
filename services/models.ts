@@ -92,11 +92,34 @@ export interface TeamMember {
   name: string;
   email: string;
   role: string;
-  status: 'Active' | 'Inactive';
+  roleId?: string;
+  status: 'Active' | 'Inactive' | 'Pending';
   lastActive: string;
   avatar: string;
   joinedDate: string;
 }
+
+// Judging criterion definition
+export interface JudgingCriterion {
+  id: string;
+  name: string;
+  description: string;
+  weight: number;
+  minScore: number;
+  maxScore: number;
+  sortOrder: number;
+}
+
+// A single criterion score submitted by a judge
+export interface CriterionScore {
+  criterionId: string;
+  score: number;
+  comment?: string;
+}
+
+// Display label for program status
+export const programStatusLabel = (s: 'Active' | 'Draft' | 'Completed'): string =>
+  ({ Active: 'Published', Draft: 'Draft', Completed: 'Closed' }[s] ?? s);
 
 
 

@@ -1849,6 +1849,17 @@ export const team = {
 
     return { data, error };
   },
+
+  removeMember: async (memberId: string) => {
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return { error: { message: 'Not authenticated' } };
+    const { error } = await supabase
+      .from('organization_members')
+      .delete()
+      .eq('id', memberId)
+      .eq('organization_id', orgId);
+    return { error };
+  },
 };
 
 // ============================================================================

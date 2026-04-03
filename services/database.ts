@@ -1959,6 +1959,102 @@ class DatabaseService {
     };
   }
 
+  async deleteRound(roundId: string): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+    const { error } = await supabase.from('rounds').delete().eq('id', roundId);
+    if (error) throw new Error(error.message || 'Failed to delete round');
+    await this.safeAuditLog({
+      action: 'Deleted round',
+      actionType: 'delete',
+      resourceType: 'round',
+      resourceId: roundId,
+    });
+  }
+
+  // ── Judging / Scores ──────────────────────────────────────────────────────
+
+  async submitScores(
+    submissionJudgeId: string,
+    criteriaScores: { criterionId: string; score: number; comment?: string }[],
+  ): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+    const rows = criteriaScores.map(cs => ({
+      submission_judge_id: submissionJudgeId,
+      criterion_id: cs.criterionId,
+      score: cs.score,
+      comment: cs.comment || null,
+      scored_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase
+      .from('scores')
+      .upsert(rows, { onConflict: 'submission_judge_id,criterion_id' });
+    if (error) throw new Error(error.message || 'Failed to submit scores');
+    await this.safeAuditLog({
+      action: 'Submitted judging scores',
+      actionType: 'create',
+      resourceType: 'scores',
+      resourceId: submissionJudgeId,
+    });
+  }
+
+  async getScoresForSubmission(submissionId: string) {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('submission_judges')
+      .select(`
+        id,
+        status,
+        completed_at,
+        judges ( id, name, avatar_url ),
+        judge_comments ( overall_comment, recommendation, submitted_at ),
+        scores ( score, comment, criterion_id, judging_criteria ( name, weight ) )
+      `)
+      .eq('submission_id', submissionId);
+    if (error || !data) return [];
+    return data;
+  }
+
+  // ── Rounds (update + reorder) ──────────────────────────────────────────────
+
+  async updateRound(round: Partial<Round> & { id: string }): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+    const payload: Record<string, unknown> = {};
+    if (round.title !== undefined) payload.title = round.title;
+    if (round.type !== undefined) payload.type = round.type;
+    if (round.startDate !== undefined) payload.start_date = round.startDate;
+    if (round.endDate !== undefined) payload.end_date = round.endDate;
+    if (round.status !== undefined) payload.status = round.status.toLowerCase();
+    if (round.description !== undefined) payload.description = round.description;
+    const { error } = await supabase.from('rounds').update(payload).eq('id', round.id);
+    if (error) throw new Error(error.message || 'Failed to update round');
+    await this.safeAuditLog({
+      action: 'Updated round',
+      actionType: 'update',
+      resourceType: 'round',
+      resourceId: round.id,
+    });
+  }
+
+  async reorderRounds(programId: string, orderedIds: string[]): Promise<void> {
+    if (!supabase) throw new Error('Supabase not configured');
+    const rows = orderedIds.map((id, index) => ({ id, program_id: programId, sort_order: index }));
+    const { error } = await supabase.from('rounds').upsert(rows, { onConflict: 'id' });
+    if (error) throw new Error(error.message || 'Failed to reorder rounds');
+  }
+
+  // ── Team members ───────────────────────────────────────────────────────────
+
+  async removeTeamMember(memberId: string): Promise<void> {
+    const { error } = await team.removeMember(memberId);
+    if (error) throw new Error(error.message || 'Failed to remove member');
+    await this.safeAuditLog({
+      action: 'Removed team member',
+      actionType: 'delete',
+      resourceType: 'organization_member',
+      resourceId: memberId,
+    });
+  }
+
   hasPermission(permission: string): boolean {
     // Fail-open so the UI doesn't go blank if permissions haven't been seeded/configured yet.
     // Once permissions are present, this will correctly enforce them.
