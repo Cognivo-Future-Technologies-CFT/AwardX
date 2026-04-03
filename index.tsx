@@ -16,6 +16,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProgramProvider } from './contexts/ProgramContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Analytics } from '@vercel/analytics/react';
+import { Toaster } from 'sonner';
 import { initSentry } from './services/sentry';
 
 initSentry();
@@ -25,7 +26,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      staleTime: 15000,
+      staleTime: 5 * 60 * 1000, // 5 minutes default
     },
   },
 });
@@ -44,6 +45,7 @@ root.render(
           <ProgramProvider>
             <App />
             <Analytics />
+            <Toaster richColors position="top-right" />
           </ProgramProvider>
         </AuthProvider>
       </BrowserRouter>

@@ -1,29 +1,25 @@
-
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
-type ModalSize = 'default' | 'lg' | 'xl' | 'full';
-
-const SIZE_CLASS: Record<ModalSize, string> = {
-  default: 'max-w-lg',
-  lg: 'max-w-2xl',
-  xl: 'max-w-4xl',
-  full: 'max-w-7xl',
-};
-
-interface ModalProps {
+interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: ModalSize;
+  width?: string;
 }
 
 const FOCUSABLE_SELECTORS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'default' }) => {
-  const dialogRef = useRef<HTMLDivElement>(null);
+export const Drawer: React.FC<DrawerProps> = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  width = 'max-w-[700px]',
+}) => {
+  const panelRef = useRef<HTMLDivElement>(null);
   const titleId = React.useId();
   const previousActiveElement = useRef<Element | null>(null);
 
@@ -41,21 +37,19 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   useEffect(() => {
     if (isOpen) {
       previousActiveElement.current = document.activeElement;
-      // Focus first focusable element inside dialog after mount
       requestAnimationFrame(() => {
-        const el = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTORS);
+        const el = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTORS);
         el?.focus();
       });
     } else {
-      // Return focus to the element that opened the modal
       (previousActiveElement.current as HTMLElement | null)?.focus();
     }
   }, [isOpen]);
 
-  // Trap Tab key inside modal
+  // Trap Tab key inside drawer
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Tab' || !dialogRef.current) return;
-    const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS));
+    if (e.key !== 'Tab' || !panelRef.current) return;
+    const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS));
     if (focusable.length === 0) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -76,39 +70,42 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     <AnimatePresence>
       {isOpen && (
         <>
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40"
             aria-hidden="true"
           />
+          {/* Panel */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className={`fixed right-0 top-0 bottom-0 z-40 w-full ${width} pointer-events-auto`}
           >
             <div
-              ref={dialogRef}
+              ref={panelRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={titleId}
               onKeyDown={handleKeyDown}
-              className={`bg-white w-full ${SIZE_CLASS[size]} rounded-2xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]`}
+              className="flex flex-col h-full bg-white shadow-2xl"
             >
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id={titleId} className="text-xl font-bold text-slate-900">{title}</h3>
+              <div className="flex-shrink-0 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 id={titleId} className="text-lg font-bold text-slate-900">{title}</h3>
                 <button
                   onClick={onClose}
-                  aria-label="Close dialog"
+                  aria-label="Close drawer"
                   className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-900 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 {children}
               </div>
             </div>
