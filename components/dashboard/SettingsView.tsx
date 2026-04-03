@@ -1,9 +1,9 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '../Button';
-import { User, CreditCard, Bell, Shield, Globe, Wallet } from 'lucide-react';
+import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard } from 'lucide-react';
 import { db } from '../../services/database';
-import { auth } from '../../services/supabase';
+import { auth, storage } from '../../services/supabase';
 import { Program } from '../../services/models';
 
 interface SettingsViewProps {
@@ -27,7 +27,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
   const [stripeStatusDetails, setStripeStatusDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const buildPresetAvatar = (seed: string, bg: string, fg: string) => {
+    const initial = (seed || 'U').trim().charAt(0).toUpperCase() || 'U';
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><rect width='120' height='120' fill='${bg}'/><circle cx='60' cy='46' r='24' fill='${fg}' fill-opacity='0.9'/><path d='M20 112c4-23 21-37 40-37s36 14 40 37' fill='${fg}' fill-opacity='0.9'/><text x='60' y='108' text-anchor='middle' font-family='Arial, sans-serif' font-size='16' fill='white' opacity='0.85'>${initial}</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  };
+
+  const avatarPresets = useMemo(
+    () => [
+      buildPresetAvatar('A', '#4f46e5', '#c7d2fe'),
+      buildPresetAvatar('B', '#0f766e', '#99f6e4'),
+      buildPresetAvatar('C', '#be123c', '#fecdd3'),
+      buildPresetAvatar('D', '#4338ca', '#ddd6fe'),
+      buildPresetAvatar('E', '#1d4ed8', '#bfdbfe'),
+      buildPresetAvatar('F', '#7c3aed', '#e9d5ff'),
+      buildPresetAvatar('G', '#b45309', '#fde68a'),
+      buildPresetAvatar('H', '#166534', '#bbf7d0'),
+    ],
+    []
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -179,6 +201,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
     }
   };
 
+  const handleAvatarUpload = async (file: File) => {
+    if (!file) return;
+    const userId = profile?.id;
+    if (!userId) {
+      setError('Unable to upload avatar: missing user profile id.');
+      return;
+    }
+
+    setAvatarUploading(true);
+    setError(null);
+    try {
+      const { url, error: uploadError } = await storage.uploadAvatar(file, userId);
+      if (uploadError || !url) {
+        throw uploadError || new Error('Avatar upload failed');
+      }
+
+      setProfile((p: any) => ({ ...(p || {}), avatar_url: url }));
+      setShowAvatarPicker(false);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to upload avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const saveOrganization = async () => {
     setSaving(true);
     setError(null);
@@ -246,13 +293,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'domain', label: 'Domain & Branding', icon: Globe },
+    { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+  ];
+
+  const shortcutGroups = [
+    {
+      title: 'Global',
+      items: [
+        { keys: 'Cmd/Ctrl + K', action: 'Open universal search' },
+        { keys: '?', action: 'Open this shortcut guide' },
+        { keys: 'Esc', action: 'Close search or dialogs' },
+      ],
+    },
+    {
+      title: 'Navigation',
+      items: [
+        { keys: 'g then o', action: 'Go to Overview' },
+        { keys: 'g then b', action: 'Open Overview Page' },
+        { keys: 'g then p', action: 'Open Program Details' },
+        { keys: 'g then f', action: 'Open Form Builder' },
+        { keys: 'g then s', action: 'Open Settings' },
+        { keys: 'g then t', action: 'Open Teams & Roles' },
+        { keys: 'g then a', action: 'Open Analytics' },
+        { keys: 'g then r', action: 'Open Reach' },
+        { keys: 'g then l', action: 'Open Audit Logs' },
+        { keys: 'g then j', action: 'Open Judging' },
+      ],
+    },
+    {
+      title: 'Working faster',
+      items: [
+        { keys: 'Search + Enter', action: 'Jump to the top result' },
+        { keys: 'Click a result', action: 'Navigate directly to that item or view' },
+        { keys: 'Use tabs', action: 'Switch between settings sections quickly' },
+      ],
+    },
   ];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-       <div>
-          <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-          <p className="text-slate-500">Manage your account preferences and program configuration.</p>
+     <div className="w-full min-h-[calc(100vh-10rem)] space-y-6">
+       <div className="flex flex-col gap-2">
+         <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+         <p className="text-slate-500 max-w-3xl">Manage your account preferences and program configuration.</p>
        </div>
 
        {error && (
@@ -261,14 +343,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
          </div>
        )}
 
-       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[600px]">
-          {/* Sidebar Tabs */}
-          <div className="w-full md:w-64 bg-slate-50/50 border-r border-slate-200 p-2">
+       <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[calc(100vh-14rem)]">
+         {/* Sidebar Tabs */}
+         <div className="w-full xl:w-auto bg-slate-50/60 border-r border-slate-200 p-2 xl:p-3">
              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors mb-1 ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors mb-1 ${
                      activeTab === tab.id 
                      ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' 
                      : 'text-slate-500 hover:bg-slate-100'
@@ -281,13 +363,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 p-8">
+           <div className="min-w-0 p-5 md:p-8 xl:p-10">
              {loading && (
                <div className="text-sm text-slate-500">Loading settings…</div>
              )}
 
              {activeTab === 'profile' && (
-                <div className="space-y-6 max-w-lg">
+               <div className="space-y-6 w-full max-w-4xl">
                    <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Profile Information</h2>
                    
                    <div className="flex items-center gap-4 mb-6">
@@ -298,12 +380,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                           <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                         </div>
                       )}
-                      <div>
-                         <Button variant="outline" size="sm" disabled>
-                           Change Avatar
+                      <div className="space-y-2">
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           onClick={() => setShowAvatarPicker((prev) => !prev)}
+                           disabled={avatarUploading}
+                         >
+                           {showAvatarPicker ? 'Close Avatar Picker' : 'Change Avatar'}
                          </Button>
+                         {avatarUrl && (
+                           <button
+                             type="button"
+                             onClick={() => setProfile((p: any) => ({ ...(p || {}), avatar_url: '' }))}
+                             className="block text-xs text-slate-500 hover:text-slate-700"
+                           >
+                             Remove avatar
+                           </button>
+                         )}
                       </div>
                    </div>
+
+                   {showAvatarPicker && (
+                     <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                       <div>
+                         <label className="block text-sm font-semibold text-slate-700 mb-2">Upload avatar</label>
+                         <input
+                           type="file"
+                           accept="image/*"
+                           disabled={avatarUploading}
+                           onChange={(e) => {
+                             const file = e.target.files?.[0];
+                             if (file) {
+                               void handleAvatarUpload(file);
+                             }
+                             e.target.value = '';
+                           }}
+                           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-100"
+                         />
+                         {avatarUploading && <p className="mt-2 text-xs text-indigo-600">Uploading avatar...</p>}
+                       </div>
+
+                       <div>
+                         <label className="block text-sm font-semibold text-slate-700 mb-2">Choose a preset avatar</label>
+                         <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                           {avatarPresets.map((preset) => {
+                             const selected = profile?.avatar_url === preset;
+                             return (
+                               <button
+                                 key={preset}
+                                 type="button"
+                                 onClick={() => setProfile((p: any) => ({ ...(p || {}), avatar_url: preset }))}
+                                 className={`rounded-full p-0.5 border-2 transition-colors ${selected ? 'border-indigo-500' : 'border-transparent hover:border-slate-300'}`}
+                                 title="Select avatar"
+                               >
+                                 <img src={preset} alt="Preset avatar" className="h-12 w-12 rounded-full object-cover" />
+                               </button>
+                             );
+                           })}
+                         </div>
+                       </div>
+                     </div>
+                   )}
 
                    <div className="space-y-4">
                       <div>
@@ -348,7 +486,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                    </div>
 
                    <div className="pt-4">
-                      <Button onClick={saveProfile} disabled={loading || saving}>
+                      <Button onClick={saveProfile} disabled={loading || saving || avatarUploading}>
                         {saving ? 'Saving…' : 'Save Changes'}
                       </Button>
                    </div>
@@ -356,10 +494,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
              )}
 
              {activeTab === 'billing' && (
-                <div className="space-y-6">
+               <div className="space-y-6 w-full max-w-6xl">
                    <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Current Plan</h2>
                    
-                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 flex justify-between items-center">
+                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
                          <div className="text-indigo-900 font-bold text-lg">{(org?.plan || 'starter').toString().toUpperCase()} Plan</div>
                          <div className="text-indigo-600 text-sm">Plan is loaded from your organization record in Supabase.</div>
@@ -368,7 +506,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                    </div>
 
                    <h3 className="font-bold text-slate-900 mt-8 mb-4">Organization</h3>
-                   <div className="border border-slate-200 rounded-xl p-4 space-y-3 max-w-xl">
+                   <div className="border border-slate-200 rounded-xl p-4 space-y-3 w-full max-w-2xl">
                      <div>
                        <label className="block text-sm font-semibold text-slate-700 mb-1">Organization Name</label>
                        <input
@@ -387,7 +525,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                    </div>
 
                    <h3 className="font-bold text-slate-900 mt-8 mb-4">Payment Providers</h3>
-                   <div className="border border-slate-200 rounded-xl p-4 space-y-4 max-w-2xl">
+                   <div className="border border-slate-200 rounded-xl p-4 space-y-4 w-full max-w-4xl">
                      <div>
                        <label className="block text-sm font-semibold text-slate-700 mb-1">Program</label>
                        <select
@@ -533,7 +671,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
              )}
 
              {activeTab === 'notifications' && (
-               <div className="space-y-6 max-w-xl">
+               <div className="space-y-6 w-full max-w-4xl">
                  <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Notifications</h2>
 
                  <div className="space-y-4">
@@ -563,7 +701,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
              )}
 
              {activeTab === 'domain' && (
-               <div className="space-y-6 max-w-xl">
+               <div className="space-y-6 w-full max-w-4xl">
                  <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Domain & Branding</h2>
                  <div className="space-y-4">
                    <div>
@@ -606,7 +744,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
              )}
 
              {activeTab === 'security' && (
-               <div className="space-y-6 max-w-xl">
+               <div className="space-y-6 w-full max-w-4xl">
                  <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Security</h2>
                  <div className="border border-slate-200 rounded-xl p-4 flex items-center justify-between">
                    <div>
@@ -626,6 +764,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                    >
                      Sign out
                    </Button>
+                 </div>
+               </div>
+             )}
+
+             {activeTab === 'shortcuts' && (
+               <div className="space-y-6 w-full max-w-6xl">
+                 <div className="space-y-2">
+                   <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-4">Shortcut Guide</h2>
+                   <p className="text-sm text-slate-500 max-w-3xl">
+                     Use these shortcuts to move through the app faster and launch the universal search from anywhere.
+                   </p>
+                 </div>
+
+                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                   {shortcutGroups.map((group) => (
+                     <div key={group.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                       <h3 className="text-sm font-bold text-slate-900 mb-4">{group.title}</h3>
+                       <div className="space-y-3">
+                         {group.items.map((item) => (
+                           <div key={`${group.title}:${item.keys}`} className="flex items-start justify-between gap-4 rounded-xl bg-slate-50 px-3 py-3">
+                             <div className="min-w-0">
+                               <div className="font-semibold text-slate-900 text-sm">{item.action}</div>
+                             </div>
+                             <kbd className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm">
+                               {item.keys}
+                             </kbd>
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+
+                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 text-sm text-indigo-900">
+                   <strong>Universal search:</strong> type a program, submission, person, role, notification, log, category, or form name. The search bar will surface the closest match and let you jump directly there.
                  </div>
                </div>
              )}

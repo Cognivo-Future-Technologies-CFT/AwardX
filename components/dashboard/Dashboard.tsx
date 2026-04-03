@@ -1,5 +1,6 @@
 
 import React, { Suspense, lazy, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
 import { DashboardOverview } from './DashboardOverview';
@@ -12,11 +13,11 @@ import { TeamsView } from './TeamsView';
 import { AuditLogsView } from './AuditLogsView';
 import { CategoriesView } from './CategoriesView';
 import { ScheduleView } from './ScheduleView';
-import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
+import { SubmissionProcessView } from './SubmissionProcessView';
 import { ProgramDetailsView } from './ProgramDetailsView';
 import { PageBuilder } from './builder/PageBuilder';
 import { CustomGridView } from './CustomGridView';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
 import { auth } from '../../services/supabase';
@@ -43,8 +44,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [activeEvent, setActiveEvent] = useState<Program | null>(null);
   const [currentView, setCurrentView] = useState('overview');
   const [isInitializing, setIsInitializing] = useState(true);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  // Restore workspace state on init
+  // Sync URL → state on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -53,24 +56,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const initializeDashboard = async () => {
           await databaseService.initialize();
 
-          const params = new URLSearchParams(window.location.search);
-          const viewParam = params.get('view');
-          const tabParam = params.get('tab');
-          if (!cancelled && (viewParam === 'settings' || tabParam === 'billing')) {
+          const urlView = searchParams.get('view');
+          const urlTab = searchParams.get('tab');
+          const urlProgram = searchParams.get('program');
+
+          if (!cancelled && (urlView === 'settings' || urlTab === 'billing')) {
             setCurrentView('settings');
+          } else if (!cancelled && urlView) {
+            setCurrentView(urlView);
           }
 
-          // Restore persisted workspace state
           const { user } = await auth.getUser();
           if (user) {
-            const { data: ws } = await workspaceState.get(user.id);
-            if (ws) {
-              if (!cancelled && ws.current_view) setCurrentView(ws.current_view);
-              if (ws.active_program_id) {
-                // Load the program
-                const programs = await databaseService.getPrograms();
-                const restored = programs.find(p => p.id === ws.active_program_id);
-                if (!cancelled && restored) setActiveEvent(restored);
+            const programs = await databaseService.getPrograms();
+
+            // URL program param takes priority over persisted workspace
+            if (urlProgram) {
+              const fromUrl = programs.find(p => p.id === urlProgram);
+              if (!cancelled && fromUrl) setActiveEvent(fromUrl);
+            } else {
+              const { data: ws } = await workspaceState.get(user.id);
+              if (ws) {
+                if (!cancelled && ws.current_view && !urlView) setCurrentView(ws.current_view);
+                if (ws.active_program_id) {
+                  const restored = programs.find(p => p.id === ws.active_program_id);
+                  if (!cancelled && restored) setActiveEvent(restored);
+                }
               }
             }
           }
@@ -95,11 +106,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist workspace state on change
+  // Sync state → URL + persist
   useEffect(() => {
     databaseService.setActiveProgram(activeEvent?.id || null);
+
+    // Update URL to reflect current state
+    const params = new URLSearchParams();
+    if (activeEvent?.id) params.set('program', activeEvent.id);
+    if (currentView && currentView !== 'overview') params.set('view', currentView);
+    const newSearch = params.toString();
+    const currentSearch = window.location.search.replace(/^\?/, '');
+    if (newSearch !== currentSearch) {
+      navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
+    }
 
     const persistState = async () => {
       try {
@@ -111,7 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           });
         }
       } catch {
-        // Non-critical — don't block UI
+        // Non-critical
       }
     };
     persistState();
@@ -206,9 +228,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       currentView={currentView}
       activeEvent={activeEvent}
       onChangeView={setCurrentView}
+      onSelectProgram={setActiveEvent}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
-      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'submission-setup' || currentView === 'schedule-rounds' || currentView === 'builder'}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'submission-setup' || currentView === 'schedule-rounds' || currentView === 'builder' || currentView === 'program-details'}
       hideHeader={currentView === 'builder'}
     >
       <motion.div

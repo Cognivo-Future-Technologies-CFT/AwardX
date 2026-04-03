@@ -129,26 +129,34 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     // ── Mutations ─────────────────────────────────────────────────────────────
     const inviteMutation = useMutation({
         mutationFn: async (vars: { email: string; roleId: string }) => {
-            await db.addTeamMemberByEmail(vars.email, vars.roleId, activeEvent.id);
             const roleName = rawRoles.find(r => r.id === vars.roleId)?.name;
-            await sendTeamInviteEmail({ email: vars.email, roleName, programTitle: activeEvent.title || 'your workspace' });
+            const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
+            const inviteUrl = `${siteUrl}/signup`;
+
+            await sendTeamInviteEmail({
+                email: vars.email,
+                roleName,
+                programTitle: activeEvent.title || 'your workspace',
+                inviteUrl,
+            });
+
+            try {
+                await db.addTeamMemberByEmail(vars.email, vars.roleId, activeEvent.id);
+                return { added: true };
+            } catch {
+                return { added: false };
+            }
         },
-        onMutate: async (vars) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.teams.members(activeEvent.id) });
-            const previous = queryClient.getQueryData<TeamMember[]>(queryKeys.teams.members(activeEvent.id));
-            queryClient.setQueryData<TeamMember[]>(queryKeys.teams.members(activeEvent.id), old => [
-                ...(old ?? []),
-                { memberId: `optimistic-${Date.now()}`, userId: '', name: vars.email, email: vars.email, role: 'Pending', status: 'Pending', lastActive: '—', avatar: '', joinedDate: '' },
-            ]);
-            return { previous };
+        onError: () => {
+            toast.error('Failed to send invite email. Please try again.');
         },
-        onError: (_err, _vars, context) => {
-            queryClient.setQueryData(queryKeys.teams.members(activeEvent.id), context?.previous);
-            toast.error('Failed to add member. Make sure they have already signed up.');
-        },
-        onSuccess: () => {
+        onSuccess: (result) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(activeEvent.id) });
-            toast.success('Member added successfully');
+            if (result?.added) {
+                toast.success('Invite sent and member added to this program.');
+            } else {
+                toast.success('Invite sent from AwardX. They will be added after signing up.');
+            }
             setInviteEmails('');
             setIsInviteModalOpen(false);
         },
@@ -270,29 +278,29 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     return (
         <div className="space-y-8">
             {ConfirmDialogNode}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
                     <p className="text-slate-500">
                         Manage your team members, roles, and granular permissions.
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <div className="bg-slate-100 p-1 rounded-lg flex gap-1">
+                <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+                    <div className="bg-slate-100 p-1 rounded-lg flex gap-1 w-full sm:w-auto">
                         <button
                             onClick={() => setActiveTab('members')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeTab === 'members' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex-1 sm:flex-none ${activeTab === 'members' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Members
                         </button>
                         <button
                             onClick={() => setActiveTab('roles')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${activeTab === 'roles' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex-1 sm:flex-none ${activeTab === 'roles' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Roles & Permissions
                         </button>
                     </div>
-                    <Button className="flex items-center gap-2" onClick={() => setIsInviteModalOpen(true)}>
+                    <Button className="flex items-center justify-center gap-2 w-full sm:w-auto" onClick={() => setIsInviteModalOpen(true)}>
                         <UserPlus className="w-4 h-4" /> Add User
                     </Button>
                 </div>
@@ -306,8 +314,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
             {!membersLoading && activeTab === 'members' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-slate-200 flex gap-4 bg-slate-50/50">
-                        <div className="relative flex-1 max-w-md">
+                    <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row gap-3 sm:gap-4 bg-slate-50/50">
+                        <div className="relative flex-1 max-w-full sm:max-w-md">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
                                 type="text"
@@ -317,12 +325,14 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                 className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                         </div>
-                        <button className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white hover:bg-slate-50 text-slate-600">
+                        <button className="flex items-center justify-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white hover:bg-slate-50 text-slate-600 w-full sm:w-auto">
                             <Filter className="w-4 h-4" /> Role
                         </button>
                     </div>
 
-                    <table className="w-full text-left border-collapse">
+                    <div className="px-4 pt-3 text-xs text-slate-500 md:hidden">Swipe horizontally to view all columns.</div>
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] text-left border-collapse">
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                 <th className="p-4 pl-6">Member</th>
@@ -424,6 +434,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                             )}
                         </tbody>
                     </table>
+                    </div>
 
                     <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
                         <p className="text-xs text-slate-500">Page {memberPage} of {memberTotalPages}</p>
@@ -555,12 +566,12 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                         </select>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-lg text-xs text-slate-500">
-                        This will immediately add existing users (who already signed up) to your workspace in Supabase.
+                        AwardX will send an invite email with the selected role and event name. Existing users are added immediately; new users can join after signup.
                     </div>
                     <div className="pt-4 flex justify-end gap-3">
                         <Button variant="ghost" onClick={() => setIsInviteModalOpen(false)}>Cancel</Button>
                         <Button onClick={handleSendInvites} disabled={inviteMutation.isPending}>
-                            {inviteMutation.isPending ? 'Adding…' : 'Add Users'}
+                            {inviteMutation.isPending ? 'Sending…' : 'Send Invites'}
                         </Button>
                     </div>
                 </div>

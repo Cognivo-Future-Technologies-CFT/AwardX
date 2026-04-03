@@ -33,6 +33,13 @@ Required environment variables:
 - `PORT` - Server port (default: 5000)
 - `FRONTEND_URL` - Your frontend URL for CORS (default: http://localhost:3000)
 
+Optional Redis caching variables:
+- `REDIS_ENABLED` - Set to `true` to enable Redis-backed cache
+- `REDIS_URL` - Redis connection URL
+- `REDIS_TOKEN` - Optional Redis password/token (provider dependent)
+- `REDIS_USERNAME` - Optional username (default: `default`)
+- `REDIS_NAMESPACE` - Optional cache key namespace (default: `awardx`)
+
 ### 3. Run Development Server
 
 ```bash
@@ -75,6 +82,20 @@ npm start
 - `DELETE /api/programs/:id` - Delete program
 - `GET /api/programs/:id/stats` - Get program statistics
 
+### Caching
+- Redis caching is applied only to read endpoints for organizations/programs/stats.
+- Cache key examples:
+   - `awardx:org:{id}`
+   - `awardx:program:{id}`
+   - `awardx:program:{id}:stats`
+   - `awardx:programs:org:{organizationId}`
+- TTL defaults:
+   - `short` (60s): fast-changing stats
+   - `medium` (300s): program lists
+   - `long` (900s): mostly static entity lookups
+- Write endpoints (`POST/PUT/DELETE`) invalidate related keys to keep reads fresh.
+- If Redis is unavailable, the server serves uncached data and continues operating.
+
 ### Health Check
 - `GET /api/health` - Server health check
 
@@ -104,6 +125,7 @@ server/
 - **CORS**: Restricted to frontend URL only
 - **JWT Validation**: All protected routes require valid JWT token
 - **Environment Isolation**: Database credentials never exposed to frontend
+- **Safe Caching**: Auth/session-sensitive responses are not cached
 
 ## Development
 

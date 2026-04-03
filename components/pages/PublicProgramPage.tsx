@@ -75,15 +75,22 @@ export const PublicProgramPage: React.FC = () => {
                     programResult = await programs.getPublicById(id!);
                 }
 
-                const [programData, sectionsData] = await Promise.all([
+                const [programData, sectionsData, configData] = await Promise.all([
                     Promise.resolve(programResult),
                     programResult.data?.id 
                         ? programPages.getSections(programResult.data.id)
-                        : Promise.resolve({ data: null })
+                        : Promise.resolve({ data: null }),
+                    programResult.data?.id
+                        ? programPages.getConfig(programResult.data.id)
+                        : Promise.resolve({ data: null }),
                 ]);
 
                 if (programData.error) throw programData.error;
                 if (!programData.data) throw new Error('Program not found');
+
+                if (!configData?.data?.is_published) {
+                    throw new Error('This program page is not published yet.');
+                }
 
                 setProgram(programData.data);
 

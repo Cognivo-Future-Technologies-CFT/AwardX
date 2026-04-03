@@ -2,6 +2,18 @@
 export default {
   content: ['./index.html', './index.tsx', './App.tsx', './components/**/*.{ts,tsx}', './contexts/**/*.{ts,tsx}', './services/**/*.{ts,tsx}', './types/**/*.{ts,tsx}'],
   theme: {
+    /* Clamp ALL rounded-* utilities to 0.5 rem (pill shapes keep full) */
+    borderRadius: {
+      none:    '0',
+      sm:      '0.5rem',
+      DEFAULT: '0.5rem',
+      md:      '0.5rem',
+      lg:      '0.5rem',
+      xl:      '0.5rem',
+      '2xl':   '0.5rem',
+      '3xl':   '0.5rem',
+      full:    '9999px',
+    },
     extend: {
       colors: {
         background: '#ffffff',

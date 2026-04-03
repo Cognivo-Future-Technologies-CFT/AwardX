@@ -1,4 +1,4 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
   GripVertical, Trash2, Settings, Eye, Save, Plus, Type, FileText,
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
@@ -103,11 +103,12 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   isSaving = false
 }, ref) => {
   const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
+
   // --- State ---
   const [fields, setFields] = useState<FormField[]>(initialFields);
   const [pages, setPages] = useState<FormPage[]>(
-    initialPages && initialPages.length > 0 
-      ? initialPages 
+    initialPages && initialPages.length > 0
+      ? initialPages
       : [{ id: 'page-1', title: 'Page 1', order: 0 }]
   );
   const [theme, setTheme] = useState<FormTheme>(initialTheme);
@@ -121,19 +122,83 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
+  // --- Undo / Redo history ------------------------------------------------
+  type Snapshot = { fields: FormField[]; pages: FormPage[]; theme: FormTheme };
+  const historyRef  = useRef<Snapshot[]>([]);
+  const futureRef   = useRef<Snapshot[]>([]);
+  const skipHistory = useRef(false); // prevent re-recording on undo/redo restore
+
+  /** Call after any user-driven mutation to record a snapshot */
+  const pushHistory = useCallback(() => {
+    if (skipHistory.current) return;
+    // Capture *current* React state values by reading refs that we keep in sync
+    // We schedule via functional state updates to get the latest committed values
+    setFields(f => {
+      setPages(p => {
+        setTheme(t => {
+          historyRef.current.push({ fields: f, pages: p, theme: t });
+          if (historyRef.current.length > 60) historyRef.current.shift();
+          futureRef.current = [];       // new action clears redo stack
+          return t;
+        });
+        return p;
+      });
+      return f;
+    });
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    setFields(f => { futureRef.current.push({ fields: f, pages: [], theme: defaultTheme }); return f; });
+    // Store current as redo entry, then restore
+    setFields(cur => { setPages(cp => { setTheme(ct => {
+      futureRef.current[futureRef.current.length - 1] = { fields: cur, pages: cp, theme: ct };
+      return ct;
+    }); return cp; }); return cur; });
+    skipHistory.current = true;
+    setFields(prev.fields);
+    setPages(prev.pages);
+    setTheme(prev.theme);
+    skipHistory.current = false;
+  }, []);
+
+  const redo = useCallback(() => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    setFields(cur => { setPages(cp => { setTheme(ct => {
+      historyRef.current.push({ fields: cur, pages: cp, theme: ct });
+      return ct;
+    }); return cp; }); return cur; });
+    skipHistory.current = true;
+    setFields(next.fields);
+    setPages(next.pages);
+    setTheme(next.theme);
+    skipHistory.current = false;
+  }, []);
+
+  // Keyboard shortcut listener — Cmd/Ctrl+Z = undo, Cmd/Ctrl+Y or Cmd/Ctrl+Shift+Z = redo
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo]);
+  // -------------------------------------------------------------------------
+
   // --- Effects ---
   useEffect(() => {
     if (initialPages && initialPages.length > 0) {
       setPages(initialPages);
-      // Ensure specific page selection logic allows for correct ID
       setSelectedPageId(prev => {
-        if (!initialPages.find(p => p.id === prev)) {
-          return initialPages[0].id;
-        }
+        if (!initialPages.find(p => p.id === prev)) return initialPages[0].id;
         return prev;
       });
     } else {
-      // Reset to default page when initialPages is empty or undefined
       const defaultPages = [{ id: 'page-1', title: 'Page 1', order: 0 }];
       setPages(defaultPages);
       setSelectedPageId('page-1');
@@ -141,13 +206,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   }, [initialPages]);
 
   useEffect(() => {
-    // Always set fields, even if empty array (to reset state)
     setFields(initialFields || []);
     setSelectedFieldId(null);
   }, [initialFields]);
 
   useEffect(() => {
-    // Always set theme, reset to default if undefined
     setTheme(initialTheme || defaultTheme);
   }, [initialTheme]);
 
@@ -160,15 +223,13 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
   // Expose current form data via ref
   useImperativeHandle(ref, () => ({
-    getCurrentFormData: () => ({
-      fields,
-      pages,
-      theme
-    })
+    getCurrentFormData: () => ({ fields, pages, theme }),
   }));
 
   // --- Actions ---
+  // --- Actions (each mutating action records a history snapshot first) ---
   const addField = (type: string) => {
+    pushHistory();
     const fieldDef = fieldTypes.flatMap(g => g.items).find(t => t.type === type);
     const newField: FormField = {
       id: `field-${Date.now()}`,
@@ -184,37 +245,37 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         ? { options: ['Best Picture', 'Best Director', 'Best Actor'] }
         : {}),
     };
-    setFields([...fields, newField]);
+    setFields(prev => [...prev, newField]);
     setSelectedFieldId(newField.id);
   };
 
   const updateField = (id: string, updates: Partial<FormField>) => {
-    setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
+    pushHistory();
+    setFields(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
   };
 
   const deleteField = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setFields(fields.filter(f => f.id !== id));
+    pushHistory();
+    setFields(prev => prev.filter(f => f.id !== id));
     if (selectedFieldId === id) setSelectedFieldId(null);
   };
 
   const duplicateField = (field: FormField, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    const newField = {
-      ...field,
-      id: `field-${Date.now()}`,
-      label: `${field.label} (Copy)`
-    };
-    setFields([...fields, newField]);
+    pushHistory();
+    const newField = { ...field, id: `field-${Date.now()}`, label: `${field.label} (Copy)` };
+    setFields(prev => [...prev, newField]);
   };
 
   const addPage = () => {
+    pushHistory();
     const newPage: FormPage = {
       id: `page-${Date.now()}`,
       title: `Page ${pages.length + 1}`,
       order: pages.length,
     };
-    setPages([...pages, newPage]);
+    setPages(prev => [...prev, newPage]);
     setSelectedPageId(newPage.id);
   };
 
@@ -226,12 +287,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       confirmLabel: 'Delete page',
     });
     if (!ok) return;
-
+    pushHistory();
     const remaining = pages.filter(p => p.id !== pageId);
     const firstId = remaining[0].id;
-
     setPages(remaining);
-    setFields(fields.map(f => f.pageId === pageId ? { ...f, pageId: firstId } : f));
+    setFields(prev => prev.map(f => f.pageId === pageId ? { ...f, pageId: firstId } : f));
     setSelectedPageId(firstId);
   };
 
@@ -320,6 +380,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   };
 
   const moveFieldOnPage = (fieldId: string, direction: 'up' | 'down') => {
+    pushHistory();
     const pageFields = fields.filter((f) => f.pageId === selectedPageId);
     const currentIndex = pageFields.findIndex((f) => f.id === fieldId);
     if (currentIndex === -1) return;
@@ -742,10 +803,10 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   }
 
   return (
-    <div className="flex h-full bg-slate-50 font-sans">
+    <div className="flex flex-col xl:flex-row h-full min-h-0 bg-slate-50 font-sans">
       {ConfirmDialogNode}
       {/* 1. Left Sidebar: Toolkit */}
-      <div className="w-72 bg-white border-r border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50">
+      <div className="w-full xl:w-72 bg-white border-b xl:border-b-0 xl:border-r border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50 max-h-[42vh] xl:max-h-none">
         <div className="p-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <Layout className="w-5 h-5 text-indigo-600" />
@@ -779,15 +840,15 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       </div>
 
       {/* 2. Main Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#F8FAFC]">
+      <div className="flex-1 flex flex-col min-w-0 min-h-[48vh] bg-[#F8FAFC]">
         {/* Toolbar */}
-        <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-sm z-10">
-          <div className="flex items-center gap-3">
+        <div className="bg-white border-b border-slate-200 px-3 sm:px-4 lg:px-6 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-sm z-10">
+          <div className="flex items-center gap-3 min-w-0">
             <h3 className="text-sm font-bold text-slate-700">Form Builder</h3>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 mr-4 bg-white border border-slate-200 rounded-lg px-2 py-1">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+            <div className="flex items-center gap-1 sm:gap-2 bg-white border border-slate-200 rounded-lg px-1.5 sm:px-2 py-1 max-w-full overflow-x-auto">
               {pages.map(page => (
                           <button
                   key={page.id}
@@ -805,7 +866,33 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   </button>
                 </div>
 
-            <div className="h-6 w-px bg-slate-200 mx-2" />
+            <div className="hidden sm:block h-6 w-px bg-slate-200 mx-1" />
+
+            {/* Undo / Redo */}
+            <button
+              type="button"
+              onClick={undo}
+              disabled={historyRef.current.length === 0}
+              title="Undo (Ctrl/⌘ Z)"
+              className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7v6h6" /><path d="M3 13A9 9 0 1 0 5.2 5.2" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={futureRef.current.length === 0}
+              title="Redo (Ctrl/⌘ Y)"
+              className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 7v6h-6" /><path d="M21 13A9 9 0 1 1 18.8 5.2" />
+              </svg>
+            </button>
+
+            <div className="hidden sm:block h-6 w-px bg-slate-200 mx-1" />
 
             <Button variant="ghost" onClick={() => setIsPreview(true)}>
               <Eye className="w-4 h-4 mr-2" /> Preview
@@ -817,13 +904,13 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   </div>
 
         {/* Builder Area */}
-        <div className="flex-1 overflow-y-auto p-8 relative">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative">
           {renderEditCanvas()}
                     </div>
                   </div>
 
       {/* 3. Right Sidebar: Properties */}
-      <div className="w-80 bg-white border-l border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50">
+      <div className="w-full xl:w-80 bg-white border-t xl:border-t-0 xl:border-l border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50 max-h-[42vh] xl:max-h-none">
         <div className="p-5 border-b border-slate-100">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
             Theme Settings

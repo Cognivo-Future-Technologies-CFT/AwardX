@@ -31,8 +31,8 @@ export default async function handler(req: any, res: any) {
   }
 
   const resend = new Resend(resendApiKey);
-  const subject = `You are invited to ${programTitle}`;
-  const roleLine = roleName ? `Role: ${roleName}` : 'Role: Team member';
+  const subject = `AwardX invite: ${programTitle}`;
+  const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
   const inviteLine = inviteUrl ? `Accept your invite: ${inviteUrl}` : 'Sign in to join your workspace.';
 
   try {
@@ -40,9 +40,9 @@ export default async function handler(req: any, res: any) {
       from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
       to: email,
       subject,
-      text: `You have been invited to ${programTitle}.\n${roleLine}\n${inviteLine}`,
+      text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\n${inviteLine}`,
       html: `<div style="font-family:Arial,sans-serif;line-height:1.6">
-        <h2>You have been invited to ${programTitle}</h2>
+        <h2>The AwardX team for ${programTitle} wants you to join</h2>
         <p>${roleLine}</p>
         <p>${inviteLine}</p>
       </div>`,

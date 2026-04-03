@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Program } from '../../../services/models';
-import { WorkflowView } from './WorkflowView';
 import { TileView } from './TileView';
-import { Grid, Workflow, Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
@@ -12,10 +11,7 @@ interface ScheduleRoundsViewProps {
   activeEvent: Program | null;
 }
 
-type ViewMode = 'tile' | 'workflow';
-
 export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEvent }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('workflow');
   const [rounds, setRounds] = useState<Round[]>([]);
   const [edges, setEdges] = useState<RoundEdge[]>([]);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
@@ -261,7 +257,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
               <span><kbd className="font-sans font-bold text-slate-600">Del</kbd> to remove</span>
             </div>
           </div>
-          <p className="text-sm text-slate-500 mt-1">Configure evaluation rounds and workflow</p>
+          <p className="text-sm text-slate-500 mt-1">Configure evaluation rounds</p>
         </div>
         <div className="flex items-center gap-3">
           <Button
@@ -272,25 +268,6 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             <Sparkles className="w-4 h-4 mr-2" />
             Extensions
           </Button>
-
-          <div className="flex bg-slate-100 rounded-lg p-1 border border-slate-200">
-            <Button
-              variant={viewMode === 'tile' ? 'primary' : 'ghost'}
-              onClick={() => setViewMode('tile')}
-              className="px-3 py-1.5 text-xs shadow-none"
-            >
-              <Grid className="w-4 h-4 mr-2" />
-              Tile View
-            </Button>
-            <Button
-              variant={viewMode === 'workflow' ? 'primary' : 'ghost'}
-              onClick={() => setViewMode('workflow')}
-              className="px-3 py-1.5 text-xs shadow-none"
-            >
-              <Workflow className="w-4 h-4 mr-2" />
-              Workflow View
-            </Button>
-          </div>
 
           <div className="h-8 w-px bg-slate-200" />
 
@@ -322,45 +299,30 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        {viewMode === 'workflow' ? (
-          <WorkflowView
-            rounds={rounds}
-            edges={edges}
-            selectedRoundId={selectedRoundId}
-            onRoundSelect={setSelectedRoundId}
-            onRoundUpdate={handleRoundUpdate}
-            onRoundDelete={handleRoundDelete}
-            onEdgeCreate={handleEdgeCreate}
-            onEdgeUpdate={handleEdgeUpdate}
-            onEdgeDelete={handleEdgeDelete}
-            programId={activeEvent.id}
-          />
-        ) : (
-          <TileView
-            rounds={rounds}
-            selectedRoundId={selectedRoundId}
-            onRoundSelect={setSelectedRoundId}
-            onRoundUpdate={handleRoundUpdate}
-            onRoundDelete={handleRoundDelete}
-            onRoundReorder={async (reorderedRounds) => {
-              setRounds(reorderedRounds);
-              // Persist the new order to database
-              try {
-                await Promise.all(
-                  reorderedRounds.map(round =>
-                    scheduleRoundsService.updateRound({
-                      ...round,
-                      updatedAt: new Date().toISOString(),
-                    })
-                  )
-                );
-              } catch (error) {
-                console.error('Failed to persist round order:', error);
-              }
-            }}
-            programId={activeEvent.id}
-          />
-        )}
+        <TileView
+          rounds={rounds}
+          selectedRoundId={selectedRoundId}
+          onRoundSelect={setSelectedRoundId}
+          onRoundUpdate={handleRoundUpdate}
+          onRoundDelete={handleRoundDelete}
+          onRoundReorder={async (reorderedRounds) => {
+            setRounds(reorderedRounds);
+            // Persist the new order to database
+            try {
+              await Promise.all(
+                reorderedRounds.map(round =>
+                  scheduleRoundsService.updateRound({
+                    ...round,
+                    updatedAt: new Date().toISOString(),
+                  })
+                )
+              );
+            } catch (error) {
+              console.error('Failed to persist round order:', error);
+            }
+          }}
+          programId={activeEvent.id}
+        />
       </div>
     </div>
   );

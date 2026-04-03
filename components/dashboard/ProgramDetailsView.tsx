@@ -82,19 +82,19 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
     }
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8">
-            <div>
+        <div className="w-full min-h-[calc(100vh-10rem)] space-y-6">
+            <div className="flex flex-col gap-2">
                 <h1 className="text-2xl font-bold text-slate-900">Program Details</h1>
                 <p className="text-slate-500">Manage the core details of your award program.</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-6">
+            <form onSubmit={handleSubmit} className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-8 space-y-6">
 
                 {/* Basic Info Section */}
                 <section className="space-y-4">
                     <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2">Basic Information</h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         <div className="space-y-1">
                             <label className="block text-sm font-semibold text-slate-700">Program Title</label>
                             <div className="relative">
@@ -126,7 +126,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                         <div className="space-y-1">
                             <label className="block text-sm font-semibold text-slate-700">URL Slug</label>
                             <div className="relative">
@@ -187,7 +187,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
 
                 {/* Status Section */}
                 <section className="space-y-4 pt-4">
-                    <div className="flex flex-col md:flex-row gap-8">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                         <div>
                             <h2 className="text-lg font-bold text-slate-900 mb-4">Status</h2>
                             <div className="flex gap-4">
@@ -255,7 +255,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-1">Provider</label>
                                 <select

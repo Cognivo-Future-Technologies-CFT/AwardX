@@ -37,7 +37,7 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // 1. Find the judge by invite_token (must not be used yet)
+    // 1. Find the judge by invite_token.
     const { data: judge, error: judgeError } = await supabase
       .from('judges')
       .select('id, name, email, avatar_url, bio, status, program_id, organization_id, invite_token_used_at')
@@ -49,29 +49,22 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    // 2. Check if token has already been used
-    if (judge.invite_token_used_at) {
-      res.status(410).json({
-        error: 'This invite link has already been used. Please contact the organizer if you need a new link.',
-        expired: true,
-      });
-      return;
-    }
+    // 2. Mark the judge as active on access, but do not hard-expire the token.
+    if (judge.status !== 'active' || !judge.invite_token_used_at) {
+      const { error: updateError } = await supabase
+        .from('judges')
+        .update({
+          invite_token_used_at: judge.invite_token_used_at || new Date().toISOString(),
+          status: 'active',
+          accepted_at: judge.accepted_at || new Date().toISOString(),
+        })
+        .eq('id', judge.id);
 
-    // 3. Mark token as used and update judge status to active
-    const { error: updateError } = await supabase
-      .from('judges')
-      .update({
-        invite_token_used_at: new Date().toISOString(),
-        status: 'active',
-        accepted_at: new Date().toISOString(),
-      })
-      .eq('id', judge.id);
-
-    if (updateError) {
-      console.error('Failed to mark token as used:', updateError);
-      res.status(500).json({ error: 'Failed to process invite' });
-      return;
+      if (updateError) {
+        console.error('Failed to mark token as used:', updateError);
+        res.status(500).json({ error: 'Failed to process invite' });
+        return;
+      }
     }
 
     // 4. Fetch the program details
@@ -85,31 +78,49 @@ export default async function handler(req: any, res: any) {
       program = programData;
     }
 
-    // 5. Fetch ONLY shortlisted submissions for this program
-    let submissions: any[] = [];
-    if (judge.program_id) {
-      const { data: submissionData } = await supabase
-        .from('submissions')
-        .select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, vote_count')
-        .eq('program_id', judge.program_id)
-        .eq('status', 'shortlisted')
-        .order('submitted_at', { ascending: false });
-      submissions = submissionData || [];
+    // 5. Fetch judge assignments with submission details.
+    let assignments: any[] = [];
+    if (judge.id) {
+      const { data: assignmentData } = await supabase
+        .from('submission_judges')
+        .select(`
+          id,
+          status,
+          completed_at,
+          assigned_at,
+          submission_id,
+          submissions (
+            id,
+            title,
+            description,
+            cover_image_url,
+            status,
+            category_id,
+            submitted_at,
+            applicant_name,
+            vote_count
+          )
+        `)
+        .eq('judge_id', judge.id)
+        .order('assigned_at', { ascending: false });
 
-      // Fetch category names for submissions
-      if (submissions.length > 0) {
-        const categoryIds = [...new Set(submissions.map(s => s.category_id).filter(Boolean))];
+      assignments = assignmentData || [];
+
+      if (assignments.length > 0) {
+        const categoryIds = [...new Set(assignments.map((row: any) => row.submissions?.category_id).filter(Boolean))];
+        let categoryMap = new Map<string, string>();
         if (categoryIds.length > 0) {
           const { data: categories } = await supabase
             .from('categories')
             .select('id, title')
             .in('id', categoryIds);
-          const categoryMap = new Map((categories || []).map((c: any) => [c.id, c.title]));
-          submissions = submissions.map(s => ({
-            ...s,
-            category_name: categoryMap.get(s.category_id) || 'Uncategorized',
-          }));
+          categoryMap = new Map((categories || []).map((c: any) => [c.id, c.title]));
         }
+
+        assignments = assignments.map((row: any) => ({
+          ...row,
+          category_name: categoryMap.get(row.submissions?.category_id) || 'Uncategorized',
+        }));
       }
     }
 
@@ -155,16 +166,21 @@ export default async function handler(req: any, res: any) {
         industryCategory: program.industry_category,
       } : null,
       organization: organizationName,
-      submissions: submissions.map(s => ({
-        id: s.id,
-        title: s.title,
-        description: s.description,
-        coverImageUrl: s.cover_image_url,
-        status: s.status,
-        category: s.category_name || 'Uncategorized',
-        submittedAt: s.submitted_at,
-        applicantName: s.applicant_name,
-        voteCount: s.vote_count,
+      assignments: assignments.map((row: any) => ({
+        submissionJudgeId: row.id,
+        status: row.status,
+        completedAt: row.completed_at,
+        submission: row.submissions ? {
+          id: row.submissions.id,
+          title: row.submissions.title,
+          description: row.submissions.description,
+          coverImageUrl: row.submissions.cover_image_url,
+          status: row.submissions.status,
+          category: row.category_name || 'Uncategorized',
+          submittedAt: row.submissions.submitted_at,
+          applicantName: row.submissions.applicant_name,
+          voteCount: row.submissions.vote_count,
+        } : null,
       })),
       criteria: criteria.map(c => ({
         id: c.id,

@@ -86,7 +86,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ activeEvent }) => 
        </div>
 
        {/* Stat Cards */}
-       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
          {[
            { label: 'Total Submissions', value: stats.totalSubmissions, color: 'text-indigo-600 bg-indigo-50' },
            { label: 'Pending Review', value: stats.pendingReview, color: 'text-orange-600 bg-orange-50' },
@@ -95,7 +95,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ activeEvent }) => 
          ].map((stat, i) => (
            <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
              <div className="text-sm font-medium text-slate-500 mb-2">{stat.label}</div>
-             <div className="text-3xl font-bold text-slate-900">{stat.value}</div>
+             <div className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">{stat.value}</div>
            </div>
          ))}
        </div>

@@ -34,4 +34,10 @@ export const queryKeys = {
   overview: {
     stats: (programId: string) => ['overview-stats', programId] as const,
   },
+  categories: {
+    all: (programId: string) => ['categories', programId] as const,
+  },
+  forms: {
+    byProgram: (programId: string) => ['forms', programId] as const,
+  },
 } as const;

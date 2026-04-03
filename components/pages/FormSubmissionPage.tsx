@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../Button';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -58,6 +58,9 @@ export const FormSubmissionPage: React.FC = () => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [showRequirements, setShowRequirements] = useState(true);
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
   const [paymentState, setPaymentState] = useState<'idle' | 'success' | 'cancelled'>('idle');
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
@@ -209,9 +212,17 @@ export const FormSubmissionPage: React.FC = () => {
     restoreDraft();
   }, [formId, isLoading, formFields.length]);
 
+  useEffect(() => {
+    if (!formId) return;
+    const key = `requirements_dismissed_${formId}`;
+    const dismissed = sessionStorage.getItem(key) === 'true';
+    setShowRequirements(!dismissed);
+  }, [formId]);
+
   // Auto-save draft on data change (debounced)
   useEffect(() => {
     if (!formId || isLoading || isSubmitted || Object.keys(formData).length === 0) return;
+    setSaveState('saving');
     const timer = setTimeout(async () => {
       try {
         const { user } = await auth.getUser();
@@ -223,12 +234,30 @@ export const FormSubmissionPage: React.FC = () => {
           draft_data: formData,
           current_page: currentPageIdx,
         });
+        setLastSavedAt(new Date());
+        setSaveState('saved');
       } catch {
-        // Non-critical
+        setSaveState('error');
       }
     }, 2000); // 2s debounce
     return () => clearTimeout(timer);
   }, [formData, currentPageIdx, formId, isLoading, isSubmitted]);
+
+  const requiredFields = useMemo(() => formFields.filter(f => !!f.required), [formFields]);
+  const completedRequiredCount = useMemo(() => {
+    return requiredFields.filter((field) => {
+      const value = formData[field.id];
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'string') return value.trim().length > 0;
+      return value != null && value !== '';
+    }).length;
+  }, [requiredFields, formData]);
+
+  const dismissRequirements = () => {
+    if (!formId) return;
+    sessionStorage.setItem(`requirements_dismissed_${formId}`, 'true');
+    setShowRequirements(false);
+  };
 
   const currentPage = formPages[currentPageIdx] || formPages[0];
   const pageFields = formFields.filter(f => f.pageId === currentPage?.id);
@@ -236,6 +265,9 @@ export const FormSubmissionPage: React.FC = () => {
 
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
+    if (saveState !== 'saving') {
+      setSaveState('idle');
+    }
   };
 
   const validatePage = () => {
@@ -586,6 +618,49 @@ export const FormSubmissionPage: React.FC = () => {
                   Step {currentPageIdx + 1} of {formPages.length}
                 </div>
               )}
+              {showRequirements && requiredFields.length > 0 && (
+                <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-indigo-900">Before you submit</p>
+                      <p className="text-xs text-indigo-700 mt-0.5">Complete required items to avoid deadline risk.</p>
+                    </div>
+                    <button
+                      onClick={dismissRequirements}
+                      className="text-xs font-semibold text-indigo-700 hover:text-indigo-900"
+                      type="button"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <div className="mt-3 text-xs text-indigo-800 font-medium">
+                    {completedRequiredCount} of {requiredFields.length} required fields completed
+                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {requiredFields.slice(0, 6).map((field) => {
+                      const value = formData[field.id];
+                      const filled = Array.isArray(value)
+                        ? value.length > 0
+                        : typeof value === 'string'
+                          ? value.trim().length > 0
+                          : value != null && value !== '';
+                      return (
+                        <li key={field.id} className={`text-xs ${filled ? 'text-emerald-700' : 'text-indigo-700'}`}>
+                          {filled ? '✓' : '•'} {field.label}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              <div className="mt-3 text-xs">
+                {saveState === 'saving' && <span className="text-amber-600">Saving draft...</span>}
+                {saveState === 'saved' && (
+                  <span className="text-emerald-600">Draft saved{lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString()}` : ''}</span>
+                )}
+                {saveState === 'error' && <span className="text-red-600">Draft save failed. Check connection.</span>}
+                {saveState === 'idle' && Object.keys(formData).length > 0 && <span className="text-slate-500">Unsaved changes</span>}
+              </div>
             </div>
 
             <AnimatePresence mode="wait">
@@ -622,6 +697,12 @@ export const FormSubmissionPage: React.FC = () => {
               >
                 <ChevronLeft className="w-4 h-4 mr-2" /> Back
               </Button>
+
+              <div className="hidden md:block text-xs text-slate-500">
+                {saveState === 'saving' && 'Saving draft...'}
+                {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString()}` : ''}`}
+                {saveState === 'error' && 'Save failed'}
+              </div>
 
               {isLastPage ? (
                 <Button

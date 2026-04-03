@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LayoutDashboard, Tag, CalendarClock, Workflow,
+  LayoutDashboard, Tag,
   FileText, Gavel, Users, Globe, Settings,
-  ChevronRight, Lock,
+  ChevronRight, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { Drawer } from '../Drawer';
 import { Program, programStatusLabel } from '../../services/models';
@@ -13,8 +13,7 @@ import { queryKeys } from '../../services/queryKeys';
 // Lazy-loaded view components (re-used from existing dashboard views)
 import { DashboardOverview } from './DashboardOverview';
 import { CategoriesView } from './CategoriesView';
-import { ScheduleView } from './ScheduleView';
-import { SubmissionTable } from './SubmissionTable';
+// ScheduleView removed — schedule/rounds temporarily hidden from tile hub
 import { JudgingView } from './JudgingView';
 import { TeamsView } from './TeamsView';
 import { SettingsView } from './SettingsView';
@@ -25,7 +24,7 @@ interface ProgramTileHubProps {
 }
 
 type TileId =
-  | 'overview' | 'categories' | 'rounds' | 'schedule'
+  | 'overview' | 'categories'
   | 'entries' | 'judging' | 'team' | 'publish' | 'settings';
 
 interface TileConfig {
@@ -37,11 +36,10 @@ interface TileConfig {
   locked?: boolean;
 }
 
+// 'rounds' and 'schedule' are temporarily hidden — tile view is the primary focus
 const TILES: TileConfig[] = [
   { id: 'overview',    label: 'Overview',    icon: <LayoutDashboard />, description: 'Stats, activity, and highlights',      accent: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
   { id: 'categories',  label: 'Categories',  icon: <Tag />,             description: 'Award categories and eligibility',     accent: 'bg-blue-50 text-blue-600 border-blue-100' },
-  { id: 'rounds',      label: 'Rounds',      icon: <CalendarClock />,   description: 'Timeline phases and schedule',          accent: 'bg-cyan-50 text-cyan-600 border-cyan-100' },
-  { id: 'schedule',    label: 'Workflow',     icon: <Workflow />,        description: 'Visual round workflow editor',          accent: 'bg-teal-50 text-teal-600 border-teal-100' },
   { id: 'entries',     label: 'Entries',     icon: <FileText />,        description: 'All submitted entries',                 accent: 'bg-violet-50 text-violet-600 border-violet-100' },
   { id: 'judging',     label: 'Judging',     icon: <Gavel />,           description: 'Judge panel, scoring and assignments',  accent: 'bg-purple-50 text-purple-600 border-purple-100' },
   { id: 'team',        label: 'Team',        icon: <Users />,           description: 'Members, roles and permissions',        accent: 'bg-pink-50 text-pink-600 border-pink-100' },
@@ -50,7 +48,16 @@ const TILES: TileConfig[] = [
 ];
 
 // ── Publish Tile Drawer Content ───────────────────────────────────────────────
-const PublishPanel: React.FC<{ program: Program; onClose: () => void }> = ({ program, onClose }) => {
+type ReadinessLevel = 'ok' | 'warning' | 'error';
+
+interface ReadinessCheck {
+  id: string;
+  label: string;
+  level: ReadinessLevel;
+  detail: string;
+}
+
+const PublishPanel: React.FC<{ program: Program; checks: ReadinessCheck[]; onClose: () => void }> = ({ program, checks, onClose }) => {
   const [saving, setSaving] = useState(false);
 
   const handleToggle = async (newStatus: 'Active' | 'Draft') => {
@@ -65,6 +72,23 @@ const PublishPanel: React.FC<{ program: Program; onClose: () => void }> = ({ pro
   };
 
   const isPublished = program.status === 'Active';
+  const blockingChecks = checks.filter(c => c.level === 'error');
+
+  const readinessBadge = (level: ReadinessLevel) => {
+    if (level === 'ok') {
+      return (
+        <span className="inline-flex items-center gap-1 text-emerald-700 text-xs font-semibold">
+          <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+        </span>
+      );
+    }
+
+    return (
+      <span className={`inline-flex items-center gap-1 text-xs font-semibold ${level === 'error' ? 'text-red-700' : 'text-amber-700'}`}>
+        <AlertCircle className="w-3.5 h-3.5" /> {level === 'error' ? 'Blocking' : 'Review'}
+      </span>
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -84,6 +108,21 @@ const PublishPanel: React.FC<{ program: Program; onClose: () => void }> = ({ pro
         </p>
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-bold text-slate-900 mb-3">Publish Readiness</h3>
+        <div className="space-y-2.5">
+          {checks.map(check => (
+            <div key={check.id} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-800">{check.label}</p>
+                {readinessBadge(check.level)}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">{check.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-3">
         {isPublished ? (
           <button
@@ -96,10 +135,10 @@ const PublishPanel: React.FC<{ program: Program; onClose: () => void }> = ({ pro
         ) : program.status === 'Draft' ? (
           <button
             onClick={() => handleToggle('Active')}
-            disabled={saving}
+            disabled={saving || blockingChecks.length > 0}
             className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
-            {saving ? 'Publishing…' : 'Publish Program'}
+            {saving ? 'Publishing…' : blockingChecks.length > 0 ? 'Resolve blockers to publish' : 'Publish Program'}
           </button>
         ) : null}
       </div>
@@ -143,12 +182,27 @@ const useTileStats = (program: Program | null) => {
     staleTime: 30_000,
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: queryKeys.categories.all(program?.id ?? ''),
+    queryFn: () => db.getCategories(program!.id),
+    enabled,
+    staleTime: 30_000,
+  });
+
+  const { data: forms = [] } = useQuery({
+    queryKey: queryKeys.forms.byProgram(program?.id ?? ''),
+    queryFn: () => db.getForms(program!.id),
+    enabled,
+    staleTime: 30_000,
+  });
+
   return {
     entries: submissions.length,
     judges: judges.length,
     rounds: rounds.length,
     members: members.length,
-    categories: program?.entriesCount ?? 0,
+    categories: categories.length,
+    forms,
   };
 };
 
@@ -157,14 +211,42 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
   const [activeTile, setActiveTile] = useState<TileId | null>(null);
   const stats = useTileStats(activeEvent);
 
+  const readinessChecks: ReadinessCheck[] = [
+    {
+      id: 'categories',
+      label: 'Categories configured',
+      level: stats.categories > 0 ? 'ok' : 'error',
+      detail: stats.categories > 0 ? `${stats.categories} categories configured.` : 'Add at least one category before publishing.',
+    },
+    {
+      id: 'forms',
+      label: 'Submission form is published',
+      level: stats.forms.some((form: any) => !!form.is_active) ? 'ok' : 'error',
+      detail: stats.forms.some((form: any) => !!form.is_active)
+        ? 'At least one form is published and ready for entrants.'
+        : 'Publish at least one form so entrants can submit.',
+    },
+    {
+      id: 'rounds',
+      label: 'Rounds and schedule',
+      level: stats.rounds > 0 ? 'ok' : 'warning',
+      detail: stats.rounds > 0 ? `${stats.rounds} rounds configured.` : 'No rounds found. Add at least one timeline round for clarity.',
+    },
+    {
+      id: 'judges',
+      label: 'Judges invited',
+      level: stats.judges > 0 ? 'ok' : 'warning',
+      detail: stats.judges > 0 ? `${stats.judges} judges invited.` : 'No judges invited yet. You can still publish and invite later.',
+    },
+  ];
+
   const statBadge = (tile: TileId): string | number | null => {
     switch (tile) {
-      case 'entries':    return stats.entries;
-      case 'judging':    return stats.judges > 0 ? `${stats.judges} judges` : null;
-      case 'rounds':     return stats.rounds > 0 ? `${stats.rounds} rounds` : null;
-      case 'team':       return stats.members > 0 ? `${stats.members} members` : null;
-      case 'publish':    return activeEvent ? programStatusLabel(activeEvent.status) : null;
-      default:           return null;
+      case 'entries':  return stats.entries || null;
+      case 'judging':  return stats.judges > 0  ? `${stats.judges} judges`  : null;
+      case 'team':     return stats.members > 0 ? `${stats.members} members`: null;
+      case 'publish':  return activeEvent ? programStatusLabel(activeEvent.status) : null;
+      default:         return null;
     }
   };
 
@@ -173,15 +255,22 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
     switch (tile) {
       case 'overview':    return <DashboardOverview activeEvent={activeEvent} onNavigate={onNavigate} />;
       case 'categories':  return <CategoriesView activeEvent={activeEvent} />;
-      case 'rounds':      return <ScheduleView activeEvent={activeEvent} />;
-      case 'schedule':    return <div className="p-6 text-slate-500 text-sm">Open the full Workflow view from the sidebar for the visual round editor.</div>;
-      case 'entries':     return <SubmissionTable activeEvent={activeEvent} />;
+      // 'entries' now navigates to full-page — handled in handleTileClick
       case 'judging':     return <JudgingView activeEvent={activeEvent} />;
       case 'team':        return <TeamsView activeEvent={activeEvent} />;
-      case 'publish':     return <PublishPanel program={activeEvent} onClose={() => setActiveTile(null)} />;
+      case 'publish':     return <PublishPanel program={activeEvent} checks={readinessChecks} onClose={() => setActiveTile(null)} />;
       case 'settings':    return <SettingsView activeEvent={activeEvent} />;
       default:            return null;
     }
+  };
+
+  const handleTileClick = (tile: TileConfig) => {
+    // Full-page navigations — skip the drawer
+    if (tile.id === 'entries') {
+      onNavigate('submissions');
+      return;
+    }
+    setActiveTile(tile.id);
   };
 
   if (!activeEvent) {
@@ -193,7 +282,7 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -216,7 +305,7 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
           return (
             <button
               key={tile.id}
-              onClick={() => setActiveTile(tile.id)}
+              onClick={() => handleTileClick(tile)}
               className="group text-left bg-white border border-slate-200 rounded-2xl p-5 hover:border-indigo-300 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <div className="flex items-start justify-between mb-4">
@@ -241,8 +330,8 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
         })}
       </div>
 
-      {/* Drawers */}
-      {TILES.map(tile => (
+      {/* Drawers — entries tile navigates full-page, so it's excluded here */}
+      {TILES.filter(t => t.id !== 'entries').map(tile => (
         <Drawer
           key={tile.id}
           isOpen={activeTile === tile.id}

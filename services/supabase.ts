@@ -1345,7 +1345,9 @@ export const judgingCriteria = {
     name: string;
     description?: string;
     weight: number;
+    min_score?: number;
     max_score?: number;
+    sort_order?: number;
   }) => {
     const { data, error } = await supabase
       .from('judging_criteria')
@@ -1359,6 +1361,9 @@ export const judgingCriteria = {
     name: string;
     weight: number;
     description: string;
+    min_score: number;
+    max_score: number;
+    sort_order: number;
   }>) => {
     const { data, error } = await supabase
       .from('judging_criteria')
@@ -2232,6 +2237,44 @@ export const storage = {
       return { path: data.path, error: null };
     }
     return { path: null, error };
+  },
+
+  uploadProgramPageAsset: async (file: File, programId: string, sectionType?: string, fieldKey?: string) => {
+    if (!supabase) {
+      return { url: null, path: null, bucket: null, error: { message: 'Supabase is not configured.' } };
+    }
+
+    const configuredBucket = import.meta.env.VITE_SUPABASE_PAGE_ASSETS_BUCKET || 'avatars';
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const baseName = file.name.replace(/\.[^/.]+$/, '');
+    const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const section = (sectionType || 'section').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const field = (fieldKey || 'asset').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const filePath = `program-pages/${programId}/${section}/${field}/${unique}-${safeName}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(configuredBucket)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: file.type || undefined,
+      });
+
+    if (error || !data) {
+      return { url: null, path: null, bucket: configuredBucket, error };
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(configuredBucket)
+      .getPublicUrl(filePath);
+
+    return {
+      url: publicData?.publicUrl || null,
+      path: filePath,
+      bucket: configuredBucket,
+      error: null,
+    };
   },
 
   getSignedUrl: async (bucket: string, path: string, expiresIn = 3600) => {

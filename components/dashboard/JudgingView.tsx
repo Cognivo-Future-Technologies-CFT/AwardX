@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db } from '../../services/database';
-import { judgingConfig } from '../../services/database';
 import { Judge, Program, Submission, JudgingCriterion } from '../../services/models';
 import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
 import { SkeletonLoader } from '../SkeletonLoader';
@@ -12,7 +11,7 @@ import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { sendJudgeInviteEmail } from '../../services/email';
-import { supabase, realtime } from '../../services/supabase';
+import { judgingCriteria, supabase, realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { JudgeScoringModal } from './JudgeScoringModal';
 
@@ -41,8 +40,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
    const [isRemovingAll, setIsRemovingAll] = useState(false);
    const [shortlistOnly, setShortlistOnly] = useState(false);
+   const [unscoredOnly, setUnscoredOnly] = useState(false);
    const [judgesPage, setJudgesPage] = useState(1);
    const judgesPerPage = 9;
+   const [criteriaDraft, setCriteriaDraft] = useState<JudgingCriterion[]>([]);
+   const [criteriaSaving, setCriteriaSaving] = useState(false);
+   const [criteriaNotice, setCriteriaNotice] = useState<string | null>(null);
+   const [criteriaError, setCriteriaError] = useState<string | null>(null);
 
    // Scoring modal state
    const [scoringModalOpen, setScoringModalOpen] = useState(false);
@@ -89,9 +93,95 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       staleTime: 5 * 60_000,
    });
 
+   useEffect(() => {
+      setCriteriaDraft(criteria.map((criterion) => ({ ...criterion })));
+   }, [criteria, activeEvent?.id]);
+
+   const handleCriterionChange = (id: string, field: keyof Omit<JudgingCriterion, 'id' | 'sortOrder'>, value: string | number) => {
+      setCriteriaDraft((prev) => prev.map((criterion) => {
+         if (criterion.id !== id) return criterion;
+         return {
+            ...criterion,
+            [field]: value,
+         } as JudgingCriterion;
+      }));
+   };
+
+   const handleAddCriterion = () => {
+      setCriteriaDraft((prev) => ([
+         ...prev,
+         {
+            id: `temp-${Date.now()}`,
+            name: 'New Criterion',
+            description: 'Describe what judges should evaluate.',
+            weight: 0,
+            minScore: 0,
+            maxScore: 100,
+            sortOrder: prev.length,
+         },
+      ]));
+   };
+
+   const handleDeleteCriterion = (id: string) => {
+      setCriteriaDraft((prev) => prev.filter((criterion) => criterion.id !== id));
+   };
+
+   const handleSaveCriteria = async () => {
+      if (!activeEvent?.id) return;
+      setCriteriaSaving(true);
+      setCriteriaError(null);
+      setCriteriaNotice(null);
+
+      try {
+         const existingById = new Map(criteria.map((criterion) => [criterion.id, criterion]));
+         const draftIds = new Set(criteriaDraft.map((criterion) => criterion.id));
+
+         for (const removed of criteria.filter((criterion) => !draftIds.has(criterion.id))) {
+            const { error } = await judgingCriteria.delete(removed.id);
+            if (error) throw new Error(error.message || 'Failed to delete criterion');
+         }
+
+         for (const [index, criterion] of criteriaDraft.entries()) {
+            const payload = {
+               name: String(criterion.name).trim() || `Criterion ${index + 1}`,
+               description: String(criterion.description || '').trim(),
+               weight: Number(criterion.weight) || 0,
+               min_score: Number(criterion.minScore) || 0,
+               max_score: Number(criterion.maxScore) || 100,
+               sort_order: index,
+            };
+
+            if (existingById.has(criterion.id) && !criterion.id.startsWith('temp-')) {
+               const { error } = await judgingCriteria.update(criterion.id, payload);
+               if (error) throw new Error(error.message || 'Failed to update criterion');
+            } else {
+               const { error } = await judgingCriteria.create({
+                  program_id: activeEvent.id,
+                  ...payload,
+               });
+               if (error) throw new Error(error.message || 'Failed to create criterion');
+            }
+         }
+
+         queryClient.invalidateQueries({ queryKey: queryKeys.judging.criteria(activeEvent.id) });
+         setCriteriaNotice('Scorecard saved successfully.');
+         toast.success('Scorecard saved');
+      } catch (error: any) {
+         const message = error?.message || 'Failed to save scorecard';
+         setCriteriaError(message);
+         toast.error(message);
+      } finally {
+         setCriteriaSaving(false);
+      }
+   };
+
    const submissions = shortlistOnly
       ? allSubmissions.filter(s => s.status === 'Shortlisted')
       : allSubmissions;
+
+   const assignmentSubmissions = unscoredOnly
+      ? submissions.filter(s => s.score == null)
+      : submissions;
 
    const refreshAll = () => {
       if (!activeEvent?.id) return;
@@ -151,10 +241,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    };
 
    const toggleSelectAll = () => {
-      if (selectedIds.length === submissions.length) {
-         setSelectedIds([]);
+      const visibleIds = assignmentSubmissions.map(s => s.id);
+      const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+
+      if (allVisibleSelected) {
+         setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
       } else {
-         setSelectedIds(submissions.map(s => s.id));
+         setSelectedIds(prev => Array.from(new Set([...prev, ...visibleIds])));
       }
    };
 
@@ -170,7 +263,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    };
 
    const totalProgress = Math.round(judges.reduce((acc, curr) => acc + curr.progress, 0) / (judges.length || 1));
-   const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+   const totalWeight = criteriaDraft.reduce((sum, c) => sum + Number(c.weight || 0), 0);
    const judgeTotalPages = Math.max(1, Math.ceil(judges.length / judgesPerPage));
    const paginatedJudges = judges.slice((judgesPage - 1) * judgesPerPage, judgesPage * judgesPerPage);
 
@@ -198,17 +291,17 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
         criteria={criteria}
         onScored={refreshAll}
       />
-      <div className="flex justify-between items-center">
+         <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Judging Management</h1>
           <p className="text-slate-500">Track scoring progress and manage your panel.</p>
         </div>
-        <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+            <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm overflow-x-auto">
            {['overview', 'panel', 'scorecard', 'assignments'].map((tab) => (
               <button
                  key={tab}
                  onClick={() => setActiveTab(tab as any)}
-                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                         className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
                     activeTab === tab 
                     ? 'bg-slate-900 text-white shadow' 
                     : 'text-slate-500 hover:text-slate-900'
@@ -223,7 +316,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       {activeTab === 'overview' && (
          <div className="space-y-8">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
                  <div className="flex items-center gap-4 mb-4">
                     <div className="p-3 bg-white/20 rounded-xl">
@@ -269,17 +362,17 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       {activeTab === 'panel' && (
          <div className="space-y-6">
             {judgesLoading && (
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[1, 2, 3].map(i => <SkeletonLoader key={i} className="h-48" />)}
                </div>
             )}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-3 lg:flex-row lg:justify-between lg:items-center">
                <h2 className="text-lg font-bold text-slate-900">Judge Panel</h2>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                            <Button
                               size="sm"
                               variant="outline"
-                              className="flex items-center gap-2"
+                              className="flex items-center justify-center gap-2 w-full sm:w-auto"
                               onClick={() => {
                                  setJudgeMode('add');
                                  setJudgeForm({ name: '', email: '', bio: '' });
@@ -290,7 +383,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            </Button>
                            <Button
                               size="sm"
-                              className="flex items-center gap-2"
+                              className="flex items-center justify-center gap-2 w-full sm:w-auto"
                               onClick={() => {
                                  setJudgeMode('invite');
                                  setJudgeForm({ name: '', email: '', bio: '' });
@@ -303,7 +396,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               <Button
                                  size="sm"
                                  variant="outline"
-                                 className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                                 className="flex items-center justify-center gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 w-full sm:w-auto"
                                  onClick={handleRemoveAllJudges}
                                  disabled={isRemovingAll}
                               >
@@ -312,7 +405,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            )}
                       </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                {paginatedJudges.map((judge) => (
                   <div key={judge.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow group">
                      <div className="flex justify-between items-start mb-6">
@@ -410,41 +503,133 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       )}
 
       {activeTab === 'scorecard' && (
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
+         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-8">
+            <div className="space-y-6">
                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                     <h2 className="text-lg font-bold text-slate-900">Scorecard Criteria</h2>
-                     <Button size="sm" variant="outline"><Plus className="w-4 h-4 mr-2" /> Add Criterion</Button>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center mb-6">
+                     <div>
+                        <h2 className="text-lg font-bold text-slate-900">Scorecard Criteria</h2>
+                        <p className="text-sm text-slate-500">Edit the criteria judges will see. Keep the total weight at 100%.</p>
+                     </div>
+                     <div className="flex items-center gap-2 flex-wrap">
+                        <Button size="sm" variant="outline" onClick={handleAddCriterion} className="flex items-center gap-2">
+                           <Plus className="w-4 h-4" /> Add Criterion
+                        </Button>
+                        <Button size="sm" onClick={handleSaveCriteria} disabled={criteriaSaving} className="flex items-center gap-2">
+                           <Settings className="w-4 h-4" /> {criteriaSaving ? 'Saving...' : 'Save Scorecard'}
+                        </Button>
+                     </div>
                   </div>
-                  
+
                   <div className="space-y-4">
-                     {criteria.map((c, idx) => (
-                        <div key={c.id} className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 group">
-                           <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                 <h4 className="font-bold text-slate-900">{c.name}</h4>
-                                 <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">{c.weight}%</span>
+                     {criteriaDraft.map((criterion, idx) => (
+                        <div key={criterion.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 group">
+                           <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+                              <div className="flex-1 space-y-3">
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                       <label className="block text-xs font-semibold text-slate-600 mb-1">Criterion name</label>
+                                       <input
+                                          value={criterion.name}
+                                          onChange={(e) => handleCriterionChange(criterion.id, 'name', e.target.value)}
+                                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                       />
+                                    </div>
+                                    <div>
+                                       <label className="block text-xs font-semibold text-slate-600 mb-1">Weight %</label>
+                                       <input
+                                          type="number"
+                                          min={0}
+                                          max={100}
+                                          value={criterion.weight}
+                                          onChange={(e) => handleCriterionChange(criterion.id, 'weight', Number(e.target.value) || 0)}
+                                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                       />
+                                    </div>
+                                 </div>
+
+                                 <div>
+                                    <label className="block text-xs font-semibold text-slate-600 mb-1">Description</label>
+                                    <textarea
+                                       rows={2}
+                                       value={criterion.description}
+                                       onChange={(e) => handleCriterionChange(criterion.id, 'description', e.target.value)}
+                                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                 </div>
+
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                       <label className="block text-xs font-semibold text-slate-600 mb-1">Min score</label>
+                                       <input
+                                          type="number"
+                                          value={criterion.minScore}
+                                          onChange={(e) => handleCriterionChange(criterion.id, 'minScore', Number(e.target.value) || 0)}
+                                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                       />
+                                    </div>
+                                    <div>
+                                       <label className="block text-xs font-semibold text-slate-600 mb-1">Max score</label>
+                                       <input
+                                          type="number"
+                                          value={criterion.maxScore}
+                                          onChange={(e) => handleCriterionChange(criterion.id, 'maxScore', Number(e.target.value) || 0)}
+                                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                       />
+                                    </div>
+                                    <div>
+                                       <label className="block text-xs font-semibold text-slate-600 mb-1">Preview weight</label>
+                                       <div className="h-10 rounded-xl bg-white border border-slate-200 px-3 flex items-center gap-3">
+                                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                             <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min(Number(criterion.weight) || 0, 100)}%` }} />
+                                          </div>
+                                          <span className="text-xs font-bold text-slate-500">{criterion.weight}%</span>
+                                       </div>
+                                    </div>
+                                 </div>
                               </div>
-                              <p className="text-xs text-slate-500">{c.description}</p>
-                           </div>
-                           <div className="w-32">
-                              <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                                 <div className="h-full bg-indigo-500" style={{ width: `${c.weight}%` }}></div>
+
+                              <div className="flex items-center gap-2 xl:pt-7">
+                                 <button
+                                    type="button"
+                                    onClick={() => handleDeleteCriterion(criterion.id)}
+                                    className="rounded-xl border border-red-200 bg-white p-2 text-red-500 transition-colors hover:bg-red-50"
+                                    aria-label="Delete criterion"
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </button>
                               </div>
                            </div>
-                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg"><Settings className="w-4 h-4" /></button>
-                              <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                           <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                              <span>Criterion {idx + 1}</span>
+                              <span>{criterion.minScore} to {criterion.maxScore}</span>
                            </div>
                         </div>
                      ))}
                   </div>
 
-                  {totalWeight !== 100 && (
-                     <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                        Total weight must equal 100% (Current: {totalWeight}%)
+                  {criteriaDraft.length === 0 && (
+                     <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                        No criteria yet. Add one to define how judges should score entries.
+                     </div>
+                  )}
+
+                  {totalWeight !== 100 && criteriaDraft.length > 0 && (
+                     <div className="mt-4 p-3 bg-amber-50 text-amber-700 text-sm rounded-lg flex items-center gap-2">
+                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                        Total weight should equal 100% for a balanced scorecard. Current total: {totalWeight}%
+                     </div>
+                  )}
+
+                  {criteriaNotice && (
+                     <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                        {criteriaNotice}
+                     </div>
+                  )}
+
+                  {criteriaError && (
+                     <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                        {criteriaError}
                      </div>
                   )}
                </div>
@@ -453,37 +638,12 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
             <div className="space-y-6">
                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                   <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                     <Sliders className="w-4 h-4 text-slate-400" /> Scoring Settings
+                     <Sliders className="w-4 h-4 text-slate-400" /> Admin Guidelines
                   </h3>
-                  <div className="space-y-4">
-                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1">Scoring System</label>
-                        <select className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none text-sm">
-                           <option>Numeric (0-10)</option>
-                           <option>Numeric (0-100)</option>
-                           <option>Star Rating (1-5)</option>
-                           <option>Pass / Fail</option>
-                        </select>
-                     </div>
-                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1">Pass Threshold</label>
-                        <input type="number" className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none text-sm" placeholder="e.g. 7.0" />
-                     </div>
-                     <div className="pt-2">
-                        <label className="flex items-center cursor-pointer">
-                           <input type="checkbox" className="mr-2 accent-indigo-600" defaultChecked />
-                           <span className="text-sm text-slate-600">Allow Judge Comments</span>
-                        </label>
-                     </div>
-                     <div>
-                        <label className="flex items-center cursor-pointer">
-                           <input type="checkbox" className="mr-2 accent-indigo-600" />
-                           <span className="text-sm text-slate-600">Blind Judging (Hide Applicant Name)</span>
-                        </label>
-                     </div>
-                  </div>
-                  <div className="mt-6 pt-6 border-t border-slate-100">
-                     <Button className="w-full">Save Configuration</Button>
+                  <div className="space-y-3 text-sm text-slate-600">
+                     <p className="rounded-xl bg-slate-50 border border-slate-100 p-3">Use clear, measurable criteria names. Avoid overlapping scopes so judges score consistently.</p>
+                     <p className="rounded-xl bg-slate-50 border border-slate-100 p-3">Keep weights summing to 100% and use score ranges that match the judging model you want to enforce.</p>
+                     <p className="rounded-xl bg-slate-50 border border-slate-100 p-3">Save changes before publishing assignments so judges see the latest rubric immediately.</p>
                   </div>
                </div>
             </div>
@@ -492,14 +652,25 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
          {activeTab === 'assignments' && (
             <div className="space-y-6">
-               <div className="flex justify-between items-center">
+               <div className="flex justify-between items-center gap-3 flex-wrap">
                   <div>
                      <h2 className="text-lg font-bold text-slate-900">Judge Assignments</h2>
                      <p className="text-sm text-slate-500">All nominations are visible here for admin assignment.</p>
                   </div>
-                  <Button size="sm" className="flex items-center gap-2" onClick={() => setIsAssignModalOpen(true)}>
-                     <Users className="w-4 h-4" /> Assign Judges
-                  </Button>
+                  <div className="flex items-center gap-2">
+                     <button
+                        onClick={() => setUnscoredOnly(prev => !prev)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${unscoredOnly
+                           ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                           : 'bg-white text-slate-600 border-slate-200'
+                        }`}
+                     >
+                        {unscoredOnly ? 'Showing Unscored Only' : 'Filter: Unscored Only'}
+                     </button>
+                     <Button size="sm" className="flex items-center gap-2" onClick={() => setIsAssignModalOpen(true)}>
+                        <Users className="w-4 h-4" /> Assign Judges
+                     </Button>
+                  </div>
                </div>
 
                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -511,7 +682,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                                  <input
                                     type="checkbox"
                                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                    checked={selectedIds.length === submissions.length && submissions.length > 0}
+                                    checked={assignmentSubmissions.length > 0 && assignmentSubmissions.every(s => selectedIds.includes(s.id))}
                                     onChange={toggleSelectAll}
                                  />
                               </th>
@@ -524,7 +695,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                           {submissions.map((sub) => (
+                           {assignmentSubmissions.map((sub) => (
                               <tr key={sub.id} className={`hover:bg-slate-50/80 transition-colors ${selectedIds.includes(sub.id) ? 'bg-indigo-50/30' : ''}`}>
                                  <td className="p-4 text-center">
                                     <input
@@ -567,10 +738,10 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                                  </td>
                               </tr>
                            ))}
-                           {submissions.length === 0 && (
+                           {assignmentSubmissions.length === 0 && (
                               <tr>
                                  <td colSpan={6} className="p-8 text-center text-slate-500">
-                                    No submissions found.
+                                    No submissions found for this filter.
                                  </td>
                               </tr>
                            )}

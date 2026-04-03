@@ -4,7 +4,6 @@ import { FormPreview } from './FormPreview';
 import { db } from '../../services/database';
 import { Program } from '../../services/models';
 import { FileText, CheckCircle2 } from 'lucide-react';
-import { Button } from '../Button';
 
 interface FormBuilderWithSelectorProps {
   activeEvent: Program | null;
@@ -81,9 +80,9 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
   }
 
   return (
-    <div className="flex gap-6 h-full">
+    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 h-full min-h-0">
       {/* Form Selector Sidebar */}
-      <div className="w-80 flex-shrink-0 bg-white rounded-xl border border-slate-200 p-4 overflow-y-auto">
+      <div className="w-full lg:w-80 lg:flex-shrink-0 bg-white rounded-xl border border-slate-200 p-4 overflow-y-auto max-h-[42vh] lg:max-h-none">
         <div className="mb-4">
           <h3 className="text-sm font-bold text-slate-700 mb-2">Select Nomination Form</h3>
           <p className="text-xs text-slate-500">Choose a form to use for submissions. Forms are created in the Form Builder.</p>
@@ -143,7 +142,7 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
       </div>
 
       {/* Form Preview */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 min-h-0">
         {selectedFormId ? (
           <FormPreview
             fields={currentFormFields}

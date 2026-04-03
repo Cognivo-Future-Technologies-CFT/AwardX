@@ -71,7 +71,7 @@ export const ReachView: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
+         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">Reach & Campaigns</h1>
            <p className="text-slate-500">Automate your social presence and drive engagement.</p>
@@ -195,8 +195,9 @@ export const ReachView: React.FC = () => {
             <Calendar className="w-5 h-5 text-indigo-500" /> Upcoming Content
          </h2>
          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 pt-3 text-xs text-slate-500 md:hidden">Swipe horizontally to view all columns.</div>
             <div className="overflow-x-auto">
-               <table className="w-full text-left border-collapse">
+               <table className="w-full min-w-[920px] text-left border-collapse">
                   <thead>
                      <tr className="bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                         <th className="p-4 pl-6">Content Preview</th>

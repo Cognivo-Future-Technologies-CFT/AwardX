@@ -334,7 +334,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
       {/* Header and Controls Portal */}
       {portalTarget && createPortal(
-        <div className="flex items-center gap-4">
+        <div className="hidden md:flex items-center gap-4">
           {/* Add any other header items here if needed, currently reusing the space for primary actions */}
           <Button
             variant="primary" // Changed to primary for better visibility in header
@@ -348,9 +348,9 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         portalTarget
       )}
 
-      <div className="flex h-full">
+      <div className="flex flex-col lg:flex-row h-full min-h-0">
         {/* Sidebar - Saved Forms List */}
-        <div className="w-72 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col z-10">
+        <div className="w-full lg:w-72 lg:flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col z-10 max-h-[38vh] lg:max-h-none">
           <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white">
             <h3 className="text-sm font-bold text-slate-800">Saved Forms</h3>
             <button onClick={handleNewForm} className="p-1.5 hover:bg-slate-50 hover:text-indigo-600 rounded-lg text-slate-400 transition-colors" title="Create New Form">
@@ -440,7 +440,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
         </div>
 
         {/* Main Form Builder Area */}
-        <div className="flex-1 min-w-0 h-full">
+        <div className="flex-1 min-w-0 h-full min-h-[48vh]">
           {selectedFormId || isCreatingNew ? (
             <FormBuilder
               key={formBuilderKey}

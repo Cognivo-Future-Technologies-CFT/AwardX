@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { Resend } from 'resend';
+import apiRoutes from './routes/index.js';
+import { getCacheStatus } from './cache/redisCache.js';
 
 dotenv.config();
 
@@ -21,6 +23,8 @@ app.get('/api/health', (_req, res) => {
 	res.json({ ok: true });
 });
 
+app.use('/api', apiRoutes);
+
 app.post('/api/invites/team', async (req, res) => {
 	const { email, roleName, programTitle, inviteUrl } = req.body || {};
 	if (!resend) {
@@ -30,8 +34,8 @@ app.post('/api/invites/team', async (req, res) => {
 		return res.status(400).json({ error: 'email and programTitle are required' });
 	}
 
-	const subject = `You are invited to ${programTitle}`;
-	const roleLine = roleName ? `Role: ${roleName}` : 'Role: Team member';
+	const subject = `AwardX invite: ${programTitle}`;
+	const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
 	const inviteLine = inviteUrl ? `Accept your invite: ${inviteUrl}` : 'Sign in to join your workspace.';
 
 	try {
@@ -39,9 +43,9 @@ app.post('/api/invites/team', async (req, res) => {
 			from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
 			to: email,
 			subject,
-			text: `You have been invited to ${programTitle}.\n${roleLine}\n${inviteLine}`,
+			text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\n${inviteLine}`,
 			html: `<div style="font-family:Arial,sans-serif;line-height:1.6">
-				<h2>You have been invited to ${programTitle}</h2>
+				<h2>The AwardX team for ${programTitle} wants you to join</h2>
 				<p>${roleLine}</p>
 				<p>${inviteLine}</p>
 			</div>`,
@@ -143,5 +147,11 @@ app.post('/api/invites/judge', async (req, res) => {
 });
 
 app.listen(port, () => {
+	const cacheStatus = getCacheStatus();
 	console.log(`Invite server listening on port ${port}`);
+	if (process.env.NODE_ENV !== 'production') {
+		console.log(
+			`[cache] enabled=${cacheStatus.enabled} configured=${cacheStatus.configured} available=${cacheStatus.available} namespace=${cacheStatus.namespace}`,
+		);
+	}
 });

@@ -1,15 +1,15 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
-  UserCog, Edit, Workflow, Layout
+  UserCog, Edit, Workflow, Layout, Command
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Program, Category, PERMISSIONS } from '../../services/models';
+import { Program, Category, PERMISSIONS, programStatusLabel } from '../../services/models';
 
 interface DashboardUser {
   id: string;
@@ -26,12 +26,15 @@ import { auth, realtime } from '../../services/supabase';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { UniversalSearchPalette, type UniversalSearchResult } from './UniversalSearchPalette';
+import NavigationMenuFour, { type HeaderNavItem, type HeaderNavigationLink } from '@/components/ui/navigation-menu-4';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
   currentView: string;
   activeEvent: Program | null;
   onChangeView: (view: string) => void;
+  onSelectProgram: (program: Program) => void;
   onLogout: () => void;
   onSwitchEvent: () => void;
   noPadding?: boolean;
@@ -147,6 +150,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   currentView,
   activeEvent,
   onChangeView,
+  onSelectProgram,
   onLogout,
   onSwitchEvent,
   noPadding = false,
@@ -156,6 +160,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
 
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -177,8 +184,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [allUsers, setAllUsers] = useState<DashboardUser[]>([]);
   const [permissionsReady, setPermissionsReady] = useState(false);
   const queryClient = useQueryClient();
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const notificationsRef = useRef<HTMLDivElement>(null);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   const notificationsQuery = useQuery({
@@ -186,8 +191,370 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     queryFn: () => databaseService.getNotifications({ programId: activeEvent?.id, limit: 8 }),
   });
 
+  const allProgramsQuery = useQuery({
+    queryKey: ['dashboard-search-programs'],
+    queryFn: () => databaseService.getPrograms(),
+    staleTime: 5 * 60_000,
+  });
+
+  const allSubmissionsQuery = useQuery({
+    queryKey: ['dashboard-search-submissions'],
+    queryFn: () => databaseService.getSubmissions(),
+    staleTime: 30_000,
+  });
+
+  const allTeamMembersQuery = useQuery({
+    queryKey: ['dashboard-search-team'],
+    queryFn: () => databaseService.getTeamMembers(),
+    staleTime: 30_000,
+  });
+
+  const allRolesQuery = useQuery({
+    queryKey: ['dashboard-search-roles'],
+    queryFn: () => databaseService.getRoles(),
+    staleTime: 60_000,
+  });
+
+  const allLogsQuery = useQuery({
+    queryKey: ['dashboard-search-logs'],
+    queryFn: () => databaseService.getLogs(),
+    staleTime: 30_000,
+  });
+
+  const allNotificationsQuery = useQuery({
+    queryKey: ['dashboard-search-notifications'],
+    queryFn: () => databaseService.getNotifications({ limit: 50 }),
+    staleTime: 30_000,
+  });
+
+  const activeCategoriesQuery = useQuery({
+    queryKey: ['dashboard-search-categories', activeEvent?.id || 'none'],
+    queryFn: () => (activeEvent ? databaseService.getCategories(activeEvent.id) : Promise.resolve([])),
+    enabled: !!activeEvent,
+    staleTime: 60_000,
+  });
+
+  const activeFormsQuery = useQuery({
+    queryKey: ['dashboard-search-forms', activeEvent?.id || 'none'],
+    queryFn: () => (activeEvent ? databaseService.getForms(activeEvent.id) : Promise.resolve([])),
+    enabled: !!activeEvent,
+    staleTime: 60_000,
+  });
+
   const notifications = notificationsQuery.data || [];
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const openSettingsTab = (tab: 'profile' | 'billing' | 'notifications' | 'security' | 'domain' | 'shortcuts') => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', 'settings');
+    params.set('tab', tab);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    onChangeView('settings');
+  };
+
+  const openView = (view: string) => {
+    onChangeView(view);
+  };
+
+  const searchResults = useMemo<UniversalSearchResult[]>(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const programs = allProgramsQuery.data || [];
+    const submissions = allSubmissionsQuery.data || [];
+    const members = allTeamMembersQuery.data || [];
+    const roles = allRolesQuery.data || [];
+    const logs = allLogsQuery.data || [];
+    const notificationsData = allNotificationsQuery.data || [];
+    const categories = activeCategoriesQuery.data || [];
+    const forms = activeFormsQuery.data || [];
+
+    const quickActions: UniversalSearchResult[] = [
+      {
+        id: 'action-overview',
+        title: 'Go to Overview',
+        description: 'Jump back to the program dashboard.',
+        meta: 'Navigation',
+        icon: <LayoutDashboard />,
+        onSelect: () => openView('overview'),
+      },
+      {
+        id: 'action-settings',
+        title: 'Open Settings',
+        description: 'Browse profile, billing, and shortcut guide.',
+        meta: 'Navigation',
+        icon: <Settings />,
+        onSelect: () => openSettingsTab('profile'),
+      },
+      {
+        id: 'action-shortcuts',
+        title: 'Shortcut Guide',
+        description: 'See keyboard shortcuts for fast navigation.',
+        meta: 'Help',
+        icon: <Command />,
+        onSelect: () => openSettingsTab('shortcuts'),
+      },
+      {
+        id: 'action-teams',
+        title: 'Teams & Roles',
+        description: 'Manage team members and permissions.',
+        meta: 'Navigation',
+        icon: <Users />,
+        onSelect: () => openView('teams'),
+      },
+      {
+        id: 'action-forms',
+        title: 'Form Builder',
+        description: 'Edit the submission form and fields.',
+        meta: 'Navigation',
+        icon: <LayoutTemplate />,
+        onSelect: () => openView('templates'),
+      },
+    ];
+
+    if (!query) {
+      return quickActions;
+    }
+
+    const scored: Array<UniversalSearchResult & { score: number }> = [];
+
+    const addResult = (result: UniversalSearchResult, haystack: string) => {
+      const normalized = haystack.toLowerCase();
+      if (!normalized.includes(query)) return;
+      let score = 1;
+      if (result.title.toLowerCase() === query) score += 50;
+      if (result.title.toLowerCase().startsWith(query)) score += 25;
+      if (normalized.startsWith(query)) score += 10;
+      if (normalized.includes(`${query} `)) score += 5;
+      scored.push({ ...result, score });
+    };
+
+    programs.forEach((program) => {
+      addResult(
+        {
+          id: `program-${program.id}`,
+          title: program.title,
+          description: program.description || `${program.category} · ${program.type} · ${programStatusLabel(program.status)}`,
+          meta: 'Program',
+          icon: <Sparkles />,
+          onSelect: () => {
+            if (program.id !== activeEvent?.id) {
+              onSelectProgram(program);
+            }
+            openView('overview');
+          },
+        },
+        [program.title, program.description, program.category, program.type, program.status].filter(Boolean).join(' '),
+      );
+    });
+
+    submissions.forEach((submission) => {
+      addResult(
+        {
+          id: `submission-${submission.id}`,
+          title: submission.title,
+          description: `${submission.applicant} · ${submission.category} · ${submission.status}`,
+          meta: 'Submission',
+          icon: <FileText />,
+          onSelect: () => openView('submissions'),
+        },
+        [submission.title, submission.applicant, submission.category, submission.status, submission.score, submission.date].filter(Boolean).join(' '),
+      );
+    });
+
+    members.forEach((member) => {
+      addResult(
+        {
+          id: `team-${member.userId || member.memberId}`,
+          title: member.name,
+          description: `${member.email} · ${member.role} · ${member.status}`,
+          meta: 'Team',
+          icon: <Users />,
+          onSelect: () => openView('teams'),
+        },
+        [member.name, member.email, member.role, member.status].filter(Boolean).join(' '),
+      );
+    });
+
+    roles.forEach((role) => {
+      addResult(
+        {
+          id: `role-${role.id}`,
+          title: role.name,
+          description: `${role.permissions.length} permissions configured`,
+          meta: 'Role',
+          icon: <Shield />,
+          onSelect: () => openView('teams'),
+        },
+        [role.name, role.permissions.join(' ')].join(' '),
+      );
+    });
+
+    logs.forEach((log) => {
+      addResult(
+        {
+          id: `log-${log.id}`,
+          title: log.action,
+          description: `${log.user} · ${log.details || 'Activity log entry'}`,
+          meta: 'Log',
+          icon: <Activity />,
+          onSelect: () => openView('logs'),
+        },
+        [log.action, log.user, log.details, log.type].filter(Boolean).join(' '),
+      );
+    });
+
+    notificationsData.forEach((notification) => {
+      addResult(
+        {
+          id: `notification-${notification.id}`,
+          title: notification.title,
+          description: notification.body || 'Notification',
+          meta: notification.isRead ? 'Read' : 'Unread',
+          icon: <Bell />,
+          onSelect: () => openView('overview'),
+        },
+        [notification.title, notification.body, notification.type].filter(Boolean).join(' '),
+      );
+    });
+
+    categories.forEach((category) => {
+      addResult(
+        {
+          id: `category-${category.id}`,
+          title: category.title,
+          description: 'Program category',
+          meta: 'Category',
+          icon: <Folder />,
+          onSelect: () => openView('awards'),
+        },
+        category.title,
+      );
+    });
+
+    forms.forEach((form) => {
+      addResult(
+        {
+          id: `form-${form.id}`,
+          title: form.title,
+          description: form.description || 'Program form',
+          meta: form.is_active ? 'Active form' : 'Draft form',
+          icon: <LayoutTemplate />,
+          onSelect: () => openView('templates'),
+        },
+        [form.title, form.description, form.is_active ? 'active' : 'draft'].filter(Boolean).join(' '),
+      );
+    });
+
+    return scored
+      .sort((a, b) => b.score - a.score)
+      .map(({ score, ...result }) => result)
+      .slice(0, 12);
+  }, [
+    activeEvent?.id,
+    allLogsQuery.data,
+    allNotificationsQuery.data,
+    allProgramsQuery.data,
+    allRolesQuery.data,
+    allSubmissionsQuery.data,
+    allTeamMembersQuery.data,
+    activeCategoriesQuery.data,
+    activeFormsQuery.data,
+    searchQuery,
+  ]);
+
+  const runShortcutAction = (action: string) => {
+    switch (action) {
+      case 'overview':
+        openView('overview');
+        break;
+      case 'builder':
+        openView('builder');
+        break;
+      case 'details':
+        openView('program-details');
+        break;
+      case 'forms':
+        openView('templates');
+        break;
+      case 'settings':
+        openSettingsTab('profile');
+        break;
+      case 'teams':
+        openView('teams');
+        break;
+      case 'analytics':
+        openView('analytics');
+        break;
+      case 'reach':
+        openView('reach');
+        break;
+      case 'logs':
+        openView('logs');
+        break;
+      case 'judging':
+        openView('judging');
+        break;
+      default:
+        break;
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT'
+        || target.tagName === 'TEXTAREA'
+        || target.isContentEditable
+        || !!target.closest('input, textarea, [contenteditable]');
+
+      if (event.metaKey || event.ctrlKey) {
+        if (event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          setIsSearchOpen(true);
+          return;
+        }
+      }
+
+      if (isTyping) return;
+
+      if (event.key === '?') {
+        event.preventDefault();
+        openSettingsTab('shortcuts');
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        setPendingShortcut(null);
+        setIsSearchOpen(false);
+        return;
+      }
+
+      if (pendingShortcut === 'g') {
+        event.preventDefault();
+        runShortcutAction({
+          o: 'overview',
+          b: 'builder',
+          p: 'details',
+          f: 'forms',
+          s: 'settings',
+          t: 'teams',
+          a: 'analytics',
+          r: 'reach',
+          l: 'logs',
+          j: 'judging',
+        }[event.key.toLowerCase()] || '');
+        setPendingShortcut(null);
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'g') {
+        setPendingShortcut('g');
+        window.setTimeout(() => setPendingShortcut((current) => (current === 'g' ? null : current)), 900);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pendingShortcut]);
 
   useEffect(() => {
     const channel = realtime.subscribeToNotifications(() => {
@@ -196,17 +563,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
     return () => realtime.unsubscribe(channel);
   }, [queryClient]);
-
-  useEffect(() => {
-    const onClickOutside = (event: MouseEvent) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setIsNotificationsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
 
   useEffect(() => {
     // Fetch real user data from Supabase
@@ -288,16 +644,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   // Define Nav items with Permissions
   const leftNavItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
-    { id: 'builder', label: 'Overview Page', icon: Sparkles, permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'program-details', label: 'Program Details', icon: Edit, permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'schedule', label: 'Schedule', icon: CalendarClock, permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'schedule-rounds', label: 'Schedule & Rounds', icon: Workflow, permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'submission-setup', label: 'Submission Process', icon: Settings2, permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'submissions', label: 'Submissions', icon: FileText, permission: PERMISSIONS.VIEW_SUBMISSIONS },
-    { id: 'judging', label: 'Judging', icon: Gavel, permission: PERMISSIONS.VIEW_JUDGING },
-    { id: 'awards', label: 'Awards', icon: Trophy, permission: PERMISSIONS.MANAGE_PROGRAMS },
-    { id: 'templates', label: 'Form Builder', icon: LayoutTemplate, permission: PERMISSIONS.MANAGE_FORMS },
+    { id: 'overview',          label: 'Overview',           icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
+    { id: 'builder',           label: 'Overview Page',      icon: Sparkles,        permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'program-details',   label: 'Program Details',    icon: Edit,            permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'schedule-rounds',   label: 'Schedule & Rounds',  icon: CalendarClock,   permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'submission-setup',  label: 'Submission Process', icon: Settings2,       permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'submissions',       label: 'Submissions',        icon: FileText,        permission: PERMISSIONS.VIEW_SUBMISSIONS },
+    { id: 'judging',           label: 'Judging',            icon: Gavel,           permission: PERMISSIONS.VIEW_JUDGING },
+    { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'templates',         label: 'Form Builder',       icon: LayoutTemplate,  permission: PERMISSIONS.MANAGE_FORMS },
     ...(activeEvent?.type === 'Other' ? [{ id: 'custom-grid', label: 'Grid Builder', icon: Layout, permission: PERMISSIONS.MANAGE_PROGRAMS }] : []),
   ];
 
@@ -315,20 +670,72 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const visibleLeftNav = filterNav(leftNavItems);
   const visibleRightNav = filterNav(rightNavItems);
   const rootCategories = categories.filter(c => c.parentId === null);
+  const headerNavigationLinks = useMemo<HeaderNavigationLink[]>(() => {
+    const overviewLink: HeaderNavigationLink = {
+      label: 'Overview',
+      submenu: false,
+      onSelect: () => onChangeView('overview'),
+    };
+
+    const operationLinks: HeaderNavItem[] = visibleLeftNav
+      .filter((item) => item.id !== 'overview')
+      .map((item) => ({
+        label: item.label,
+        description: `Open ${item.label} view`,
+        onSelect: () => onChangeView(item.id),
+      }));
+
+    const workspaceLinks: HeaderNavItem[] = visibleRightNav.map((item) => ({
+      label: item.label,
+      onSelect: () => onChangeView(item.id),
+    }));
+
+    const quickLinks: HeaderNavItem[] = [
+      {
+        label: 'Open Settings',
+        icon: 'InfoIcon' as const,
+        onSelect: () => onChangeView('settings'),
+      },
+      {
+        label: 'Audit Logs',
+        icon: 'BookOpenIcon' as const,
+        onSelect: () => onChangeView('logs'),
+      },
+      {
+        label: 'Teams & Roles',
+        icon: 'LifeBuoyIcon' as const,
+        onSelect: () => onChangeView('teams'),
+      },
+    ];
+
+    const links: HeaderNavigationLink[] = [
+      overviewLink,
+      {
+        label: 'Operations',
+        submenu: true as const,
+        type: 'description',
+        items: operationLinks,
+      },
+      {
+        label: 'Workspace',
+        submenu: true as const,
+        type: 'simple',
+        items: workspaceLinks,
+      },
+      {
+        label: 'Quick Actions',
+        submenu: true as const,
+        type: 'icon',
+        items: quickLinks,
+      },
+    ];
+
+    return links.filter((link) => !link.submenu || link.items.length > 0);
+  }, [onChangeView, visibleLeftNav, visibleRightNav]);
 
   // Demo-only user switching was removed for Supabase-backed auth.
   const handleUserSwitch = (_userId: string) => {
     // no-op
-  };
-
-  const handleNotificationClick = async (notificationId: string) => {
-    await databaseService.markNotificationRead(notificationId);
-    queryClient.invalidateQueries({ queryKey: ['notifications'] });
-  };
-
-  const handleMarkAllNotificationsRead = async () => {
-    await databaseService.markAllNotificationsRead(activeEvent?.id);
-    queryClient.invalidateQueries({ queryKey: ['notifications'] });
   };
 
   return (
@@ -399,6 +806,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             >
             </SidebarItem>
           ))}
+
+          {visibleRightNav.length > 0 && (
+            <>
+              {!isLeftCollapsed && (
+                <div className="mt-6 mb-4 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Workspace Tools</div>
+              )}
+
+              {visibleRightNav.map((item) => (
+                <SidebarItem
+                  key={item.id}
+                  id={item.id}
+                  label={item.label}
+                  icon={item.icon}
+                  currentView={currentView}
+                  collapsed={isLeftCollapsed}
+                  onClick={() => onChangeView(item.id)}
+                />
+              ))}
+            </>
+          )}
         </div>
 
         {/* User Profile (Left Bottom) */}
@@ -469,109 +896,27 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <div
         className={`flex-1 flex flex-col transition-all duration-300 ease-in-out min-h-screen relative
           ${isLeftCollapsed ? 'lg:pl-20' : 'lg:pl-64'} 
-          ${isRightCollapsed ? 'lg:pr-20' : 'lg:pr-64'}
+          lg:pr-0
         `}
       >
         {/* Top Header Mobile/Desktop Mix */}
         {!hideHeader && (
-          <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                <Menu />
-              </button>
-              <div className="hidden md:flex items-center gap-2 text-sm">
-                <span className="text-slate-400 cursor-pointer hover:text-slate-600" onClick={onSwitchEvent}>Event Hub</span>
-                <ChevronRight className="w-4 h-4 text-slate-300" />
-                <span className="text-slate-600 font-medium">{activeEvent?.title}</span>
-                <ChevronRight className="w-4 h-4 text-slate-300" />
-                <span className="font-semibold text-slate-900 capitalize bg-slate-100 px-2 py-1 rounded-md text-xs">{currentView}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 lg:gap-6">
-              {/* Header Actions Portal Target */}
-              <div id="dashboard-header-actions" className="flex items-center gap-2" />
-
-              {/* PRD 4.8 Test Mode Toggle */}
-              <div
-                onClick={() => setIsTestMode(!isTestMode)}
-                className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors border ${isTestMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
-              >
-                <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${isTestMode ? 'bg-amber-400' : 'bg-slate-300'}`}>
-                  <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isTestMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                </div>
-                <span className={`text-xs font-bold uppercase tracking-wide ${isTestMode ? 'text-amber-700' : 'text-slate-500'}`}>
-                  {isTestMode ? 'Sandbox' : 'Live'}
-                </span>
-              </div>
-
-              <div className="hidden sm:flex relative group">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search workspace..."
-                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 lg:w-64 transition-all hover:bg-white hover:border-slate-300"
-                />
-              </div>
-              <button
-                onClick={() => setShowMobileSearch((prev) => !prev)}
-                className="sm:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
-                aria-label="Toggle mobile search"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-
-              <div className="relative" ref={notificationsRef}>
-                <button
-                  onClick={() => setIsNotificationsOpen((prev) => !prev)}
-                  className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
-                >
-                  <Bell className="w-5 h-5" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
-
-                {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
-                    <div className="mb-2 flex items-center justify-between px-1">
-                      <h4 className="text-sm font-bold text-slate-900">Notifications</h4>
-                      <button
-                        onClick={handleMarkAllNotificationsRead}
-                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                      >
-                        Mark all read
-                      </button>
-                    </div>
-                    <div className="max-h-80 space-y-2 overflow-y-auto">
-                      {notifications.length === 0 && (
-                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-500">
-                          No notifications yet.
-                        </div>
-                      )}
-                      {notifications.map((notification) => (
-                        <button
-                          key={notification.id}
-                          onClick={() => handleNotificationClick(notification.id)}
-                          className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${
-                            notification.isRead
-                              ? 'border-slate-100 bg-slate-50 text-slate-600'
-                              : 'border-indigo-200 bg-indigo-50/60 text-slate-800'
-                          }`}
-                        >
-                          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">{notification.type}</div>
-                          <div className="mt-1 text-sm font-semibold">{notification.title}</div>
-                          <div className="mt-1 text-xs text-slate-500">{notification.body}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </header>
+          <NavigationMenuFour
+            navigationLinks={headerNavigationLinks}
+            eventTitle={activeEvent?.title || 'Event'}
+            currentView={currentView}
+            unreadCount={unreadCount}
+            isLive={!isTestMode}
+            compact={isLeftCollapsed}
+            searchValue={searchQuery}
+            onSearchChange={(value) => {
+              setSearchQuery(value);
+              setIsSearchOpen(true);
+            }}
+            onToggleLive={() => setIsTestMode((prev) => !prev)}
+            onBackToHub={onSwitchEvent}
+            onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          />
         )}
 
         {!hideHeader && showMobileSearch && (
@@ -598,72 +943,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
             </div>
           )}
-          <div className={noPadding ? 'h-full' : 'max-w-7xl mx-auto'}>
+          <div className={noPadding || currentView === 'settings' ? 'h-full w-full' : 'max-w-7xl mx-auto'}>
             {children}
           </div>
         </main>
       </div>
-
-
-      {/* RIGHT SIDEBAR - Desktop */}
-      <aside
-        className={`hidden lg:flex flex-col fixed inset-y-0 right-0 z-40 bg-white border-l border-slate-200 transition-all duration-300 ease-in-out ${isRightCollapsed ? 'w-20' : 'w-64'
-          }`}
-      >
-        {/* Toggle Button */}
-        <button
-          onClick={() => setIsRightCollapsed(!isRightCollapsed)}
-          className="absolute -left-3 top-24 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-indigo-600 z-50"
-        >
-          {isRightCollapsed ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        </button>
-
-        {/* Right Sidebar Header */}
-        <div className={`h-20 flex items-center border-b border-slate-50 transition-all ${isRightCollapsed ? 'justify-center' : 'px-6'}`}>
-          {isRightCollapsed ? (
-            <Shield className="w-5 h-5 text-slate-400" />
-          ) : (
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Workspace Tools</span>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <div className="flex-1 overflow-y-auto py-6 px-3">
-          {visibleRightNav.length > 0 ? (
-            visibleRightNav.map((item) => (
-              <SidebarItem
-                key={item.id}
-                id={item.id}
-                label={item.label}
-                icon={item.icon}
-                collapsed={isRightCollapsed}
-                currentView={currentView}
-                onClick={() => onChangeView(item.id)}
-              />
-            ))
-          ) : (
-            !isRightCollapsed && <div className="text-xs text-slate-400 text-center px-4">No tools available for your role.</div>
-          )}
-        </div>
-
-        {/* Promo / Bottom Action */}
-        {!isRightCollapsed && (
-          <div className="p-4 border-t border-slate-100">
-            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-4 text-white text-center">
-              <p className="text-xs font-bold opacity-80 mb-1">PRO PLAN</p>
-              <p className="text-sm font-bold mb-3">8 Days Left</p>
-              <button className="w-full py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors">
-                Upgrade Now
-              </button>
-            </div>
-          </div>
-        )}
-        {isRightCollapsed && (
-          <div className="p-3 border-t border-slate-100 flex justify-center">
-            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
-          </div>
-        )}
-      </aside>
 
 
       {/* MOBILE MENU OVERLAY */}
@@ -702,6 +986,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </button>
 
                 <div>
+
+                <UniversalSearchPalette
+                  isOpen={isSearchOpen}
+                  query={searchQuery}
+                  results={searchResults}
+                  onQueryChange={setSearchQuery}
+                  onClose={() => setIsSearchOpen(false)}
+                />
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Operations</div>
                   <div className="space-y-1">
                     {visibleLeftNav.map((item) => (
