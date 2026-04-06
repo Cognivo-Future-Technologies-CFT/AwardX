@@ -18,6 +18,7 @@
 
 import { getSupabaseAdmin } from '../supabase.js';
 import { getSuccessorRounds, getRound } from './roundEngine.js';
+import { autoRandomAssign, autoSegmentedAssign } from './judgeAssignment.js';
 
 interface AdvancementCriteria {
   type: 'top_n' | 'top_percent' | 'score_threshold' | 'manual' | 'all_pass';
@@ -450,6 +451,27 @@ export async function executeAdvancement(
     await supabase
       .from('round_submissions')
       .upsert(enrollments, { onConflict: 'round_id,submission_id' });
+
+    // Auto-assign judges for the next round when configured.
+    const { data: judgingConfig } = await supabase
+      .from('judging_config')
+      .select('auto_assign, max_judges_per_submission')
+      .eq('program_id', round.program_id)
+      .maybeSingle();
+
+    const shouldAutoAssign = Boolean(judgingConfig?.auto_assign);
+    if (shouldAutoAssign) {
+      const settings = (targetRound as any).settings || {};
+      const strategy = settings?.assignment_strategy === 'segmented' ? 'segmented' : 'random';
+      const segmentField = settings?.segment_field || 'category_id';
+      const judgesPerSubmission = Number(judgingConfig?.max_judges_per_submission || 3);
+
+      if (strategy === 'segmented') {
+        await autoSegmentedAssign(targetRound.id, round.program_id, segmentField, judgesPerSubmission, triggeredBy || 'system_auto');
+      } else {
+        await autoRandomAssign(targetRound.id, round.program_id, judgesPerSubmission, triggeredBy || 'system_auto');
+      }
+    }
   }
 
   // Finalize the source round

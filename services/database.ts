@@ -16,6 +16,7 @@ import {
   roundSubmissions,
   votingConfigs,
   advancement,
+  resolveMediaPublicUrl,
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { Program, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
@@ -27,6 +28,16 @@ export interface PaginatedResult<T> {
   page: number;
   pageSize: number;
   hasMore: boolean;
+}
+
+export interface PendingInvite {
+  id: string;
+  email: string;
+  token: string;
+  roleId: string | null;
+  roleName: string | null;
+  programId: string | null;
+  createdAt: string;
 }
 
 export interface DashboardNotification {
@@ -1222,7 +1233,7 @@ class DatabaseService {
     return data.map((j: any) => ({
       id: j.id,
       name: j.name,
-      avatar: j.avatar_url || '',
+      avatar: resolveMediaPublicUrl(j.avatar_url),
       email: j.email,
       status: this.mapJudgeStatus(j.status) as Judge['status'],
       progress: j.completed_count && j.assigned_count
@@ -1269,7 +1280,7 @@ class DatabaseService {
     const items: Judge[] = data.map((j: any) => ({
       id: j.id,
       name: j.name,
-      avatar: j.avatar_url || '',
+      avatar: resolveMediaPublicUrl(j.avatar_url),
       email: j.email,
       status: this.mapJudgeStatus(j.status) as Judge['status'],
       progress: j.completed_count && j.assigned_count
@@ -1433,7 +1444,7 @@ class DatabaseService {
         role: role.name || 'Member',
         status: (m.status === 'active' ? 'Active' : 'Inactive') as TeamMember['status'],
         lastActive: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—',
-        avatar: profile.avatar_url || '',
+        avatar: resolveMediaPublicUrl(profile.avatar_url),
         joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       };
     });
@@ -1473,7 +1484,7 @@ class DatabaseService {
       id: l.id,
       action: l.action,
       user: l.user_name || 'User',
-      userAvatar: l.user_avatar || '',
+      userAvatar: resolveMediaPublicUrl(l.user_avatar),
       details: l.details || '',
       timestamp: l.created_at ? new Date(l.created_at).toLocaleString() : '',
       type: (l.action_type === 'delete' ? 'delete' : l.action_type === 'warning' ? 'warning' : l.action_type === 'create' ? 'create' : 'update') as Log['type'],
@@ -1523,7 +1534,7 @@ class DatabaseService {
       id: l.id,
       action: l.action,
       user: l.user_name || 'User',
-      userAvatar: l.user_avatar || '',
+      userAvatar: resolveMediaPublicUrl(l.user_avatar),
       details: l.details || '',
       timestamp: l.created_at ? new Date(l.created_at).toLocaleString() : '',
       type: (l.action_type === 'delete' ? 'delete' : l.action_type === 'warning' ? 'warning' : l.action_type === 'create' ? 'create' : 'update') as Log['type'],
@@ -1642,7 +1653,7 @@ class DatabaseService {
       platform: a.platform,
       handle: a.handle,
       status: a.status === 'connected' ? 'Connected' : 'Disconnected',
-      avatar: a.avatar_url || '',
+      avatar: resolveMediaPublicUrl(a.avatar_url),
     }));
   }
 
@@ -1964,7 +1975,7 @@ class DatabaseService {
       role: roleName,
       status: 'Active',
       lastActive: 'Now',
-      avatar: profile.avatar_url || '',
+      avatar: resolveMediaPublicUrl(profile.avatar_url),
       source: 'Internal',
       surveyAnswer: '',
       joinedDate: profile.created_at ? new Date(profile.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -1973,6 +1984,13 @@ class DatabaseService {
 
   async deleteRound(roundId: string): Promise<void> {
     if (!supabase) throw new Error('Supabase not configured');
+
+    const { error: edgeDeleteError } = await supabase
+      .from('round_edges')
+      .delete()
+      .or(`source_round_id.eq.${roundId},target_round_id.eq.${roundId}`);
+    if (edgeDeleteError) throw new Error(edgeDeleteError.message || 'Failed to delete round connections');
+
     const { error } = await supabase.from('rounds').delete().eq('id', roundId);
     if (error) throw new Error(error.message || 'Failed to delete round');
     await this.safeAuditLog({
@@ -2091,6 +2109,36 @@ class DatabaseService {
       resourceType: 'organization_member',
       resourceId: memberId,
     });
+  }
+
+  async getPendingTeamInvites(organizationId: string): Promise<PendingInvite[]> {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('organization_invites')
+      .select('id, email, token, status, created_at, role_id, program_id, roles ( name )')
+      .eq('organization_id', organizationId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return (data as any[]).map((row) => ({
+      id: row.id,
+      email: row.email,
+      token: row.token,
+      roleId: row.role_id || null,
+      roleName: row.roles?.name || null,
+      programId: row.program_id || null,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async cancelTeamInvite(inviteId: string): Promise<void> {
+    if (!supabase) return;
+    const { error } = await supabase
+      .from('organization_invites')
+      .update({ status: 'expired' })
+      .eq('id', inviteId)
+      .eq('status', 'pending');
+    if (error) throw new Error(error.message || 'Failed to cancel invite');
   }
 
   // ========================================================================

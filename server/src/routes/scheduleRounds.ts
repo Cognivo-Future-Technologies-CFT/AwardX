@@ -150,6 +150,16 @@ router.delete('/:programId/rounds/:id', requireAuth, async (req, res) => {
 
   try {
     const supabase = getSupabaseAdmin();
+
+    const { error: edgeDeleteError } = await supabase
+      .from('round_edges')
+      .delete()
+      .eq('program_id', programId)
+      .or(`source_round_id.eq.${id},target_round_id.eq.${id}`);
+    if (edgeDeleteError) {
+      return res.status(500).json({ error: edgeDeleteError.message || 'Failed to delete round connections' });
+    }
+
     const { error } = await supabase.from('rounds').delete().eq('id', id).eq('program_id', programId);
     if (error) {
       return res.status(500).json({ error: error.message || 'Failed to delete round' });

@@ -44,6 +44,48 @@ export const clearUserCache = () => {
   // No-op: cache removed.
 };
 
+export const resolveMediaPublicUrl = (value?: string | null): string => {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+
+  // Already a directly loadable URL/data URI.
+  if (/^(https?:)?\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) {
+    return raw;
+  }
+
+  const base = supabaseUrl.replace(/\/$/, '');
+  if (!base) return raw;
+
+  // Support values stored as absolute storage paths without host.
+  if (raw.startsWith('/storage/v1/object/')) {
+    return `${base}${raw}`;
+  }
+
+  let path = raw.replace(/^\/+/, '');
+  if (path.startsWith('media/')) {
+    path = path.slice('media/'.length);
+  }
+
+  const isKnownMediaPath =
+    path.startsWith('avatars/') ||
+    path.startsWith('submissions/') ||
+    path.startsWith('program-pages/');
+
+  // Backward compatibility: old avatar values were sometimes persisted as only filename.
+  const isLikelyAvatarFilename = /^[0-9a-f-]{36}-\d+\.[a-z0-9]+$/i.test(path);
+
+  if (isLikelyAvatarFilename) {
+    path = `avatars/${path}`;
+  }
+
+  if (isKnownMediaPath || isLikelyAvatarFilename) {
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    return `${base}/storage/v1/object/public/media/${encodedPath}`;
+  }
+
+  return raw;
+};
+
 // Refresh cache (call after login or when org changes)
 export const refreshUserCache = async () => {
   // No-op beyond triggering fresh reads.
@@ -1886,6 +1928,9 @@ export const settings = {
 
     // Always provide email from auth (profiles may not store it)
     const merged = profile ? { ...profile, email: user.email } : { id: user.id, email: user.email };
+    if (merged && typeof merged === 'object') {
+      (merged as any).avatar_url = resolveMediaPublicUrl((merged as any).avatar_url);
+    }
 
     // Best-effort: persist email into profiles so other features (like "Add User by email") can look it up.
     try {
@@ -2214,14 +2259,14 @@ export const cms = {
 export const storage = {
   uploadAvatar: async (file: File, userId: string) => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const fileName = `avatars/${userId}-${Date.now()}.${fileExt}`;
     const { data, error } = await supabase.storage
-      .from('avatars')
+      .from('media')
       .upload(fileName, file, { upsert: true });
 
     if (data) {
       const { data: urlData } = supabase.storage
-        .from('avatars')
+        .from('media')
         .getPublicUrl(fileName);
       return { url: urlData.publicUrl, error: null };
     }
@@ -2230,9 +2275,9 @@ export const storage = {
 
   uploadSubmissionFile: async (file: File, submissionId: string) => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${submissionId}/${Date.now()}-${file.name}`;
+    const fileName = `submissions/${submissionId}/${Date.now()}-${file.name}`;
     const { data, error } = await supabase.storage
-      .from('submissions')
+      .from('media')
       .upload(fileName, file);
 
     if (data) {
@@ -2246,7 +2291,7 @@ export const storage = {
       return { url: null, path: null, bucket: null, error: { message: 'Supabase is not configured.' } };
     }
 
-    const configuredBucket = import.meta.env.VITE_SUPABASE_PAGE_ASSETS_BUCKET || 'avatars';
+    const configuredBucket = import.meta.env.VITE_SUPABASE_PAGE_ASSETS_BUCKET || 'media';
     const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
     const baseName = file.name.replace(/\.[^/.]+$/, '');
     const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');

@@ -120,8 +120,6 @@ function mapStatusToDb(status: Round['status']): string {
   return statusMap[status] || 'draft';
 }
 
-const EDGES_STORAGE_PREFIX = 'scheduleRounds_edges_';
-
 type EdgeMetadata = {
   sourceHandle?: string;
   targetHandle?: string;
@@ -179,28 +177,6 @@ function scheduleRoundEdgeToDb(edge: RoundEdge) {
     condition: { ...condition, metadata },
     sort_order: edge.order ?? 0,
   };
-}
-
-function loadEdgesFromLocalStorage(programId: string): RoundEdge[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const stored = localStorage.getItem(`${EDGES_STORAGE_PREFIX}${programId}`);
-    return stored ? JSON.parse(stored) : [];
-  } catch (error) {
-    console.error('Failed to load edges from localStorage:', error);
-    return [];
-  }
-}
-
-function saveEdgesToLocalStorage(programId: string, edges: RoundEdge[]): void {
-  if (typeof window === 'undefined') return;
-
-  try {
-    localStorage.setItem(`${EDGES_STORAGE_PREFIX}${programId}`, JSON.stringify(edges));
-  } catch (error) {
-    console.error('Failed to save edges to localStorage:', error);
-  }
 }
 
 // Main service functions
@@ -294,6 +270,19 @@ export const scheduleRoundsService = {
 
   // Delete a round
   async deleteRound(roundId: string): Promise<void> {
+    if (!supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    const { error: edgeDeleteError } = await supabase
+      .from('round_edges')
+      .delete()
+      .or(`source_round_id.eq.${roundId},target_round_id.eq.${roundId}`);
+
+    if (edgeDeleteError) {
+      throw new Error(edgeDeleteError.message || 'Failed to delete round connections');
+    }
+
     const { error } = await supabaseRounds.delete(roundId);
     
     if (error) {
@@ -304,36 +293,29 @@ export const scheduleRoundsService = {
   // Get edges for a program
   async getEdges(programId: string): Promise<RoundEdge[]> {
     if (!supabase) {
-      return loadEdgesFromLocalStorage(programId);
+      console.warn('Supabase not configured; returning empty edge list');
+      return [];
     }
 
     const { data, error } = await supabaseRoundEdges.getByProgram(programId);
     if (error || !data) {
-      return loadEdgesFromLocalStorage(programId);
+      console.error('Failed to load edges from database:', error);
+      throw new Error(error?.message || 'Failed to load round connections');
     }
 
-    const mapped = data.map(dbEdgeToScheduleRoundEdge);
-    if (mapped.length === 0) {
-      const localEdges = loadEdgesFromLocalStorage(programId);
-      if (localEdges.length > 0) {
-        await this.saveEdges(programId, localEdges);
-        return localEdges;
-      }
-    }
-    return mapped;
+    return data.map(dbEdgeToScheduleRoundEdge);
   },
 
   // Save edges for a program
   async saveEdges(programId: string, edges: RoundEdge[]): Promise<RoundEdge[]> {
     if (!supabase) {
-      saveEdgesToLocalStorage(programId, edges);
+      console.warn('Supabase not configured; skipping edge persistence');
       return edges;
     }
 
     const { data: existingData, error: existingError } = await supabaseRoundEdges.getByProgram(programId);
     if (existingError || !existingData) {
-      saveEdgesToLocalStorage(programId, edges);
-      return edges;
+      throw new Error(existingError?.message || 'Failed to load existing round connections');
     }
 
     const incomingIds = new Set(edges.filter(e => isUuid(e.id)).map(e => e.id));
@@ -360,7 +342,6 @@ export const scheduleRoundsService = {
       }
     }
 
-    saveEdgesToLocalStorage(programId, persisted);
     return persisted.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   },
 };

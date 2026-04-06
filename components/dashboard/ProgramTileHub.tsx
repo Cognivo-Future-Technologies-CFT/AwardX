@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Tag,
   FileText, Gavel, Users, Globe, Settings,
-  ChevronRight, AlertCircle, CheckCircle2,
+  ChevronRight, AlertCircle, CheckCircle2, Trophy, Mail,
 } from 'lucide-react';
 import { Drawer } from '../Drawer';
 import { Program, programStatusLabel } from '../../services/models';
@@ -17,6 +17,8 @@ import { CategoriesView } from './CategoriesView';
 import { JudgingView } from './JudgingView';
 import { TeamsView } from './TeamsView';
 import { SettingsView } from './SettingsView';
+import { LeaderboardView } from './LeaderboardView';
+import { MassEmailView } from './MassEmailView';
 
 interface ProgramTileHubProps {
   activeEvent: Program | null;
@@ -25,7 +27,8 @@ interface ProgramTileHubProps {
 
 type TileId =
   | 'overview' | 'categories'
-  | 'entries' | 'judging' | 'team' | 'publish' | 'settings';
+  | 'entries' | 'judging' | 'team' | 'publish' | 'settings'
+  | 'leaderboard' | 'mass-email';
 
 interface TileConfig {
   id: TileId;
@@ -38,13 +41,15 @@ interface TileConfig {
 
 // 'rounds' and 'schedule' are temporarily hidden — tile view is the primary focus
 const TILES: TileConfig[] = [
-  { id: 'overview',    label: 'Overview',    icon: <LayoutDashboard />, description: 'Stats, activity, and highlights',      accent: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
-  { id: 'categories',  label: 'Categories',  icon: <Tag />,             description: 'Award categories and eligibility',     accent: 'bg-blue-50 text-blue-600 border-blue-100' },
-  { id: 'entries',     label: 'Entries',     icon: <FileText />,        description: 'All submitted entries',                 accent: 'bg-violet-50 text-violet-600 border-violet-100' },
-  { id: 'judging',     label: 'Judging',     icon: <Gavel />,           description: 'Judge panel, scoring and assignments',  accent: 'bg-purple-50 text-purple-600 border-purple-100' },
-  { id: 'team',        label: 'Team',        icon: <Users />,           description: 'Members, roles and permissions',        accent: 'bg-pink-50 text-pink-600 border-pink-100' },
-  { id: 'publish',     label: 'Publish',     icon: <Globe />,           description: 'Control program visibility',            accent: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
-  { id: 'settings',    label: 'Settings',    icon: <Settings />,        description: 'Program configuration',                 accent: 'bg-slate-50 text-slate-500 border-slate-200' },
+  { id: 'overview',     label: 'Overview',     icon: <LayoutDashboard />, description: 'Stats, activity, and highlights',          accent: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
+  { id: 'categories',   label: 'Categories',   icon: <Tag />,             description: 'Award categories and eligibility',         accent: 'bg-blue-50 text-blue-600 border-blue-100' },
+  { id: 'entries',      label: 'Entries',      icon: <FileText />,        description: 'All submitted entries',                     accent: 'bg-violet-50 text-violet-600 border-violet-100' },
+  { id: 'judging',      label: 'Judging',      icon: <Gavel />,           description: 'Judge panel, scoring and assignments',      accent: 'bg-purple-50 text-purple-600 border-purple-100' },
+  { id: 'leaderboard',  label: 'Leaderboard',  icon: <Trophy />,          description: 'Live scores and public vote rankings',      accent: 'bg-yellow-50 text-yellow-600 border-yellow-100' },
+  { id: 'team',         label: 'Team',         icon: <Users />,           description: 'Members, roles and permissions',            accent: 'bg-pink-50 text-pink-600 border-pink-100' },
+  { id: 'mass-email',   label: 'Mass Email',   icon: <Mail />,            description: 'Send personalized emails to segments',      accent: 'bg-teal-50 text-teal-600 border-teal-100' },
+  { id: 'publish',      label: 'Publish',      icon: <Globe />,           description: 'Control program visibility',                accent: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+  { id: 'settings',     label: 'Settings',     icon: <Settings />,        description: 'Program configuration',                     accent: 'bg-slate-50 text-slate-500 border-slate-200' },
 ];
 
 // ── Publish Tile Drawer Content ───────────────────────────────────────────────
@@ -257,7 +262,9 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
       case 'categories':  return <CategoriesView activeEvent={activeEvent} />;
       // 'entries' now navigates to full-page — handled in handleTileClick
       case 'judging':     return <JudgingView activeEvent={activeEvent} />;
+      case 'leaderboard': return <LeaderboardView activeEvent={activeEvent} />;
       case 'team':        return <TeamsView activeEvent={activeEvent} />;
+      case 'mass-email':  return <MassEmailView activeEvent={activeEvent} />;
       case 'publish':     return <PublishPanel program={activeEvent} checks={readinessChecks} onClose={() => setActiveTile(null)} />;
       case 'settings':    return <SettingsView activeEvent={activeEvent} />;
       default:            return null;

@@ -865,6 +865,9 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            email: judgeForm.email.trim(),
                            name: judgeForm.name.trim(),
                            programTitle: activeEvent?.title || 'your workspace',
+                           organizationId: (judgeData as any)?.organization_id,
+                           programId: (judgeData as any)?.program_id || activeEvent?.id,
+                           inviteId: (judgeData as any)?.id,
                            inviteUrl: magicLinkUrl,
                         });
                      } else {

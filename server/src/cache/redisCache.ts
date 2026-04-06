@@ -107,6 +107,8 @@ export const cacheKeys = {
   votingResults: (roundId: string) => `round:${roundId}:voting-results`,
   advancementHistory: (programId: string) => `program:${programId}:advancement-history`,
   pipelineStatus: (programId: string) => `program:${programId}:pipeline-status`,
+  leaderboardByRound: (roundId: string) => `leaderboard:round:${roundId}`,
+  leaderboardByProgram: (programId: string) => `leaderboard:program:${programId}`,
 };
 
 export async function getCache<T>(key: string): Promise<T | null> {

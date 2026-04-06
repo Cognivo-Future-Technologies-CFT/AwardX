@@ -162,3 +162,64 @@
 - ✅ Install Playwright
 - 🔄 Write E2E: signup → create program → submit → judge → export results
 - ✅ Create `.github/workflows/ci.yml` (typecheck → vitest → build → Playwright)
+
+---
+
+## Phase 5 — Workflow Automation (New)
+
+### 1. Email Invitations (Resend Integration)
+- ✅ Create migration `008_invites_email_logs.sql` with `email_logs` table + indexes + RLS policies
+- ✅ Add backend helper `api/_utils/emailLogs.ts` for pending/sent/failed status updates
+- ✅ Upgrade `api/invites/team.ts` to create DB invite records (`organization_invites`) before email send
+- ✅ Add `api/invites/verify-team.ts` endpoint for pending → accepted flow
+- ✅ Upgrade `api/invites/judge.ts` to log email sends with template metadata
+- ✅ Add resend invite endpoint (`api/invites/resend.ts`) for judge/team token rotation
+- ✅ Add Resend webhook endpoint (`api/webhooks/resend.ts`) to map delivered/bounced/complained into `email_logs`
+
+### 2. Backend-only invite calls from client
+- ✅ Update `services/email.ts` to include Bearer token for backend authorization
+- ✅ Update `TeamsView` invite path to backend invite flow (no direct member add)
+- ✅ Add judge invite metadata wiring in `JudgingView` for logging linkage
+
+### 3. Role and access hardening
+- 🔄 Enforce Admin + Program Manager checks across override/mass-email APIs
+
+### 4. Overview / Landing Page Redesign
+- ✅ Add backend public overview endpoints with auto-fetched schedule, rounds, and awards payloads
+- ✅ Refactor `PublicProgramPage` to use backend overview API and render auto-populated sections
+- ✅ Add media library listing endpoint and wire image-slot picker in `PageBuilder`
+
+### 5. Nominate Now Button — Form Builder Link
+- ✅ Add form mapping selector in `PageBuilder` for Hero primary CTA
+- ✅ Persist mapped CTA link to selected form route with sign-in requirement flag
+- ✅ Enforce mandatory sign-in on mapped nomination form load in `FormSubmissionPage`
+- ✅ Prefill authenticated user identity fields (name/email/user_id) where applicable
+
+### 6. Nomination Advancement via Schedule & Rounds
+- ✅ Wire scheduler auto-advancement execution at round close and add manual override endpoint
+
+### 7. Auto-Assignment of Nominations to Judges
+- ✅ Trigger judge auto-assignment after advancement enrollment when `judging_config.auto_assign` is enabled
+- ✅ Support random and segmented assignment strategy from target round settings
+- ✅ Prevent self-assignment when judge user maps to the submission applicant
+
+### 8. Round-Based Segmentation + Personalized Mass Emails
+- ✅ Build segment preview endpoint (`GET /api/mass-email/:programId/rounds/:roundId/segments`)
+- ✅ Build personalized mass email send endpoint (`POST /api/mass-email/:programId/rounds/:roundId/send`)
+- ✅ Template variable substitution (`{{name}}`, `{{email}}`, `{{submission_title}}`, `{{round_title}}`, etc.)
+- ✅ Log every individual send to `email_logs` with batch context
+- ✅ `MassEmailView` dashboard component — segment picker, email composer, live preview, send log
+
+### 9. Simultaneous Judge Reviews + Live Leaderboard
+- ✅ `GET /api/leaderboard/rounds/:roundId` — per-round leaderboard combining judge scores + public votes
+- ✅ `GET /api/leaderboard/:programId` — all active/completed rounds for a program
+- ✅ `LeaderboardView` component — accordion per round, auto-polls every 30 s, manual refresh
+- ✅ `RoundLeaderboardWidget` export for embedding in other views
+- ✅ Redis cache keys added for leaderboard endpoints
+- ✅ Leaderboard tile added to `ProgramTileHub`
+
+### 10. Public Voting — Completed
+- ✅ Fixed API URL paths from `/voting/...` to `/api/voting/...` (was bypassing Express backend)
+- ✅ Leaderboard polling every 20 s for live vote counts
+- ✅ Distinguishes judge scores (indigo) from public votes (pink) in leaderboard display
+- ✅ Vote limit display + per-submission vote state tracked correctly

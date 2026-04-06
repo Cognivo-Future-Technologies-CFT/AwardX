@@ -33,6 +33,9 @@ export const queryKeys = {
   },
   overview: {
     stats: (programId: string) => ['overview-stats', programId] as const,
+    publicBySlug: (slug: string) => ['overview-public', 'slug', slug] as const,
+    publicByProgramId: (programId: string) => ['overview-public', 'program', programId] as const,
+    media: (programId: string) => ['overview-media', programId] as const,
   },
   categories: {
     all: (programId: string) => ['categories', programId] as const,
@@ -58,5 +61,15 @@ export const queryKeys = {
   },
   pipeline: {
     status: (programId: string) => ['pipeline', 'status', programId] as const,
+  },
+  invites: {
+    pending: (organizationId: string) => ['invites', 'pending', organizationId] as const,
+  },
+  leaderboard: {
+    byProgram: (programId: string) => ['leaderboard', 'program', programId] as const,
+    byRound: (roundId: string) => ['leaderboard', 'round', roundId] as const,
+  },
+  massEmail: {
+    segments: (programId: string, roundId: string) => ['mass-email', 'segments', programId, roundId] as const,
   },
 } as const;

@@ -1,6 +1,10 @@
 import { Resend } from 'resend';
 import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
 import { judgeInviteSchema } from '../_utils/validation';
+import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
+import { createEmailLog, updateEmailLog } from '../_utils/emailLogs';
+import { getAuthenticatedUser } from '../_utils/authUser';
+import { canManageInvites } from '../_utils/invitePermissions';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -22,24 +26,75 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const { email, name, programTitle, inviteUrl } = parsed.data;
+  const { email, name, programTitle, inviteUrl, organizationId, programId, inviteId } = parsed.data;
+
+  const auth = await getAuthenticatedUser(req);
+  if (!auth.user) {
+    res.status(401).json({ error: auth.error || 'Authentication required' });
+    return;
+  }
 
   const resendApiKey = process.env.RESEND_API_KEY || '';
   if (!resendApiKey) {
-    res.status(500).json({ error: 'RESEND_API_KEY not configured' });
+    res.status(200).json({
+      ok: true,
+      emailSent: false,
+      warning: 'Invite request accepted but email service is not configured',
+    });
     return;
   }
 
   const resend = new Resend(resendApiKey);
+  const fromAddress = process.env.RESEND_FROM || 'AwardX <onboarding@resend.dev>';
   const subject = `You're invited to judge: ${programTitle}`;
   const previewText = `You have been invited to judge ${programTitle}. Click to access your judging portal.`;
   const actionUrl = inviteUrl || 'https://awardstuff.vercel.app/';
   const judgeName = name || 'Judge';
+  const normalizedEmail = email.toLowerCase().trim();
+  let supabase: any;
+  try {
+    supabase = createSupabaseAdmin(auth.token || undefined);
+  } catch (envError: any) {
+    res.status(503).json({ error: envError?.message || 'Server environment is not configured for invites' });
+    return;
+  }
+
+  const { data: inviterProfile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', auth.user.id)
+    .maybeSingle();
+
+  const resolvedOrganizationId = organizationId || inviterProfile?.organization_id || null;
+  if (!resolvedOrganizationId) {
+    res.status(400).json({ error: 'organizationId is required for judge invites' });
+    return;
+  }
+
+  const permitted = await canManageInvites(supabase, auth.user.id, resolvedOrganizationId);
+  if (!permitted) {
+    res.status(403).json({ error: 'Insufficient permissions to send judge invites' });
+    return;
+  }
+
+  const { id: emailLogId } = await createEmailLog(supabase, {
+    organizationId: resolvedOrganizationId,
+    programId: programId || null,
+    inviteId: inviteId || null,
+    recipientEmail: normalizedEmail,
+    templateKey: 'judge_invite',
+    templateVersion: 'v1',
+    context: {
+      programTitle,
+      inviteUrl: actionUrl,
+      judgeName,
+    },
+  });
 
   try {
     const { data, error: sendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
-      to: email,
+      from: fromAddress,
+      to: normalizedEmail,
       subject,
       text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nIMPORTANT: This is a one-time link for security. After you click it, you'll be able to bookmark the portal page to return later.\n\nBest,\nThe AwardX team`,
       html: `<!doctype html>
@@ -104,13 +159,36 @@ export default async function handler(req: any, res: any) {
 
     if (sendError) {
       console.error('Resend error:', sendError);
-      res.status(500).json({ error: sendError.message || 'Resend rejected the email' });
+      if (emailLogId) {
+        await updateEmailLog(supabase, emailLogId, {
+          status: 'failed',
+          errorMessage: sendError.message || 'Resend rejected the email',
+        });
+      }
+      res.status(200).json({
+        ok: true,
+        emailSent: false,
+        warning: sendError.message || 'Resend rejected the email',
+      });
       return;
     }
 
-    res.json({ ok: true, id: data?.id });
+    if (emailLogId) {
+      await updateEmailLog(supabase, emailLogId, {
+        status: 'sent',
+        resendMessageId: data?.id || null,
+      });
+    }
+
+    res.json({ ok: true, id: data?.id, emailSent: true });
   } catch (error: any) {
     console.error('Judge invite error:', error);
-    res.status(500).json({ error: error?.message || 'Failed to send invite' });
+    if (emailLogId) {
+      await updateEmailLog(supabase, emailLogId, {
+        status: 'failed',
+        errorMessage: error?.message || 'Failed to send invite',
+      });
+    }
+    res.status(500).json({ error: error?.message || 'Failed to create or send invite' });
   }
 }

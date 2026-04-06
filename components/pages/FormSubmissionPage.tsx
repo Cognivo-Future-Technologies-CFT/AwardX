@@ -27,6 +27,15 @@ export const FormSubmissionPage: React.FC = () => {
   const navigate = useNavigate();
   const { formId: formIdParam } = useParams<{ formId?: string }>();
 
+  const getRequireSignInFromUrl = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('requireSignIn') === '1' || params.get('source') === 'nominate';
+    } catch {
+      return false;
+    }
+  };
+
   // Get formId from URL params or props
   const getFormIdFromUrl = () => {
     try {
@@ -108,6 +117,15 @@ export const FormSubmissionPage: React.FC = () => {
       try {
         setIsLoading(true);
 
+        if (getRequireSignInFromUrl()) {
+          const { session } = await auth.getSession();
+          if (!session) {
+            const returnUrl = `${window.location.pathname}${window.location.search}`;
+            navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`);
+            return;
+          }
+        }
+
         // Load form data directly from supabase (public access)
         if (!supabase) {
           setIsError('Database connection failed');
@@ -175,6 +193,39 @@ export const FormSubmissionPage: React.FC = () => {
             };
           });
           setFormFields(mappedFields);
+
+          // Prefill identity fields where labels/types match and values are empty.
+          const { user } = await auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', user.id)
+              .maybeSingle();
+
+            const fullName = String(profile?.full_name || user.user_metadata?.full_name || '').trim();
+            const email = String(profile?.email || user.email || '').trim();
+
+            setFormData((prev) => {
+              const next = { ...prev };
+              for (const field of mappedFields) {
+                const currentValue = next[field.id];
+                if (currentValue != null && String(currentValue).trim() !== '') continue;
+
+                const label = String(field.label || '').toLowerCase();
+                if (field.type === 'email' && email) {
+                  next[field.id] = email;
+                } else if ((label.includes('name') || label.includes('full name')) && fullName) {
+                  next[field.id] = fullName;
+                } else if (label.includes('email') && email) {
+                  next[field.id] = email;
+                } else if (label.includes('user id')) {
+                  next[field.id] = user.id;
+                }
+              }
+              return next;
+            });
+          }
         }
 
         setIsLoading(false);

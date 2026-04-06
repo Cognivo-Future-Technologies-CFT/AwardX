@@ -22,7 +22,7 @@ async function getRoundActiveSubmissions(roundId: string) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('round_submissions')
-    .select('submission_id, submissions(id, category_id, submission_data)')
+    .select('submission_id, submissions(id, category_id, applicant_id, submission_data)')
     .eq('round_id', roundId)
     .eq('status', 'active');
   if (error) throw new Error(error.message);
@@ -36,7 +36,7 @@ async function getAvailableJudges(programId: string) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('judges')
-    .select('id, name, email, bio, status')
+    .select('id, user_id, name, email, bio, status')
     .eq('program_id', programId)
     .in('status', ['active', 'invited']);
   if (error) throw new Error(error.message);
@@ -98,14 +98,16 @@ export async function autoRandomAssign(
   let judgeIndex = 0;
   for (const enrollment of enrollments) {
     const submissionId = enrollment.submission_id;
+    const submissionApplicantId = (enrollment as any).submissions?.applicant_id || null;
     let assignedCount = 0;
     let attempts = 0;
-    const maxAttempts = judges.length;
+    const maxAttempts = judges.length * 2;
 
     while (assignedCount < judgesPerSubmission && attempts < maxAttempts) {
       const judge = judges[judgeIndex % judges.length];
+      const isSelfAssignment = Boolean(submissionApplicantId && judge.user_id && submissionApplicantId === judge.user_id);
       const key = `${submissionId}:${judge.id}`;
-      if (!existing.has(key)) {
+      if (!existing.has(key) && !isSelfAssignment) {
         assignments.push({ submission_id: submissionId, judge_id: judge.id, round_id: roundId });
         existing.add(key);
         assignedCount++;
@@ -164,15 +166,18 @@ export async function autoSegmentedAssign(
     const offset = segIdx * Math.floor(judgePool.length / Math.max(segmentKeys.length, 1));
 
     for (const submissionId of segmentSubmissions) {
+      const enrollment = enrollments.find((item) => item.submission_id === submissionId) as any;
+      const submissionApplicantId = enrollment?.submissions?.applicant_id || null;
       let assignedCount = 0;
       let attempts = 0;
-      const maxAttempts = judgePool.length;
+      const maxAttempts = judgePool.length * 2;
       let jIdx = offset;
 
       while (assignedCount < judgesPerSubmission && attempts < maxAttempts) {
         const judge = judgePool[jIdx % judgePool.length];
+        const isSelfAssignment = Boolean(submissionApplicantId && judge.user_id && submissionApplicantId === judge.user_id);
         const key = `${submissionId}:${judge.id}`;
-        if (!existing.has(key)) {
+        if (!existing.has(key) && !isSelfAssignment) {
           assignments.push({ submission_id: submissionId, judge_id: judge.id, round_id: roundId });
           existing.add(key);
           assignedCount++;

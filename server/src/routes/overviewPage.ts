@@ -9,6 +9,141 @@ async function invalidateOverview(programId: string) {
   await deleteCache(cacheKeys.programOverview(programId));
 }
 
+async function getOverviewPayload(programId: string) {
+  const supabase = getSupabaseAdmin();
+
+  // Critical queries — failure here is a real error
+  const [programResult, configResult, sectionsResult] = await Promise.all([
+    supabase
+      .from('programs')
+      .select('id, title, slug, description, cover_image_url, status, visibility, deadline, timezone, industry_category')
+      .eq('id', programId)
+      .maybeSingle(),
+    supabase.from('program_page_configs').select('*').eq('program_id', programId).maybeSingle(),
+    supabase.from('program_page_sections').select('*').eq('program_id', programId).order('sort_order'),
+  ]);
+
+  if (programResult.error) throw new Error(programResult.error.message || 'Failed to fetch program');
+  if (sectionsResult.error) throw new Error(sectionsResult.error.message || 'Failed to fetch page sections');
+
+  // Optional queries — degrade gracefully if table is missing or errors
+  const [sponsorsResult, faqsResult, timelineResult, roundsResult, categoriesResult] = await Promise.allSettled([
+    supabase.from('program_sponsors').select('*').eq('program_id', programId).order('sort_order'),
+    supabase.from('program_faqs').select('*').eq('program_id', programId).order('sort_order'),
+    supabase.from('program_timeline_milestones').select('*').eq('program_id', programId).order('sort_order'),
+    supabase
+      .from('rounds')
+      .select('id, title, description, type, status, start_date, end_date, sort_order')
+      .eq('program_id', programId)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('categories')
+      .select('id, title, description, parent_id, sort_order')
+      .eq('program_id', programId)
+      .order('sort_order', { ascending: true }),
+  ]);
+
+  const safeData = (result: PromiseSettledResult<any>) =>
+    result.status === 'fulfilled' ? (result.value?.data || []) : [];
+
+  const sponsors = safeData(sponsorsResult);
+  const faqs = safeData(faqsResult);
+  const timeline = safeData(timelineResult);
+  const rounds = safeData(roundsResult);
+  const awards = safeData(categoriesResult);
+
+  // Log any optional query failures for observability
+  [sponsorsResult, faqsResult, timelineResult, roundsResult, categoriesResult].forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.warn(`[overviewPage] optional query ${i} failed for program ${programId}:`, r.reason);
+    } else if (r.value?.error) {
+      console.warn(`[overviewPage] optional query ${i} error for program ${programId}:`, r.value.error.message);
+    }
+  });
+
+  return {
+    program: programResult.data || null,
+    config: configResult.data || null,
+    sections: sectionsResult.data || [],
+    sponsors,
+    faqs,
+    timeline,
+    rounds,
+    awards,
+    schedule: {
+      deadline: programResult.data?.deadline || null,
+      timezone: programResult.data?.timezone || null,
+      rounds,
+      milestones: timeline,
+    },
+  };
+}
+
+router.get('/public/by-slug/:slug', async (req, res) => {
+  const { slug } = req.params;
+  if (!slug) {
+    return res.status(400).json({ error: 'slug is required' });
+  }
+
+  try {
+    const payload = await wrapWithCache(`public:overview:slug:${slug}`, cacheTtls.medium, async () => {
+      const supabase = getSupabaseAdmin();
+      const { data: program, error } = await supabase
+        .from('programs')
+        .select('id, visibility')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(error.message || 'Failed to fetch program by slug');
+      }
+      if (!program?.id) {
+        return null;
+      }
+
+      const data = await getOverviewPayload(program.id);
+      if (!data.config?.is_published || data.program?.visibility === 'private') {
+        return null;
+      }
+
+      return data;
+    });
+
+    if (!payload) {
+      return res.status(404).json({ error: 'Published public program page not found' });
+    }
+
+    return res.json({ data: payload });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.get('/public/:programId', async (req, res) => {
+  const { programId } = req.params;
+  if (!programId) {
+    return res.status(400).json({ error: 'programId is required' });
+  }
+
+  try {
+    const payload = await wrapWithCache(`public:overview:${programId}`, cacheTtls.medium, async () => {
+      const data = await getOverviewPayload(programId);
+      if (!data.program || !data.config?.is_published || data.program.visibility === 'private') {
+        return null;
+      }
+      return data;
+    });
+
+    if (!payload) {
+      return res.status(404).json({ error: 'Published public program page not found' });
+    }
+
+    return res.json({ data: payload });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
 router.get('/:programId', requireAuth, async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
@@ -313,6 +448,49 @@ router.delete('/:programId/timeline/:id', requireAuth, async (req, res) => {
 
     await invalidateOverview(programId);
     return res.status(204).send();
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.get('/:programId/media', requireAuth, async (req, res) => {
+  const { programId } = req.params;
+  if (!programId) {
+    return res.status(400).json({ error: 'programId is required' });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const prefix = `program-pages/${programId}`;
+
+    const { data, error } = await supabase.storage
+      .from('media')
+      .list(prefix, {
+        limit: 200,
+        offset: 0,
+        sortBy: { column: 'created_at', order: 'desc' },
+      });
+
+    if (error) {
+      return res.status(500).json({ error: error.message || 'Failed to fetch media assets' });
+    }
+
+    const assets = (data || [])
+      .filter((item) => item.name && !item.name.endsWith('/'))
+      .map((item) => {
+        const path = `${prefix}/${item.name}`;
+        const { data: publicData } = supabase.storage.from('media').getPublicUrl(path);
+        return {
+          name: item.name,
+          path,
+          url: publicData?.publicUrl || null,
+          size: item.metadata?.size || null,
+          createdAt: item.created_at || null,
+          updatedAt: item.updated_at || null,
+        };
+      });
+
+    return res.json({ data: assets });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }

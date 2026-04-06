@@ -1,22 +1,26 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+let _client: SupabaseClient | null = null;
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseServiceRoleKey);
-
-export const supabaseAdmin: SupabaseClient | null = isSupabaseConfigured
-	? createClient(supabaseUrl, supabaseServiceRoleKey, {
-			auth: {
-				autoRefreshToken: false,
-				persistSession: false,
-			},
-		})
-	: null;
+export const isSupabaseConfigured = () =>
+	Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 export function getSupabaseAdmin(): SupabaseClient {
-	if (!supabaseAdmin) {
+	if (_client) return _client;
+
+	const url = process.env.SUPABASE_URL;
+	const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+	if (!url || !key) {
 		throw new Error('Supabase server client is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
 	}
-	return supabaseAdmin;
+
+	_client = createClient(url, key, {
+		auth: {
+			autoRefreshToken: false,
+			persistSession: false,
+		},
+	});
+
+	return _client;
 }

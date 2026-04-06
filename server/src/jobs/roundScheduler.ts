@@ -11,6 +11,7 @@
 
 import { getSupabaseAdmin } from '../supabase.js';
 import { activateRound, completeRound } from '../services/roundEngine.js';
+import { executeAdvancement } from '../services/advancementEngine.js';
 import { deleteCache } from '../cache/redisCache.js';
 
 const SCHEDULER_INTERVAL_MS = 60_000; // 1 minute
@@ -55,8 +56,6 @@ async function tick() {
     }
 
     // 3. Auto-advancement for completed rounds with automatic trigger
-    // This is handled by the advancement engine (Phase 5).
-    // The scheduler identifies rounds that need advancement and delegates.
     const { data: toAdvance } = await supabase
       .from('rounds')
       .select('id, program_id, title, advancement_criteria, advancement_trigger')
@@ -65,9 +64,17 @@ async function tick() {
       .eq('advancement_trigger', 'automatic');
 
     for (const round of (toAdvance || [])) {
-      // Auto-advancement will be wired in Phase 5.
-      // For now, log it as a pending action.
-      console.log(`[scheduler] Round ready for auto-advancement: ${round.title} (${round.id})`);
+      const result = await executeAdvancement(round.id, undefined, 'scheduler_auto');
+      if (result.ok) {
+        console.log(`[scheduler] Auto-advanced round: ${round.title} (${round.id}), event=${result.eventId}`);
+        await deleteCache(`program:${round.program_id}:rounds`);
+        await deleteCache(`program:${round.program_id}:pipeline-status`);
+        await deleteCache(`program:${round.program_id}:advancement-history`);
+      } else if (result.paused) {
+        console.log(`[scheduler] Auto-advancement paused for ${round.title} (${round.id}): ${result.reason || result.error}`);
+      } else {
+        console.warn(`[scheduler] Auto-advancement failed for ${round.title} (${round.id}): ${result.error || 'unknown error'}`);
+      }
     }
   } catch (error) {
     console.error('[scheduler] Error in round scheduler tick:', error);
