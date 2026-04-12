@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
 
   return (
     <motion.header 
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-sm' : 'bg-transparent'}`}
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-background/95 backdrop-blur-md border-b border-border shadow-sm' : 'bg-transparent'}`}
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
@@ -123,10 +123,10 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
             className="flex items-center space-x-2 cursor-pointer group"
             onClick={() => handleNavClick('home')}
           >
-            <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 group-hover:text-indigo-600 transition-colors font-display">AwardX</span>
+            <span className="text-xl font-bold tracking-tight text-foreground group-hover:text-emerald-700 transition-colors font-display">AwardX</span>
           </div>
 
           <nav className="hidden md:flex items-center space-x-8">
@@ -134,8 +134,8 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`text-sm font-medium transition-all duration-200 hover:text-indigo-600 ${
-                  currentPage === item.id ? 'text-indigo-600 font-bold' : 'text-slate-600'
+                className={`text-sm font-medium transition-all duration-200 hover:text-emerald-700 ${
+                  currentPage === item.id ? 'text-emerald-700 font-semibold' : 'text-slate-600'
                 }`}
               >
                 {item.label}
@@ -154,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                   {currentUser?.avatar ? (
                     <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border-2 border-slate-200 object-cover" />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
                       {currentUser?.name.charAt(0).toUpperCase() || 'U'}
                     </div>
                   )}
@@ -190,14 +190,14 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
         <motion.div 
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          className="md:hidden bg-white border-b border-slate-100 p-4 space-y-4 shadow-xl"
+          className="md:hidden bg-background border-b border-border p-4 space-y-4 shadow-sm"
         >
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
               className={`block w-full text-left px-4 py-2 rounded-lg hover:bg-slate-50 ${
-                currentPage === item.id ? 'text-indigo-600 font-bold bg-indigo-50' : 'text-slate-600'
+                currentPage === item.id ? 'text-emerald-700 font-semibold bg-emerald-50' : 'text-slate-600'
               }`}
             >
               {item.label}
@@ -213,7 +213,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                   {currentUser?.avatar ? (
                     <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border-2 border-slate-200 object-cover" />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
+                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
                       {currentUser?.name.charAt(0).toUpperCase() || 'U'}
                     </div>
                   )}

@@ -68,21 +68,19 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 4. Fetch the program details
-    let program = null;
-    if (judge.program_id) {
-      const { data: programData } = await supabase
-        .from('programs')
-        .select('id, title, slug, description, cover_image_url, status, deadline, timezone, industry_category')
-        .eq('id', judge.program_id)
-        .single();
-      program = programData;
-    }
+    // 4–7. Fetch program, assignments, criteria, and org name in parallel.
+    const [programResult, assignmentResult, criteriaResult, orgResult] = await Promise.all([
+      // 4. Program details
+      judge.program_id
+        ? supabase
+            .from('programs')
+            .select('id, title, slug, description, cover_image_url, status, deadline, timezone, industry_category')
+            .eq('id', judge.program_id)
+            .single()
+        : Promise.resolve({ data: null }),
 
-    // 5. Fetch judge assignments with submission details.
-    let assignments: any[] = [];
-    if (judge.id) {
-      const { data: assignmentData } = await supabase
+      // 5. Judge assignments with submission details
+      supabase
         .from('submission_judges')
         .select(`
           id,
@@ -103,48 +101,47 @@ export default async function handler(req: any, res: any) {
           )
         `)
         .eq('judge_id', judge.id)
-        .order('assigned_at', { ascending: false });
+        .order('assigned_at', { ascending: false }),
 
-      assignments = assignmentData || [];
+      // 6. Judging criteria
+      judge.program_id
+        ? supabase
+            .from('judging_criteria')
+            .select('id, name, description, weight, min_score, max_score, sort_order')
+            .eq('program_id', judge.program_id)
+            .order('sort_order')
+        : Promise.resolve({ data: [] }),
 
-      if (assignments.length > 0) {
-        const categoryIds = [...new Set(assignments.map((row: any) => row.submissions?.category_id).filter(Boolean))];
-        let categoryMap = new Map<string, string>();
-        if (categoryIds.length > 0) {
-          const { data: categories } = await supabase
-            .from('categories')
-            .select('id, title')
-            .in('id', categoryIds);
-          categoryMap = new Map((categories || []).map((c: any) => [c.id, c.title]));
-        }
+      // 7. Organization name
+      judge.organization_id
+        ? supabase
+            .from('organizations')
+            .select('name')
+            .eq('id', judge.organization_id)
+            .single()
+        : Promise.resolve({ data: null }),
+    ]);
 
-        assignments = assignments.map((row: any) => ({
-          ...row,
-          category_name: categoryMap.get(row.submissions?.category_id) || 'Uncategorized',
-        }));
+    const program = programResult.data;
+    let assignments: any[] = assignmentResult.data || [];
+    const criteria: any[] = criteriaResult.data || [];
+    const organizationName: string = (orgResult.data as any)?.name || '';
+
+    // Enrich assignments with category names
+    if (assignments.length > 0) {
+      const categoryIds = [...new Set(assignments.map((row: any) => row.submissions?.category_id).filter(Boolean))];
+      let categoryMap = new Map<string, string>();
+      if (categoryIds.length > 0) {
+        const { data: categories } = await supabase
+          .from('categories')
+          .select('id, title')
+          .in('id', categoryIds);
+        categoryMap = new Map((categories || []).map((c: any) => [c.id, c.title]));
       }
-    }
-
-    // 6. Fetch judging criteria for the program
-    let criteria: any[] = [];
-    if (judge.program_id) {
-      const { data: criteriaData } = await supabase
-        .from('judging_criteria')
-        .select('id, name, description, weight, min_score, max_score, sort_order')
-        .eq('program_id', judge.program_id)
-        .order('sort_order');
-      criteria = criteriaData || [];
-    }
-
-    // 7. Fetch organization name
-    let organizationName = '';
-    if (judge.organization_id) {
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('name')
-        .eq('id', judge.organization_id)
-        .single();
-      organizationName = org?.name || '';
+      assignments = assignments.map((row: any) => ({
+        ...row,
+        category_name: categoryMap.get(row.submissions?.category_id) || 'Uncategorized',
+      }));
     }
 
     res.json({
@@ -190,6 +187,7 @@ export default async function handler(req: any, res: any) {
         weight: c.weight,
         minScore: c.min_score,
         maxScore: c.max_score,
+        sortOrder: c.sort_order,
       })),
     });
   } catch (error: any) {

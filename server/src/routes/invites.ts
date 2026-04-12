@@ -146,7 +146,7 @@ function normalizeInviteToken(raw?: string | null): string {
 async function resolveTeamInvite(supabase: any, token: string) {
 	const { data: invite, error: inviteError } = await supabase
 		.from('organization_invites')
-		.select('id, organization_id, program_id, role_id, email, status, accepted_at')
+		.select('id, organization_id, program_id, role_id, invited_by, email, status, accepted_at')
 		.eq('token', token)
 		.single();
 
@@ -256,22 +256,32 @@ router.post('/verify-team', async (req, res) => {
 		}
 
 		const profileEmail = String(authResult.user.email || '').toLowerCase().trim();
-		if (!profileEmail || profileEmail !== String(resolved.invite.email).toLowerCase().trim()) {
+		const inviteEmail = String(resolved.invite.email || '').toLowerCase().trim();
+		if (!profileEmail || profileEmail !== inviteEmail) {
 			return res.status(403).json({ error: 'This invite is for a different email address.' });
 		}
 
 		const acceptedAt = new Date().toISOString();
-		const { error: updateInviteError } = await supabase
-			.from('organization_invites')
-			.update({
-				status: 'accepted',
-				accepted_at: acceptedAt,
-			})
-			.eq('id', resolved.invite.id)
-			.eq('status', 'pending');
+		const { data: existingProfile } = await supabase
+			.from('profiles')
+			.select('id, full_name')
+			.eq('id', authResult.user.id)
+			.maybeSingle();
 
-		if (updateInviteError) {
-			return res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
+		const { error: profileUpsertError } = await supabase
+			.from('profiles')
+			.upsert(
+				{
+					id: authResult.user.id,
+					email: inviteEmail,
+					full_name: existingProfile?.full_name || authResult.user.user_metadata?.full_name || authResult.user.user_metadata?.name || profileEmail.split('@')[0] || 'User',
+					organization_id: resolved.invite.organization_id,
+				},
+				{ onConflict: 'id' },
+			);
+
+		if (profileUpsertError) {
+			return res.status(500).json({ error: profileUpsertError.message || 'Failed to link user profile' });
 		}
 
 		const { error: memberUpsertError } = await supabase
@@ -285,13 +295,26 @@ router.post('/verify-team', async (req, res) => {
 					status: 'active',
 					invited_at: acceptedAt,
 					joined_at: acceptedAt,
-					invited_by: null,
+					invited_by: resolved.invite.invited_by || null,
 				},
 				{ onConflict: 'organization_id,user_id,program_id' },
 			);
 
 		if (memberUpsertError) {
 			return res.status(500).json({ error: memberUpsertError.message || 'Failed to add team member' });
+		}
+
+		const { error: updateInviteError } = await supabase
+			.from('organization_invites')
+			.update({
+				status: 'accepted',
+				accepted_at: acceptedAt,
+			})
+			.eq('id', resolved.invite.id)
+			.eq('status', 'pending');
+
+		if (updateInviteError) {
+			return res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
 		}
 
 		const { data: program } = resolved.invite.program_id

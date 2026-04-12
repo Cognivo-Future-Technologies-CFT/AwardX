@@ -81,7 +81,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50"
             aria-hidden="true"
           />
           <motion.div
@@ -96,19 +96,19 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
               aria-modal="true"
               aria-labelledby={titleId}
               onKeyDown={handleKeyDown}
-              className={`bg-white w-full ${SIZE_CLASS[size]} rounded-2xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]`}
+              className={`bg-card w-full ${SIZE_CLASS[size]} rounded-xl border border-border shadow-sm pointer-events-auto flex flex-col max-h-[90vh]`}
             >
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 id={titleId} className="text-xl font-bold text-slate-900">{title}</h3>
+              <div className="p-5 border-b border-border flex justify-between items-center">
+                <h3 id={titleId} className="text-lg font-semibold text-foreground tracking-tight">{title}</h3>
                 <button
                   onClick={onClose}
                   aria-label="Close dialog"
-                  className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-900 transition-colors"
+                  className="p-2 hover:bg-accent rounded-md text-slate-500 hover:text-slate-900 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-6 overflow-y-auto">
+              <div className="p-5 overflow-y-auto">
                 {children}
               </div>
             </div>

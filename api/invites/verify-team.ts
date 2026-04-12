@@ -60,7 +60,7 @@ export default async function handler(req: any, res: any) {
   try {
     const { data: invite, error: inviteError } = await supabase
       .from('organization_invites')
-      .select('id, organization_id, program_id, role_id, email, status, accepted_at')
+      .select('id, organization_id, program_id, role_id, invited_by, email, status, accepted_at')
       .eq('token', token)
       .single();
 
@@ -89,31 +89,41 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    const inviteEmail = String(invite.email || '').toLowerCase().trim();
+    const authEmail = String(auth.user.email || '').toLowerCase().trim();
+    if (!authEmail || authEmail !== inviteEmail) {
+      res.status(403).json({ error: 'This invite is for a different email address.' });
+      return;
+    }
+
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, email')
+      .select('id, email, full_name')
       .eq('id', auth.user.id)
       .maybeSingle();
 
-    const profileEmail = String(profile?.email || auth.user.email || '').toLowerCase().trim();
-    if (!profileEmail || profileEmail !== String(invite.email).toLowerCase().trim()) {
+    const profileEmail = String(profile?.email || '').toLowerCase().trim();
+    if (profileEmail && profileEmail !== inviteEmail) {
       res.status(403).json({ error: 'This invite is for a different email address.' });
       return;
     }
 
     const acceptedAt = new Date().toISOString();
 
-    const { error: updateInviteError } = await supabase
-      .from('organization_invites')
-      .update({
-        status: 'accepted',
-        accepted_at: acceptedAt,
-      })
-      .eq('id', invite.id)
-      .eq('status', 'pending');
+    const { error: profileUpsertError } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          id: auth.user.id,
+          email: inviteEmail,
+          full_name: profile?.full_name || auth.user.user_metadata?.full_name || auth.user.user_metadata?.name || authEmail.split('@')[0] || 'User',
+          organization_id: invite.organization_id,
+        },
+        { onConflict: 'id' },
+      );
 
-    if (updateInviteError) {
-      res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
+    if (profileUpsertError) {
+      res.status(500).json({ error: profileUpsertError.message || 'Failed to link user profile' });
       return;
     }
 
@@ -128,13 +138,27 @@ export default async function handler(req: any, res: any) {
           status: 'active',
           invited_at: acceptedAt,
           joined_at: acceptedAt,
-          invited_by: null,
+          invited_by: invite.invited_by || null,
         },
         { onConflict: 'organization_id,user_id,program_id' },
       );
 
     if (memberUpsertError) {
       res.status(500).json({ error: memberUpsertError.message || 'Failed to add team member' });
+      return;
+    }
+
+    const { error: updateInviteError } = await supabase
+      .from('organization_invites')
+      .update({
+        status: 'accepted',
+        accepted_at: acceptedAt,
+      })
+      .eq('id', invite.id)
+      .eq('status', 'pending');
+
+    if (updateInviteError) {
+      res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
       return;
     }
 

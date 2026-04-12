@@ -163,8 +163,8 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    if (judgeRow.status !== 'invited') {
-      res.status(400).json({ error: 'Only invited judges can receive a resend' });
+    if (judgeRow.status !== 'invited' && judgeRow.status !== 'active') {
+      res.status(400).json({ error: 'Only invited or active judges can receive a resend' });
       return;
     }
 
@@ -176,7 +176,7 @@ export default async function handler(req: any, res: any) {
         invite_token_used_at: null,
       })
       .eq('id', judgeRow.id)
-      .eq('status', 'invited');
+      .in('status', ['invited', 'active']);
 
     if (rotateJudgeError) {
       res.status(500).json({ error: rotateJudgeError.message || 'Failed to rotate judge invite token' });
@@ -207,7 +207,7 @@ export default async function handler(req: any, res: any) {
       from: process.env.RESEND_FROM || 'AwardX <no-reply@awardx.one>',
       to: judgeRow.email,
       subject,
-      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${inviteUrl}\n\nIMPORTANT: This is a one-time link for security. After you click it, you'll be able to bookmark the portal page to return later.\n\nBest,\nThe AwardX team`,
+      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${inviteUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,
       html: `<!doctype html><html><body style="font-family:Arial,sans-serif;line-height:1.6"><h2>You're Invited to Judge</h2><p>for <strong>${programTitle}</strong></p><p>Hi ${judgeName},</p><p>You have been selected as a judge. Access your portal using this secure link:</p><p><a href="${inviteUrl}">Access Judging Portal</a></p></body></html>`,
     });
 

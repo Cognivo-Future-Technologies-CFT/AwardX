@@ -187,7 +187,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [activeTab, setActiveTab] = useState<'members' | 'roles'>('members');
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [orgId, setOrgId] = useState<string | null>(null);
-    const [inviteEmails, setInviteEmails] = useState('');
+    const [inviteEmailBlocks, setInviteEmailBlocks] = useState<string[]>([]);
+    const [inviteEmailDraft, setInviteEmailDraft] = useState('');
     const [inviteRoleId, setInviteRoleId] = useState<string>('');
     const [memberSearch, setMemberSearch] = useState('');
     const [memberPage, setMemberPage] = useState(1);
@@ -307,7 +308,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             } else {
                 toast.success('Invite sent. They will be added after accepting.');
             }
-            setInviteEmails('');
+            setInviteEmailBlocks([]);
+            setInviteEmailDraft('');
             setIsInviteModalOpen(false);
         },
     });
@@ -438,11 +440,63 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         }
     };
 
+    const addInviteEmailBlocks = (raw: string) => {
+        const emails = raw
+            .split(/[,\n]/g)
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+        if (emails.length === 0) return;
+
+        setInviteEmailBlocks((prev) => {
+            const seen = new Set(prev.map((e) => e.toLowerCase()));
+            const next = [...prev];
+
+            for (const email of emails) {
+                const key = email.toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                next.push(email);
+            }
+
+            return next;
+        });
+    };
+
+    const commitInviteEmailDraft = () => {
+        const value = inviteEmailDraft.trim();
+        if (!value) return;
+        addInviteEmailBlocks(value);
+        setInviteEmailDraft('');
+    };
+
+    const removeInviteEmailBlock = (emailToRemove: string) => {
+        setInviteEmailBlocks((prev) => prev.filter((email) => email !== emailToRemove));
+    };
+
+    const handleInviteDraftKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
+            if (inviteEmailDraft.trim()) {
+                e.preventDefault();
+                commitInviteEmailDraft();
+            }
+        }
+    };
+
+    const handleInviteDraftPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        const pasted = e.clipboardData.getData('text');
+        if (!/[\n,]/.test(pasted)) return;
+        e.preventDefault();
+        addInviteEmailBlocks(pasted);
+        setInviteEmailDraft('');
+    };
+
     const handleSendInvites = () => {
-        const emails = inviteEmails
+        const draftEmails = inviteEmailDraft
             .split(/[,\n]/g)
             .map(s => s.trim())
             .filter(Boolean);
+        const emails = [...inviteEmailBlocks, ...draftEmails];
 
         if (emails.length === 0) { toast.error('Please enter at least one email address'); return; }
         if (!inviteRoleId) { toast.error('Please select a role'); return; }
@@ -854,12 +908,37 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                 <div className="space-y-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">User email addresses</label>
-                        <textarea
-                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none h-24"
-                            placeholder="Enter emails separated by commas or new lines…"
-                            value={inviteEmails}
-                            onChange={(e) => setInviteEmails(e.target.value)}
-                        />
+                        <div className="w-full border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 p-2 min-h-[96px]">
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {inviteEmailBlocks.map((email) => (
+                                    <span
+                                        key={email}
+                                        className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold px-2 py-1"
+                                    >
+                                        {email}
+                                        <button
+                                            type="button"
+                                            onClick={() => removeInviteEmailBlock(email)}
+                                            className="text-indigo-500 hover:text-indigo-700"
+                                            aria-label={`Remove ${email}`}
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                            <input
+                                type="text"
+                                className="w-full px-2 py-1 text-sm outline-none"
+                                placeholder="Type an email and press Enter…"
+                                value={inviteEmailDraft}
+                                onChange={(e) => setInviteEmailDraft(e.target.value)}
+                                onKeyDown={handleInviteDraftKeyDown}
+                                onBlur={commitInviteEmailDraft}
+                                onPaste={handleInviteDraftPaste}
+                            />
+                            <p className="text-[11px] text-slate-500 px-2 pt-1">Press Enter, comma, or Tab to add each email.</p>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Assign Role</label>

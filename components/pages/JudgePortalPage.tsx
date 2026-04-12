@@ -60,7 +60,23 @@ export const JudgePortalPage: React.FC = () => {
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [selectedSubmissionJudgeId, setSelectedSubmissionJudgeId] = useState<string | undefined>();
   const [scoringOpen, setScoringOpen] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<number>(0);
+  // Task 15: track deleted submissions count for banner
+  const [deletedCount, setDeletedCount] = useState(0);
+  // Resolved token stored so fetchAssignments can use it without re-verifying
+  const [resolvedToken, setResolvedToken] = useState<string | null>(null);
+
+  // Task 14: separate function that only re-fetches assignments/criteria (no token re-verify)
+  const fetchAssignments = useMemo(() => async (token: string) => {
+    const resp = await fetch(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`);
+    const data = await resp.json();
+    if (!resp.ok) return;
+    const allAssignments: AssignmentInfo[] = data.assignments || [];
+    const valid = allAssignments.filter((item) => item.submission);
+    const removed = allAssignments.length - valid.length;
+    setDeletedCount(removed);
+    setAssignments(valid);
+    setCriteria(data.criteria || []);
+  }, []);
 
   useEffect(() => {
     const verifyToken = async () => {
@@ -92,9 +108,14 @@ export const JudgePortalPage: React.FC = () => {
 
         setJudge(data.judge);
         setProgram(data.program);
-        setAssignments((data.assignments || []).filter((item: AssignmentInfo) => item.submission));
+        const allAssignments: AssignmentInfo[] = data.assignments || [];
+        const valid = allAssignments.filter((item: AssignmentInfo) => item.submission);
+        // Task 15: track silently-filtered (deleted) submissions
+        setDeletedCount(allAssignments.length - valid.length);
+        setAssignments(valid);
         setCriteria(data.criteria || []);
         setOrganization(data.organization || '');
+        setResolvedToken(token);
         setStatus('success');
       } catch (err: any) {
         console.error('Judge portal error:', err);
@@ -104,7 +125,7 @@ export const JudgePortalPage: React.FC = () => {
     };
 
     verifyToken();
-  }, [tokenParam, lastRefresh]);
+  }, [tokenParam]);
 
   const formatDate = (dateStr: string) => {
     try {
@@ -186,9 +207,7 @@ export const JudgePortalPage: React.FC = () => {
         submissionJudgeId={selectedSubmissionJudgeId}
         isJudgeView={true}
         onScored={() => {
-          // Refresh assignments from server to get updated status
-          setLastRefresh(Date.now());
-          // Also update local state optimistically for immediate UI feedback
+          // Task 14: optimistic update + lightweight data refresh (no token re-verify)
           setAssignments((prev) =>
             prev.map((assignment) =>
               assignment.submissionJudgeId === selectedSubmissionJudgeId
@@ -196,6 +215,7 @@ export const JudgePortalPage: React.FC = () => {
                 : assignment,
             ),
           );
+          if (resolvedToken) fetchAssignments(resolvedToken);
         }}
       />
 
@@ -232,7 +252,12 @@ export const JudgePortalPage: React.FC = () => {
         >
           {program?.coverImageUrl ? (
             <div className="relative h-48">
-              <img src={program.coverImageUrl} alt={program.title} className="h-full w-full object-cover" />
+              <img
+                src={program.coverImageUrl}
+                alt={program.title}
+                className="h-full w-full object-cover"
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-slate-950/20 to-transparent" />
             </div>
           ) : (
@@ -347,6 +372,13 @@ export const JudgePortalPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Task 15: banner for submissions that were deleted after assignment */}
+          {deletedCount > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {deletedCount} submission{deletedCount > 1 ? 's' : ''} previously assigned to you {deletedCount > 1 ? 'are' : 'is'} no longer available.
+            </div>
+          )}
+
           {assignments.length === 0 ? (
             <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
@@ -404,9 +436,10 @@ export const JudgePortalPage: React.FC = () => {
 
                       <div className="px-5 pb-5">
                         <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                          {/* Task 13: only show 100% for completed; 0% for pending */}
                           <div
                             className={`h-2 rounded-full ${completed ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                            style={{ width: completed ? '100%' : `${Math.min(35 + idx * 12, 85)}%` }}
+                            style={{ width: completed ? '100%' : '0%' }}
                           />
                         </div>
                       </div>
@@ -423,6 +456,7 @@ export const JudgePortalPage: React.FC = () => {
                                 src={submission.coverImageUrl}
                                 alt={submission.title}
                                 className="h-56 w-full rounded-2xl object-cover"
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
                               />
                             )}
                             {submission.description && (

@@ -577,6 +577,30 @@ class DatabaseService {
     this.cachedPermissions = new Set(permKeys);
   }
 
+  private async requireProgramManageAccess(): Promise<void> {
+    // Ensure we have the freshest role/permission state before enforcing.
+    await this.refreshPermissionCache();
+
+    const roleName = (this.cachedRoleName || '').toLowerCase();
+    const isAdminRole = roleName === 'admin' || roleName === 'owner' || roleName === 'superadmin';
+    const hasManagePermission = !!this.cachedPermissions && (
+      this.cachedPermissions.has('all') ||
+      this.cachedPermissions.has('manage_programs')
+    );
+
+    if (isAdminRole || hasManagePermission) return;
+    throw new Error('Only admins can edit or delete programs');
+  }
+
+  async canManagePrograms(): Promise<boolean> {
+    try {
+      await this.requireProgramManageAccess();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // Convert Supabase program to demo format
   private mapProgram(program: any): Program {
     return {
@@ -759,6 +783,8 @@ class DatabaseService {
   }
 
   async updateProgram(program: Program) {
+    await this.requireProgramManageAccess();
+
     const { data, error } = await supabasePrograms.update(program.id, {
       title: program.title,
       status: program.status.toLowerCase(),
@@ -806,6 +832,37 @@ class DatabaseService {
       metadata: { title: updated.title },
     });
     return updated;
+  }
+
+  async deleteProgram(programId: string): Promise<void> {
+    await this.requireProgramManageAccess();
+
+    if (!supabase) throw new Error('Supabase not configured');
+
+    // Clear dependent round graph edges first to avoid FK violations on program delete.
+    const { error: edgeDeleteError } = await supabase
+      .from('round_edges')
+      .delete()
+      .eq('program_id', programId);
+
+    if (edgeDeleteError) {
+      throw new Error(edgeDeleteError.message || 'Failed to delete round graph connections');
+    }
+
+    const { error } = await supabasePrograms.delete(programId);
+    if (error) {
+      const errorMessage = (error as any)?.message || 'Failed to delete program';
+      throw new Error(errorMessage);
+    }
+
+    await this.safeAuditLog({
+      action: 'Deleted program',
+      actionType: 'delete',
+      resourceType: 'program',
+      resourceId: programId,
+      details: `Program ${programId} deleted`,
+      metadata: { programId },
+    });
   }
 
   // Categories
@@ -2080,6 +2137,27 @@ class DatabaseService {
     }
 
     const programId = (assignment as any)?.submissions?.program_id;
+
+    const { data: existingScoreRows, error: existingScoreCheckError } = await supabase
+      .from('scores')
+      .select('id')
+      .eq('submission_judge_id', submissionJudgeId)
+      .limit(1);
+    if (existingScoreCheckError) {
+      throw new Error(existingScoreCheckError.message || 'Failed to verify existing scores');
+    }
+
+    const { data: existingJudgeComment, error: existingCommentCheckError } = await supabase
+      .from('judge_comments')
+      .select('submission_judge_id')
+      .eq('submission_judge_id', submissionJudgeId)
+      .maybeSingle();
+    if (existingCommentCheckError) {
+      throw new Error(existingCommentCheckError.message || 'Failed to verify existing score comments');
+    }
+
+    const isScoreUpdate = (existingScoreRows?.length || 0) > 0 || !!existingJudgeComment;
+
     let normalizedCriteriaScores = [...criteriaScores];
     let criterionIds = Array.from(new Set(normalizedCriteriaScores.map((item) => item.criterionId).filter(Boolean)));
     if (criterionIds.length === 0) {
@@ -2201,10 +2279,16 @@ class DatabaseService {
     if (updateError) console.warn('Failed to update assignment status:', updateError);
 
     await this.safeAuditLog({
-      action: 'Submitted judging scores',
-      actionType: 'create',
+      action: isScoreUpdate ? 'Updated judging scores' : 'Submitted judging scores',
+      actionType: isScoreUpdate ? 'update' : 'create',
       resourceType: 'scores',
       resourceId: submissionJudgeId,
+      details: `${normalizedCriteriaScores.length} criteria scored`,
+      metadata: {
+        submissionJudgeId,
+        criteriaCount: normalizedCriteriaScores.length,
+        hasOverallComment: !!overallComment,
+      },
     });
   }
 

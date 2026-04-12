@@ -170,6 +170,18 @@ export async function resendTeamInvite(
   }, options?.onTrace);
 }
 
+export async function resendJudgeInvite(
+  judgeId: string,
+  programTitleFallback?: string,
+  options?: { onTrace?: EmailTraceCallback },
+) {
+  return postJson('/api/invites/resend', {
+    inviteType: 'judge',
+    recordId: judgeId,
+    programTitleFallback: programTitleFallback || 'your workspace',
+  }, options?.onTrace);
+}
+
 export async function sendMassEmail(payload: MassEmailPayload, options?: { onTrace?: EmailTraceCallback }) {
   return postJson(`/api/mass-email/${payload.programId}/rounds/${payload.roundId}/send`, {
     segment: payload.segment,

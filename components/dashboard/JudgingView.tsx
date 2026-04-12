@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db } from '../../services/database';
@@ -10,7 +10,7 @@ import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
-import { sendJudgeInviteEmail } from '../../services/email';
+import { sendJudgeInviteEmail, resendJudgeInvite } from '../../services/email';
 import { judgingCriteria, supabase, realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { JudgeScoringModal } from './JudgeScoringModal';
@@ -41,6 +41,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string | null>(null);
    const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
    const [isRemovingAll, setIsRemovingAll] = useState(false);
+   const [resendingJudgeId, setResendingJudgeId] = useState<string | null>(null);
    const [shortlistOnly, setShortlistOnly] = useState(false);
    const [unscoredOnly, setUnscoredOnly] = useState(false);
    const [judgesPage, setJudgesPage] = useState(1);
@@ -65,7 +66,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const { data: allOrgJudges = [], isLoading: allOrgJudgesLoading } = useQuery({
       queryKey: ['judges', 'org'],
       queryFn: () => db.getJudges(),
-      enabled: !!activeEvent?.id,
+      enabled: !!activeEvent?.id && isAssignModalOpen,
       staleTime: 30_000,
    });
 
@@ -174,6 +175,10 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
    const handleSaveCriteria = async () => {
       if (!activeEvent?.id) return;
+      if (totalWeight !== 100 && criteriaDraft.length > 0) {
+         toast.error('Weights must total 100%');
+         return;
+      }
       setCriteriaSaving(true);
       setCriteriaError(null);
       setCriteriaNotice(null);
@@ -229,11 +234,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       ? submissions.filter(s => s.score == null)
       : submissions;
 
-   const refreshAll = () => {
+   const refreshAll = useCallback(() => {
       if (!activeEvent?.id) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all(activeEvent.id) });
-   };
+   }, [activeEvent?.id, queryClient]);
 
    // Realtime judging progress subscription
    useEffect(() => {
@@ -407,28 +412,45 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                            {assignedSubmissions.map((submission) => {
-                              const assignedJudgeNames = (submission.assignedJudges || [])
-                                 .map((judgeId) => judgeNameById.get(judgeId) || 'Unknown Judge');
+                              const assignedJudgeChips = (submission.assignedJudges || []).map((judgeId, idx) => ({
+                                 key: `${submission.id}-${judgeId}-${idx}`,
+                                 name: judgeNameById.get(judgeId) || 'Unknown Judge',
+                              }));
 
                               return (
-                                 <tr key={submission.id} className="hover:bg-slate-50/80 transition-colors">
+                                 <tr
+                                    key={submission.id}
+                                    className="hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                       setSelectedSubmission(submission);
+                                       setScoringModalOpen(true);
+                                    }}
+                                    onKeyDown={(e) => {
+                                       if (e.key === 'Enter' || e.key === ' ') {
+                                          e.preventDefault();
+                                          setSelectedSubmission(submission);
+                                          setScoringModalOpen(true);
+                                       }
+                                    }}
+                                    tabIndex={0}
+                                    role="button"
+                                    aria-label={`Score submission ${submission.title}`}
+                                 >
                                     <td className="p-4">
                                        <div className="font-semibold text-slate-900 text-sm">{submission.title}</div>
-                                       <div className="text-xs text-slate-500">{submission.category}</div>
+                                       <div className="text-xs text-slate-500">{submission.category} · Tap to score</div>
                                     </td>
                                     <td className="p-4 text-sm text-slate-700">{submission.applicant || '-'}</td>
                                     <td className="p-4">
-                                       <div className="flex flex-wrap gap-1.5">
-                                          {assignedJudgeNames.slice(0, 3).map((name) => (
-                                             <span key={`${submission.id}-${name}`} className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                                {name}
+                                       <div className="mb-1 text-[11px] font-semibold text-slate-500">
+                                          {assignedJudgeChips.length} judge{assignedJudgeChips.length === 1 ? '' : 's'}
+                                       </div>
+                                       <div className="flex flex-wrap gap-1.5 max-w-[380px]">
+                                          {assignedJudgeChips.map((chip) => (
+                                             <span key={chip.key} className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                {chip.name}
                                              </span>
                                           ))}
-                                          {assignedJudgeNames.length > 3 && (
-                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                                +{assignedJudgeNames.length - 3} more
-                                             </span>
-                                          )}
                                        </div>
                                     </td>
                                     <td className="p-4">
@@ -538,21 +560,46 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                      </div>
 
                      <div className="flex gap-2">
+                        {(() => {
+                           const assignedSub = submissions.find(s =>
+                              (s.assignedJudges || []).includes(judge.id)
+                           ) ?? null;
+                           return (
+                              <button
+                                 className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                 title={assignedSub ? undefined : 'No assignments found'}
+                                 disabled={!assignedSub}
+                                 onClick={() => {
+                                    if (!assignedSub) return;
+                                    setSelectedSubmission(assignedSub);
+                                    setScoringModalOpen(true);
+                                 }}
+                              >
+                                 View Scores
+                              </button>
+                           );
+                        })()}
                         <button
-                           className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-100"
-                           onClick={() => {
-                              // Find a submission assigned to this judge
-                              const assignedSub = submissions.find(s =>
-                                 (s.assignedJudges || []).includes(judge.id)
-                              ) ?? submissions[0] ?? null;
-                              setSelectedSubmission(assignedSub);
-                              setScoringModalOpen(true);
+                           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                           title="Resend invite"
+                           disabled={resendingJudgeId === judge.id}
+                           onClick={async () => {
+                              setResendingJudgeId(judge.id);
+                              try {
+                                 await resendJudgeInvite(judge.id, activeEvent?.title);
+                                 toast.success('Invite resent successfully');
+                              } catch (err: any) {
+                                 toast.error(err?.message || 'Failed to resend invite');
+                              } finally {
+                                 setResendingJudgeId(null);
+                              }
                            }}
                         >
-                           View Scores
-                        </button>
-                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-100">
-                           <Mail className="w-4 h-4" />
+                           {resendingJudgeId === judge.id ? (
+                              <div className="w-4 h-4 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" />
+                           ) : (
+                              <Mail className="w-4 h-4" />
+                           )}
                         </button>
                         <button
                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-100 transition-colors"
@@ -762,8 +809,8 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                      >
                         {unscoredOnly ? 'Showing Unscored Only' : 'Filter: Unscored Only'}
                      </button>
-                     <Button size="sm" className="flex items-center gap-2" onClick={() => setIsAssignModalOpen(true)}>
-                        <Users className="w-4 h-4" /> Assign Judges
+                     <Button size="sm" className="flex items-center gap-2" onClick={() => setIsAssignModalOpen(true)} disabled={selectedIds.length === 0}>
+                        <Users className="w-4 h-4" /> Assign Judges{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
                      </Button>
                   </div>
                </div>
@@ -835,7 +882,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            ))}
                            {assignmentSubmissions.length === 0 && (
                               <tr>
-                                 <td colSpan={6} className="p-8 text-center text-slate-500">
+                                 <td colSpan={7} className="p-8 text-center text-slate-500">
                                     No submissions found for this filter.
                                  </td>
                               </tr>

@@ -96,7 +96,7 @@ export default async function handler(req: any, res: any) {
       from: fromAddress,
       to: normalizedEmail,
       subject,
-      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nIMPORTANT: This is a one-time link for security. After you click it, you'll be able to bookmark the portal page to return later.\n\nBest,\nThe AwardX team`,
+      text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nClick the link below to access your judging portal and view the assigned submissions:\n${actionUrl}\n\nYou can bookmark this link to return to your portal at any time during the judging period.\n\nBest,\nThe AwardX team`,
       html: `<!doctype html>
 <html>
   <head>
@@ -130,10 +130,10 @@ export default async function handler(req: any, res: any) {
                   <a href="${actionUrl}" style="background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.3);">Access Judging Portal</a>
                 </div>
 
-                <!-- One-time & bookmark notice -->
-                <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin:24px 0;">
-                  <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
-                    <strong>🔐 One-time link:</strong> For security, this link can only be used once. After you click it, you can bookmark the portal page to return anytime during the judging period.
+                <!-- Bookmark notice -->
+                <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin:24px 0;">
+                  <p style="margin:0;font-size:13px;color:#166534;line-height:1.5;">
+                    <strong>🔖 Bookmark this link</strong> to return to your judging portal at any time during the judging period.
                   </p>
                 </div>
 

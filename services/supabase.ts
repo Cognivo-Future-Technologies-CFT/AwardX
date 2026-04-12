@@ -993,8 +993,9 @@ export const submissions = {
 
     const programIds = orgPrograms.map(p => p.id);
     const page = Math.max(1, filters?.page || 1);
-    const pageSize = Math.max(1, Math.min(100, filters?.pageSize || 0));
-    const usePagination = pageSize > 0;
+    const requestedPageSize = filters?.pageSize;
+    const usePagination = typeof requestedPageSize === 'number' && requestedPageSize > 0;
+    const pageSize = usePagination ? Math.max(1, Math.min(100, requestedPageSize)) : 0;
     const offset = (page - 1) * (usePagination ? pageSize : 1);
 
     let query = supabase

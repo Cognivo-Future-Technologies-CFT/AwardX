@@ -96,6 +96,17 @@ export const withdrawSubmissionSchema = z.object({
   reason: z.string().trim().min(1).max(500).optional(),
 });
 
+export const judgeSubmitScoresSchema = z.object({
+  token: z.string().uuid(),
+  submissionJudgeId: z.string().uuid(),
+  criteriaScores: z.array(z.object({
+    criterionId: z.string().uuid(),
+    score: z.number().finite(),
+    comment: z.string().max(2000).optional(),
+  })).min(1),
+  overallComment: z.string().max(5000).optional(),
+});
+
 export const razorpayVerifySchema = z.object({
   submissionId: z.string().uuid(),
   razorpayOrderId: z.string().trim().min(1),

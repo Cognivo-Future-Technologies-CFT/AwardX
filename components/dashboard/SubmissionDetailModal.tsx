@@ -9,9 +9,11 @@ interface SubmissionDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
     submission: Submission | null;
+    /** Map of judgeId → judge name for display; falls back to truncated ID if absent */
+    judgeNameById?: Map<string, string>;
 }
 
-export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ isOpen, onClose, submission }) => {
+export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ isOpen, onClose, submission, judgeNameById }) => {
     if (!submission) return null;
 
     const statusConfig: any = {
@@ -22,7 +24,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
         'Under Review': { color: 'text-blue-600 bg-blue-50 border-blue-100', icon: <Clock className="w-3 h-3" /> },
     };
 
-    const responses = submission.submissionData?.responses || {};
+    const responses = (submission.submissionData as Record<string, unknown>) || {};
     const hasResponses = Object.keys(responses).length > 0;
 
     return (
@@ -93,7 +95,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
                                     submission.assignedJudges?.map((jid) => (
                                         <div key={jid} className="px-3 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2 text-sm text-slate-600 shadow-sm hover:border-indigo-200 transition-colors cursor-default">
                                             <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                                            {jid.substring(0, 8)}...
+                                            {judgeNameById?.get(jid) ?? `${jid.substring(0, 8)}…`}
                                         </div>
                                     ))
                                 ) : (
@@ -146,11 +148,6 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
                         className="px-6 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all"
                     >
                         Close
-                    </button>
-                    <button
-                        className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
-                    >
-                        Edit Submission
                     </button>
                 </div>
             </div>

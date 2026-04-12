@@ -23,9 +23,9 @@ const MySubmissionsPage = lazy(() => import('./components/pages/MySubmissionsPag
 const PublicVotingPage = lazy(() => import('./components/pages/PublicVotingPage').then((m) => ({ default: m.PublicVotingPage })));
 
 const RouteLoader: React.FC = () => (
-  <div className="min-h-screen flex items-center justify-center bg-slate-50">
+  <div className="min-h-screen flex items-center justify-center bg-background">
     <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
       <p className="text-slate-600">Loading...</p>
     </div>
   </div>
@@ -95,7 +95,7 @@ const MarketingLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
   const currentPage = useMemo(() => pathToPage(location.pathname), [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-indigo-500/30 selection:text-indigo-900">
+    <div className="min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 selection:text-foreground">
       <Header
         currentPage={currentPage}
         onNavigate={(page) => navigate(pageToPath(page))}
