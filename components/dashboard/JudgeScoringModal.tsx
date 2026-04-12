@@ -94,6 +94,11 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
+  const clampScore = (value: number, minScore: number, maxScore: number) => {
+    const boundedMax = Math.min(maxScore, 100);
+    return Math.min(Math.max(value, minScore), boundedMax);
+  };
+
   // Reset state when modal opens for a new submission
   useEffect(() => {
     if (isOpen && submission) {
@@ -105,6 +110,16 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
     }
   }, [isOpen, submission?.id]);
 
+  const preferredJudgeId = submission?.assignedJudges?.[0];
+  const { data: resolvedAssignmentId } = useQuery({
+    queryKey: ['submission-judge-assignment-id', submission?.id, preferredJudgeId],
+    queryFn: () => db.getSubmissionJudgeAssignmentId(submission!.id, preferredJudgeId),
+    enabled: isOpen && !isJudgeView && !!submission?.id && !submissionJudgeId,
+    staleTime: 30_000,
+  });
+
+  const effectiveSubmissionJudgeId = submissionJudgeId || resolvedAssignmentId || undefined;
+
   // Fetch existing scores for this submission (admin view shows all judges)
   const { data: existingScores = [] } = useQuery({
     queryKey: queryKeys.judging.scores(submission?.id ?? ''),
@@ -115,8 +130,20 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
 
   const submitMutation = useMutation({
     mutationFn: (payload: { criteriaScores: CriterionScore[]; overallComment?: string }) => {
-      if (!submissionJudgeId) throw new Error('No judge assignment found');
-      return db.submitScores(submissionJudgeId, payload.criteriaScores, payload.overallComment);
+      if (!effectiveSubmissionJudgeId) throw new Error('No judge assignment found');
+      return db.submitScores(
+        effectiveSubmissionJudgeId,
+        payload.criteriaScores,
+        payload.overallComment,
+        criteria.map((criterion, index) => ({
+          name: criterion.name,
+          description: criterion.description,
+          weight: criterion.weight,
+          minScore: criterion.minScore,
+          maxScore: criterion.maxScore,
+          sortOrder: criterion.sortOrder ?? index,
+        })),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.judging.scores(submission?.id ?? '') });
@@ -124,6 +151,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
       setLastSavedAt(new Date());
       toast.success('Scores saved successfully');
       onScored?.();
+      onClose();
     },
     onError: (err: Error) => {
       setSaveState('error');
@@ -146,7 +174,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
   const weightedScore = totalWeight > 0
     ? criteria.reduce((sum, c) => {
-        const raw = scores[c.id] ?? 0;
+        const raw = clampScore(scores[c.id] ?? 0, c.minScore, c.maxScore);
         const normalised = c.maxScore > 0 ? (raw / c.maxScore) * 100 : 0;
         return sum + (normalised * c.weight) / totalWeight;
       }, 0)
@@ -244,14 +272,29 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
                     <input
                       type="number"
                       min={c.minScore}
-                      max={c.maxScore}
+                      max={Math.min(c.maxScore, 100)}
                       step={1}
                       value={scores[c.id] ?? ''}
                       onChange={e => {
-                        setScores(prev => ({ ...prev, [c.id]: Number(e.target.value) }));
+                        const value = e.target.value.trim();
+                        if (value === '') {
+                          setScores(prev => {
+                            const next = { ...prev };
+                            delete next[c.id];
+                            return next;
+                          });
+                          setSaveState('idle');
+                          return;
+                        }
+
+                        const parsed = Number(value);
+                        if (!Number.isFinite(parsed)) return;
+
+                        const clamped = clampScore(parsed, c.minScore, c.maxScore);
+                        setScores(prev => ({ ...prev, [c.id]: clamped }));
                         setSaveState('idle');
                       }}
-                      placeholder={`${c.minScore}–${c.maxScore}`}
+                      placeholder={`${c.minScore}–${Math.min(c.maxScore, 100)}`}
                       className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-300"
                     />
                     <span className="text-xs text-slate-400">/ {c.maxScore}</span>
@@ -287,7 +330,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
           </div>
 
           <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100">
-            {!submissionJudgeId ? (
+            {!effectiveSubmissionJudgeId ? (
               <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
                 This submission has not been assigned to you. Scores cannot be submitted.
               </p>

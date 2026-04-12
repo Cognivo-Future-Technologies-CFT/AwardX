@@ -49,26 +49,23 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    // 2. Check if token was already used (one-time link enforcement)
-    if (judge.invite_token_used_at) {
-      res.status(403).json({ error: 'This invite link has already been used. Please contact the organizer for a new invite.' });
-      return;
-    }
+    // 2. Mark first-time acceptance, but allow repeat opens for the same invite link.
+    // This keeps judge portals refreshable and ensures new assignments show up.
+    if (!judge.invite_token_used_at) {
+      const { error: updateError } = await supabase
+        .from('judges')
+        .update({
+          invite_token_used_at: new Date().toISOString(),
+          status: 'active',
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('id', judge.id);
 
-    // 3. Mark the token as used (one-time use) and activate judge
-    const { error: updateError } = await supabase
-      .from('judges')
-      .update({
-        invite_token_used_at: new Date().toISOString(),
-        status: 'active',
-        accepted_at: new Date().toISOString(),
-      })
-      .eq('id', judge.id);
-
-    if (updateError) {
-      console.error('Failed to mark token as used:', updateError);
-      res.status(500).json({ error: 'Failed to process invite' });
-      return;
+      if (updateError) {
+        console.error('Failed to mark token as used:', updateError);
+        res.status(500).json({ error: 'Failed to process invite' });
+        return;
+      }
     }
 
     // 4. Fetch the program details

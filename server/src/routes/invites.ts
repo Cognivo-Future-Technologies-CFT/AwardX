@@ -114,6 +114,207 @@ function isValidEmail(s: string) {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+const INVITE_TOKEN_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+function normalizeInviteToken(raw?: string | null): string {
+	if (!raw) return '';
+	const text = (() => {
+		try {
+			return decodeURIComponent(String(raw));
+		} catch {
+			return String(raw);
+		}
+	})().trim();
+
+	const directMatch = text.match(INVITE_TOKEN_RE);
+	if (directMatch?.[0]) return directMatch[0];
+
+	try {
+		const maybeUrl = new URL(text);
+		const queryCandidate = maybeUrl.searchParams.get('teamInviteToken') || maybeUrl.searchParams.get('token') || maybeUrl.searchParams.get('inviteToken');
+		const queryMatch = queryCandidate?.match(INVITE_TOKEN_RE);
+		if (queryMatch?.[0]) return queryMatch[0];
+		const pathMatch = maybeUrl.pathname.match(INVITE_TOKEN_RE);
+		if (pathMatch?.[0]) return pathMatch[0];
+	} catch {
+		// Not a URL value.
+	}
+
+	return '';
+}
+
+async function resolveTeamInvite(supabase: any, token: string) {
+	const { data: invite, error: inviteError } = await supabase
+		.from('organization_invites')
+		.select('id, organization_id, program_id, role_id, email, status, accepted_at')
+		.eq('token', token)
+		.single();
+
+	if (inviteError || !invite) {
+		return { error: 'Invalid or expired invite link.' as const };
+	}
+
+	if (invite.status === 'accepted' || invite.accepted_at) {
+		return { error: 'This invite has already been accepted.' as const, statusCode: 403 };
+	}
+
+	return { invite };
+}
+
+async function insertNotificationSafe(
+	supabase: any,
+	payload: {
+		organizationId: string;
+		programId?: string | null;
+		recipientUserId?: string | null;
+		type: string;
+		title: string;
+		body: string;
+		metadata?: Record<string, any>;
+	},
+) {
+	try {
+		await supabase.from('notifications').insert({
+			organization_id: payload.organizationId,
+			program_id: payload.programId || null,
+			recipient_user_id: payload.recipientUserId || null,
+			type: payload.type,
+			title: payload.title,
+			body: payload.body,
+			metadata: payload.metadata || {},
+		});
+	} catch {
+		// Notifications are best-effort and should never break invite flows.
+	}
+}
+
+router.get('/verify-team', async (req, res) => {
+	try {
+		if (!isSupabaseConfigured()) {
+			return res.status(503).json({ error: 'Database not configured' });
+		}
+
+		const token = normalizeInviteToken(String(req.query?.token || req.query?.teamInviteToken || req.query?.inviteToken || req.query?.url || ''));
+		if (!token) return res.status(400).json({ error: 'Invalid token format' });
+
+		const supabase = getSupabaseAdmin();
+		const resolved = await resolveTeamInvite(supabase, token);
+		if ('error' in resolved) {
+			return res.status(resolved.statusCode || 404).json({ error: resolved.error });
+		}
+
+		return res.status(401).json({
+			error: 'Authentication required to accept invite',
+			requiresAuth: true,
+			invite: {
+				organizationId: resolved.invite.organization_id,
+				programId: resolved.invite.program_id,
+				email: resolved.invite.email,
+			},
+		});
+	} catch (err: any) {
+		console.error('Verify team invite (GET) error:', err);
+		return res.status(500).json({ error: err?.message || 'Internal server error' });
+	}
+});
+
+router.post('/verify-team', async (req, res) => {
+	try {
+		if (!isSupabaseConfigured()) {
+			return res.status(503).json({ error: 'Database not configured' });
+		}
+
+		const token = normalizeInviteToken(String(req.body?.token || ''));
+		if (!token) return res.status(400).json({ error: 'Invalid token format' });
+
+		const authResult = await getAuthUser(req);
+		if (!authResult?.user) {
+			return res.status(401).json({ error: 'Authentication required to accept invite', requiresAuth: true });
+		}
+
+		const supabase = getSupabaseAdmin();
+		const resolved = await resolveTeamInvite(supabase, token);
+		if ('error' in resolved) {
+			if (resolved.statusCode === 403 && resolved.error === 'This invite has already been accepted.') {
+				const { data: acceptedInvite } = await supabase
+					.from('organization_invites')
+					.select('organization_id')
+					.eq('token', token)
+					.maybeSingle();
+
+				const { data: existingMember } = await supabase
+					.from('organization_members')
+					.select('id')
+					.eq('organization_id', acceptedInvite?.organization_id || null)
+					.eq('user_id', authResult.user.id)
+					.maybeSingle();
+				if (existingMember?.id) {
+					return res.json({ ok: true, accepted: true, alreadyAccepted: true });
+				}
+			}
+			return res.status(resolved.statusCode || 404).json({ error: resolved.error });
+		}
+
+		const profileEmail = String(authResult.user.email || '').toLowerCase().trim();
+		if (!profileEmail || profileEmail !== String(resolved.invite.email).toLowerCase().trim()) {
+			return res.status(403).json({ error: 'This invite is for a different email address.' });
+		}
+
+		const acceptedAt = new Date().toISOString();
+		const { error: updateInviteError } = await supabase
+			.from('organization_invites')
+			.update({
+				status: 'accepted',
+				accepted_at: acceptedAt,
+			})
+			.eq('id', resolved.invite.id)
+			.eq('status', 'pending');
+
+		if (updateInviteError) {
+			return res.status(500).json({ error: updateInviteError.message || 'Failed to accept invite' });
+		}
+
+		const { error: memberUpsertError } = await supabase
+			.from('organization_members')
+			.upsert(
+				{
+					organization_id: resolved.invite.organization_id,
+					program_id: resolved.invite.program_id,
+					user_id: authResult.user.id,
+					role_id: resolved.invite.role_id,
+					status: 'active',
+					invited_at: acceptedAt,
+					joined_at: acceptedAt,
+					invited_by: null,
+				},
+				{ onConflict: 'organization_id,user_id,program_id' },
+			);
+
+		if (memberUpsertError) {
+			return res.status(500).json({ error: memberUpsertError.message || 'Failed to add team member' });
+		}
+
+		const { data: program } = resolved.invite.program_id
+			? await supabase.from('programs').select('title').eq('id', resolved.invite.program_id).maybeSingle()
+			: ({ data: null } as any);
+		const joinedTitle = program?.title || 'the team';
+		await insertNotificationSafe(supabase, {
+			organizationId: resolved.invite.organization_id,
+			programId: resolved.invite.program_id,
+			recipientUserId: authResult.user.id,
+			type: 'team',
+			title: 'Team invite accepted',
+			body: `You joined ${joinedTitle}.`,
+			metadata: { inviteId: resolved.invite.id },
+		});
+
+		return res.json({ ok: true, accepted: true });
+	} catch (err: any) {
+		console.error('Verify team invite (POST) error:', err);
+		return res.status(500).json({ error: err?.message || 'Internal server error' });
+	}
+});
+
 router.post('/team', async (req, res) => {
 	try {
 		const { email, roleId, roleName, programTitle, organizationId, programId } = req.body || {};
@@ -184,6 +385,21 @@ router.post('/team', async (req, res) => {
 		const siteUrl = getSiteUrl();
 		const inviteUrl = `${siteUrl}/signup?teamInviteToken=${inviteRow.token}`;
 		const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
+		const { data: existingProfile } = await supabase
+			.from('profiles')
+			.select('id')
+			.eq('email', normalizedEmail)
+			.maybeSingle();
+
+		await insertNotificationSafe(supabase, {
+			organizationId: resolvedOrgId,
+			programId: programId || null,
+			recipientUserId: user.id,
+			type: 'team',
+			title: `Invite sent: ${programTitle}`,
+			body: `Team invite sent to ${normalizedEmail}.`,
+			metadata: { inviteId: inviteRow.id },
+		});
 
 		const emailLogId = await createEmailLog(supabase, {
 			organizationId: resolvedOrgId,
@@ -196,6 +412,17 @@ router.post('/team', async (req, res) => {
 
 		const resend = getResend();
 		if (!resend) {
+			if (existingProfile?.id) {
+				await insertNotificationSafe(supabase, {
+					organizationId: resolvedOrgId,
+					programId: programId || null,
+					recipientUserId: existingProfile.id,
+					type: 'team',
+					title: `Team invite: ${programTitle}`,
+					body: `You have been invited to join ${programTitle}.`,
+					metadata: { inviteId: inviteRow.id, inviteUrl },
+				});
+			}
 			if (emailLogId) await updateEmailLog(supabase, emailLogId, 'failed', { errorMessage: 'RESEND_API_KEY not configured' });
 			return res.status(200).json({
 				ok: true,
@@ -220,6 +447,17 @@ router.post('/team', async (req, res) => {
 
 		if (sendError) {
 			console.error('Resend error (team invite):', sendError);
+			if (existingProfile?.id) {
+				await insertNotificationSafe(supabase, {
+					organizationId: resolvedOrgId,
+					programId: programId || null,
+					recipientUserId: existingProfile.id,
+					type: 'team',
+					title: `Team invite: ${programTitle}`,
+					body: `You have been invited to join ${programTitle}.`,
+					metadata: { inviteId: inviteRow.id, inviteUrl },
+				});
+			}
 			if (emailLogId) await updateEmailLog(supabase, emailLogId, 'failed', { errorMessage: sendError.message });
 			return res.status(200).json({
 				ok: true,
@@ -227,6 +465,18 @@ router.post('/team', async (req, res) => {
 				token: inviteRow.token,
 				emailSent: false,
 				warning: sendError.message || 'Email provider rejected the send',
+			});
+		}
+
+		if (existingProfile?.id) {
+			await insertNotificationSafe(supabase, {
+				organizationId: resolvedOrgId,
+				programId: programId || null,
+				recipientUserId: existingProfile.id,
+				type: 'team',
+				title: `Team invite: ${programTitle}`,
+				body: `You have been invited to join ${programTitle}.`,
+				metadata: { inviteId: inviteRow.id, inviteUrl },
 			});
 		}
 

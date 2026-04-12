@@ -103,10 +103,7 @@ export const JudgePortalPage: React.FC = () => {
       }
     };
 
-    // Only verify on first load or after explicit refresh
-    if (lastRefresh === 0) {
-      verifyToken();
-    }
+    verifyToken();
   }, [tokenParam, lastRefresh]);
 
   const formatDate = (dateStr: string) => {

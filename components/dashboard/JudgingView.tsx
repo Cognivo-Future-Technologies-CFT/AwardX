@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db } from '../../services/database';
 import { Judge, Program, Submission, JudgingCriterion, TeamMember } from '../../services/models';
-import { Gavel, CheckCircle2, Clock, Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
+import { Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX } from 'lucide-react';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
@@ -101,6 +101,36 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                sortOrder: Number(c.sort_order) || 0,
             }));
          }
+
+         // Bootstrap defaults for new programs so scoring always has UUID-backed criteria.
+         const bootstrapPayload = defaultCriteria.map((criterion, index) => ({
+            program_id: activeEvent.id,
+            name: criterion.name,
+            description: criterion.description,
+            weight: criterion.weight,
+            min_score: criterion.minScore,
+            max_score: criterion.maxScore,
+            sort_order: index,
+         }));
+
+         const { data: inserted, error: insertError } = await supabase
+            .from('judging_criteria')
+            .insert(bootstrapPayload)
+            .select('*')
+            .order('sort_order');
+
+         if (!insertError && inserted && inserted.length > 0) {
+            return inserted.map((c: Record<string, unknown>) => ({
+               id: String(c.id),
+               name: String(c.name),
+               description: String(c.description || ''),
+               weight: Number(c.weight) || 100,
+               minScore: Number(c.min_score) || 0,
+               maxScore: Number(c.max_score) || 100,
+               sortOrder: Number(c.sort_order) || 0,
+            }));
+         }
+
          return defaultCriteria;
       },
       enabled: !!activeEvent?.id,
@@ -278,11 +308,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       }
    };
 
-   const totalProgress = Math.round(judges.reduce((acc, curr) => acc + curr.progress, 0) / (judges.length || 1));
    const totalWeight = criteriaDraft.reduce((sum, c) => sum + Number(c.weight || 0), 0);
    const judgeTotalPages = Math.max(1, Math.ceil(judges.length / judgesPerPage));
    const paginatedJudges = judges.slice((judgesPage - 1) * judgesPerPage, judgesPage * judgesPerPage);
    const assignableJudges = judges.length > 0 ? judges : allOrgJudges;
+   const judgeDirectory = assignableJudges.length > 0 ? assignableJudges : allOrgJudges;
+   const judgeNameById = new Map(judgeDirectory.map((judge) => [judge.id, judge.name]));
+   const assignedSubmissions = submissions.filter((submission) => (submission.assignedJudges || []).length > 0);
    const existingJudgeEmails = new Set(
       judges
          .map((judge) => String(judge.email || '').trim().toLowerCase())
@@ -340,46 +372,80 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
       {activeTab === 'overview' && (
          <div className="space-y-8">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
-                 <div className="flex items-center gap-4 mb-4">
-                    <div className="p-3 bg-white/20 rounded-xl">
-                       <Gavel className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                       <div className="text-indigo-100 text-sm font-medium">Overall Progress</div>
-                       <div className="text-2xl font-bold">{totalProgress}%</div>
-                    </div>
-                 </div>
-                 <div className="w-full bg-indigo-900/30 rounded-full h-2">
-                    <div className="bg-white h-2 rounded-full transition-all duration-1000" style={{ width: `${totalProgress}%` }}></div>
-                 </div>
-              </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+               <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-100">
+                  <div>
+                     <h2 className="text-lg font-bold text-slate-900">Assigned Submissions</h2>
+                     <p className="text-sm text-slate-500">Assignment details are visible directly in overview.</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setActiveTab('assignments')}>
+                     Open Full Assignments
+                  </Button>
+               </div>
 
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center gap-4">
-                 <div className="p-3 bg-green-50 rounded-xl text-green-600">
-                    <CheckCircle2 className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <div className="text-slate-500 text-sm font-medium">Completed Scores</div>
-                    <div className="text-2xl font-bold text-slate-900">
-                       {judges.reduce((acc, curr) => acc + curr.completedCount, 0)}
-                    </div>
-                 </div>
-              </div>
+               {submissionsLoading ? (
+                  <div className="p-5 space-y-3">
+                     <SkeletonLoader className="h-12" />
+                     <SkeletonLoader className="h-12" />
+                     <SkeletonLoader className="h-12" />
+                  </div>
+               ) : assignedSubmissions.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">
+                     No assigned submissions yet. Use Assignments tab to assign judges.
+                  </div>
+               ) : (
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-left border-collapse">
+                        <thead>
+                           <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                              <th className="p-4">Submission</th>
+                              <th className="p-4">Applicant</th>
+                              <th className="p-4">Assigned Judges</th>
+                              <th className="p-4">Status</th>
+                              <th className="p-4">Score</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                           {assignedSubmissions.map((submission) => {
+                              const assignedJudgeNames = (submission.assignedJudges || [])
+                                 .map((judgeId) => judgeNameById.get(judgeId) || 'Unknown Judge');
 
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center gap-4">
-                 <div className="p-3 bg-orange-50 rounded-xl text-orange-600">
-                    <Clock className="w-6 h-6" />
-                 </div>
-                 <div>
-                    <div className="text-slate-500 text-sm font-medium">Pending Reviews</div>
-                    <div className="text-2xl font-bold text-slate-900">
-                       {judges.reduce((acc, curr) => acc + (curr.assignedCount - curr.completedCount), 0)}
-                    </div>
-                 </div>
-              </div>
+                              return (
+                                 <tr key={submission.id} className="hover:bg-slate-50/80 transition-colors">
+                                    <td className="p-4">
+                                       <div className="font-semibold text-slate-900 text-sm">{submission.title}</div>
+                                       <div className="text-xs text-slate-500">{submission.category}</div>
+                                    </td>
+                                    <td className="p-4 text-sm text-slate-700">{submission.applicant || '-'}</td>
+                                    <td className="p-4">
+                                       <div className="flex flex-wrap gap-1.5">
+                                          {assignedJudgeNames.slice(0, 3).map((name) => (
+                                             <span key={`${submission.id}-${name}`} className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                {name}
+                                             </span>
+                                          ))}
+                                          {assignedJudgeNames.length > 3 && (
+                                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                                                +{assignedJudgeNames.length - 3} more
+                                             </span>
+                                          )}
+                                       </div>
+                                    </td>
+                                    <td className="p-4">
+                                       <span className="px-2.5 py-0.5 rounded-full text-xs font-medium border bg-slate-100 text-slate-700 border-slate-200">
+                                          {submission.status}
+                                       </span>
+                                    </td>
+                                    <td className="p-4 text-sm font-semibold text-slate-800">
+                                       {submission.score == null ? 'Unscored' : submission.score}
+                                    </td>
+                                 </tr>
+                              );
+                           })}
+                        </tbody>
+                     </table>
+                  </div>
+               )}
             </div>
          </div>
       )}
@@ -855,12 +921,16 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            email: judgeForm.email.trim(),
                            programId: activeEvent?.id,
                         });
+                        if ((judgeData as any)?.reused_existing) {
+                           toast.success('Existing judge found. Reassigned to this program.');
+                        }
                         // Build magic link URL with the invite token
                         const siteUrl = window.location.origin;
                         const inviteToken = judgeData?.invite_token;
-                        const magicLinkUrl = inviteToken
-                           ? `${siteUrl}/judge/${inviteToken}`
-                           : siteUrl;
+                        if (!inviteToken) {
+                           throw new Error('Unable to generate invite link. Please try inviting again.');
+                        }
+                        const magicLinkUrl = `${siteUrl}/judge/${inviteToken}`;
                         await sendJudgeInviteEmail({
                            email: judgeForm.email.trim(),
                            name: judgeForm.name.trim(),
@@ -871,11 +941,14 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            inviteUrl: magicLinkUrl,
                         });
                      } else {
-                        await db.createJudge({
+                        const judgeData = await db.createJudge({
                            name: judgeForm.name.trim(),
                            email: judgeForm.email.trim(),
                            programId: activeEvent?.id,
                         });
+                        if ((judgeData as any)?.reused_existing) {
+                           toast.success('Existing judge found. Reassigned to this program.');
+                        }
                      }
                      refreshAll();
                      setIsJudgeModalOpen(false);

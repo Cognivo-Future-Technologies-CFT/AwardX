@@ -1,9 +1,35 @@
 import React, { useState } from 'react';
 import { Round } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
-import { Plus, GripVertical, Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, Calendar } from 'lucide-react';
+import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar } from 'lucide-react';
 import { Button } from '../../Button';
-import { motion, Reorder } from 'framer-motion';
+import { Reorder } from 'framer-motion';
+import { Modal } from '../../Modal';
+import { Avatar, AvatarFallback, AvatarImage } from '../../ui/avatar';
+
+interface RoundParticipantInsight {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  status: 'active' | 'advanced' | 'eliminated';
+  score?: number | null;
+  votes?: number;
+}
+
+interface RoundJudgeInsight {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  email?: string;
+}
+
+interface RoundCardInsight {
+  participantTotal: number;
+  participantAdvanced: number;
+  participants: RoundParticipantInsight[];
+  judgeTotal: number;
+  judges: RoundJudgeInsight[];
+}
 
 interface TileViewProps {
   rounds: Round[];
@@ -13,6 +39,8 @@ interface TileViewProps {
   onRoundDelete: (roundId: string) => void;
   onRoundReorder: (rounds: Round[]) => void;
   programId: string;
+  roundInsights?: Record<string, RoundCardInsight>;
+  insightsLoading?: boolean;
 }
 
 export const TileView: React.FC<TileViewProps> = ({
@@ -23,8 +51,12 @@ export const TileView: React.FC<TileViewProps> = ({
   onRoundDelete,
   onRoundReorder,
   programId,
+  roundInsights,
+  insightsLoading,
 }) => {
   const [items, setItems] = useState(rounds);
+  const [participantsListRoundId, setParticipantsListRoundId] = useState<string | null>(null);
+  const [judgesListRoundId, setJudgesListRoundId] = useState<string | null>(null);
 
   React.useEffect(() => {
     setItems(rounds);
@@ -88,6 +120,26 @@ export const TileView: React.FC<TileViewProps> = ({
   };
 
   const selectedRound = rounds.find(r => r.id === selectedRoundId);
+  const participantsListRound = items.find(r => r.id === participantsListRoundId) || null;
+  const judgesListRound = items.find(r => r.id === judgesListRoundId) || null;
+
+  const getInitials = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return 'NA';
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  };
+
+  const getParticipantStatusBadge = (status: RoundParticipantInsight['status']) => {
+    if (status === 'advanced') {
+      return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px] font-semibold">Advanced</span>;
+    }
+    if (status === 'eliminated') {
+      return <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[11px] font-semibold">Eliminated</span>;
+    }
+    return <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold">Active</span>;
+  };
 
   return (
     <div className="h-full overflow-y-auto p-6 bg-slate-50">
@@ -107,7 +159,7 @@ export const TileView: React.FC<TileViewProps> = ({
                 id: `round-${Date.now()}`,
                 programId,
                 name: 'New Round',
-                type: 'jury',
+                type: 'Nomination',
                 evaluationLogic: 'scoring',
                 evaluatorStrategy: 'all_judges',
                 blindEvaluation: false,
@@ -147,7 +199,7 @@ export const TileView: React.FC<TileViewProps> = ({
                   id: `round-${Date.now()}`,
                   programId,
                   name: 'New Round',
-                  type: 'jury',
+                  type: 'Nomination',
                   evaluationLogic: 'scoring',
                   evaluatorStrategy: 'all_judges',
                   blindEvaluation: false,
@@ -197,7 +249,70 @@ export const TileView: React.FC<TileViewProps> = ({
                           <p className="text-sm text-slate-500 capitalize">{round.type} • {round.evaluationLogic}</p>
                         </div>
                       </div>
-                      {getStatusBadge(round.status)}
+                      <div className="flex items-start gap-2 flex-wrap justify-end">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 border border-slate-200 rounded-full bg-white px-2 py-1 hover:bg-slate-100 transition-colors"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setParticipantsListRoundId(round.id);
+                          }}
+                        >
+                          <div className="flex -space-x-2">
+                            {(roundInsights?.[round.id]?.participants || []).slice(0, 3).map(participant => (
+                              <Avatar key={participant.id} className="w-6 h-6 border-2 border-white">
+                                <AvatarImage src={participant.avatarUrl} alt={participant.name} />
+                                <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[10px]">
+                                  {getInitials(participant.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {(roundInsights?.[round.id]?.participants || []).length === 0 && (
+                              <span className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white text-slate-500 flex items-center justify-center">
+                                <Users className="w-3 h-3" />
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                            {insightsLoading ? 'Participants...' : `${roundInsights?.[round.id]?.participantTotal || 0} nominations`}
+                          </span>
+                          {!insightsLoading && (roundInsights?.[round.id]?.participantAdvanced || 0) > 0 && (
+                            <span className="text-[11px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                              {roundInsights?.[round.id]?.participantAdvanced || 0} shortlisted
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 border border-slate-200 rounded-full bg-white px-2 py-1 hover:bg-slate-100 transition-colors"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setJudgesListRoundId(round.id);
+                          }}
+                        >
+                          <div className="flex -space-x-2">
+                            {(roundInsights?.[round.id]?.judges || []).slice(0, 3).map(judge => (
+                              <Avatar key={judge.id} className="w-6 h-6 border-2 border-white">
+                                <AvatarImage src={judge.avatarUrl} alt={judge.name} />
+                                <AvatarFallback className="bg-amber-100 text-amber-800 text-[10px]">
+                                  {getInitials(judge.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {(roundInsights?.[round.id]?.judges || []).length === 0 && (
+                              <span className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white text-slate-500 flex items-center justify-center">
+                                <Users className="w-3 h-3" />
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                            {insightsLoading ? 'Judges...' : `${roundInsights?.[round.id]?.judgeTotal || 0} judges`}
+                          </span>
+                        </button>
+
+                        {getStatusBadge(round.status)}
+                      </div>
                     </div>
 
                     {round.description && (
@@ -252,6 +367,67 @@ export const TileView: React.FC<TileViewProps> = ({
           onClose={() => onRoundSelect(null)}
         />
       )}
+
+      <Modal
+        isOpen={Boolean(participantsListRound)}
+        onClose={() => setParticipantsListRoundId(null)}
+        title={participantsListRound ? `${participantsListRound.name} - Participants` : 'Participants'}
+        size="lg"
+      >
+        {participantsListRound && (roundInsights?.[participantsListRound.id]?.participants || []).length === 0 ? (
+          <div className="text-sm text-slate-500">No participants enrolled in this round yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {(participantsListRound ? (roundInsights?.[participantsListRound.id]?.participants || []) : []).map(participant => (
+              <div key={participant.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="w-10 h-10 border border-slate-200">
+                    <AvatarImage src={participant.avatarUrl} alt={participant.name} />
+                    <AvatarFallback className="bg-indigo-100 text-indigo-700 font-semibold">
+                      {getInitials(participant.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{participant.name}</p>
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                      {typeof participant.score === 'number' && <span>Score {participant.score.toFixed(1)}</span>}
+                      {typeof participant.votes === 'number' && <span>Votes {participant.votes}</span>}
+                    </div>
+                  </div>
+                </div>
+                {getParticipantStatusBadge(participant.status)}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(judgesListRound)}
+        onClose={() => setJudgesListRoundId(null)}
+        title={judgesListRound ? `${judgesListRound.name} - Judges` : 'Judges'}
+      >
+        {judgesListRound && (roundInsights?.[judgesListRound.id]?.judges || []).length === 0 ? (
+          <div className="text-sm text-slate-500">No judges assigned to this round yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {(judgesListRound ? (roundInsights?.[judgesListRound.id]?.judges || []) : []).map(judge => (
+              <div key={judge.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                <Avatar className="w-10 h-10 border border-slate-200">
+                  <AvatarImage src={judge.avatarUrl} alt={judge.name} />
+                  <AvatarFallback className="bg-amber-100 text-amber-800 font-semibold">
+                    {getInitials(judge.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">{judge.name}</p>
+                  <p className="text-xs text-slate-500 truncate">{judge.email || 'No email available'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

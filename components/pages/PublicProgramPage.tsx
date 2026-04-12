@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { AlertCircle, CalendarDays, ChevronDown, Trophy, ArrowRight } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronDown, Trophy, ArrowRight, Award, Sparkles, Layers3 } from 'lucide-react';
 import { getPublicOverviewByProgramId, getPublicOverviewBySlug } from '../../services/overviewApi';
 import { queryKeys } from '../../services/queryKeys';
 import { Footer } from '../Footer';
@@ -197,6 +197,72 @@ export const PublicProgramPage: React.FC = () => {
     const hasFaqs = faqs.length > 0;
     const hasSponsors = sponsors.length > 0;
 
+    const countLeafAwards = (nodeKey: string): number => {
+        const children = categoryHierarchy.childrenByParent[nodeKey] || [];
+        if (children.length === 0) return 1;
+        return children.reduce((sum: number, child: any) => sum + countLeafAwards(child._key), 0);
+    };
+
+    const countAllNestedNodes = (nodeKey: string): number => {
+        const children = categoryHierarchy.childrenByParent[nodeKey] || [];
+        return children.reduce((sum: number, child: any) => sum + 1 + countAllNestedNodes(child._key), 0);
+    };
+
+    const totalAwardEntries = categoryHierarchy.roots.reduce(
+        (sum: number, root: any) => sum + countLeafAwards(root._key),
+        0,
+    );
+    const totalNestedNodes = categoryHierarchy.roots.reduce(
+        (sum: number, root: any) => sum + countAllNestedNodes(root._key),
+        0,
+    );
+
+    const renderCategoryLevel = (parentKey: string, depth = 1): React.ReactNode => {
+        const nodes = categoryHierarchy.childrenByParent[parentKey] || [];
+        if (nodes.length === 0) return null;
+
+        const headingByDepth: Record<number, string> = {
+            1: 'Subcategories',
+            2: 'Awards',
+        };
+        const heading = headingByDepth[depth] || 'More Categories';
+
+        return (
+            <div className={depth > 1 ? 'mt-3 ml-4 border-l-2 border-indigo-100/80 pl-4' : ''}>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.14em] mb-2">{heading}</p>
+                <ul className="space-y-2">
+                    {nodes.map((node: any) => {
+                        const childNodes = categoryHierarchy.childrenByParent[node._key] || [];
+                        const hasChildren = childNodes.length > 0;
+                        const awardCount = countLeafAwards(node._key);
+
+                        return (
+                            <li key={node._key} className="text-sm text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-slate-800 truncate">{node._title}</p>
+                                        {node._description && (
+                                            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{node._description}</p>
+                                        )}
+                                    </div>
+                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide flex-shrink-0 ${
+                                        hasChildren
+                                            ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                            : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                    }`}>
+                                        <Award className="w-3 h-3" />
+                                        {hasChildren ? `${awardCount} awards` : 'Award'}
+                                    </span>
+                                </div>
+                                {hasChildren && renderCategoryLevel(node._key, depth + 1)}
+                            </li>
+                        );
+                    })}
+                </ul>
+            </div>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-white font-sans antialiased">
             <StickyNav title={data.program.title} nominateUrl={nominateUrl} ctaText={nominateButtonText} />
@@ -280,54 +346,73 @@ export const PublicProgramPage: React.FC = () => {
 
             {/* ── Award Categories ─────────────────────────────────────────── */}
             {hasCategories && (
-                <section className="py-16 md:py-24 bg-slate-50">
+                <section className="py-16 md:py-24 bg-gradient-to-b from-slate-50 via-white to-slate-50">
                     <div className="max-w-6xl mx-auto px-4 sm:px-6">
-                        <div className="mb-10">
-                            <h2 className="text-3xl font-bold text-slate-900">Award Categories</h2>
-                            <p className="text-slate-500 mt-2 text-base">
+                        <div className="mb-8 rounded-3xl border border-slate-200 bg-white shadow-sm p-6 md:p-8 relative overflow-hidden">
+                            <div className="absolute inset-y-0 right-0 w-56 bg-gradient-to-l from-indigo-50/80 to-transparent pointer-events-none" />
+                            <div className="relative">
+                                <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 mb-3">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    Awards Directory
+                                </div>
+                                <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Award Categories</h2>
+                                <p className="text-slate-500 mt-2 text-base">
                                 Recognizing excellence across {categories.length} {categories.length === 1 ? 'category' : 'categories'}
-                            </p>
+                                </p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+                                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.14em]">Primary Categories</p>
+                                <p className="text-3xl font-black text-slate-900 mt-1 leading-none">{categoryHierarchy.roots.length}</p>
+                            </div>
+                            <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white px-4 py-3.5 shadow-sm">
+                                <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-[0.14em]">Total Award Entries</p>
+                                <p className="text-3xl font-black text-indigo-700 mt-1 leading-none">{totalAwardEntries}</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+                                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.14em] flex items-center gap-1.5">
+                                    <Layers3 className="w-3.5 h-3.5" />
+                                    Nested Structure
+                                </p>
+                                <p className="text-3xl font-black text-slate-900 mt-1 leading-none">
+                                    {totalNestedNodes}
+                                </p>
+                            </div>
                         </div>
                         <div className="space-y-4">
                             {categoryHierarchy.roots.map((root: any) => {
                                 const children = categoryHierarchy.childrenByParent[root._key] || [];
+                                const totalRootAwards = countLeafAwards(root._key);
                                 return (
-                                    <details key={root._key} className="bg-white rounded-xl border border-slate-200 open:border-slate-300 overflow-hidden">
-                                        <summary className="list-none cursor-pointer flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                                    <details key={root._key} className="group bg-white rounded-2xl border border-slate-200 open:border-indigo-300 open:shadow-md overflow-hidden transition-all">
+                                        <summary className="list-none cursor-pointer flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50/70 transition-colors">
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <Trophy className="w-4 h-4 text-slate-500 flex-shrink-0" />
-                                                <span className="text-sm font-semibold text-slate-900 truncate">{root._title}</span>
-                                                {children.length > 0 && (
-                                                    <span className="text-xs text-slate-500">({children.length})</span>
-                                                )}
+                                                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                                                    <Trophy className="w-4 h-4" />
+                                                </span>
+                                                <div className="min-w-0">
+                                                    <span className="text-base font-bold text-slate-900 truncate block">{root._title}</span>
+                                                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.12em]">
+                                                            {children.length} subcategories
+                                                        </span>
+                                                        <span className="text-[11px] font-semibold text-indigo-600 uppercase tracking-[0.12em]">
+                                                            {totalRootAwards} awards
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                                            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 group-open:rotate-180" />
                                         </summary>
 
                                         {(root._description || children.length > 0) && (
-                                            <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+                                            <div className="border-t border-slate-100 px-5 py-4 space-y-3 bg-slate-50/40">
                                                 {root._description && (
                                                     <p className="text-sm text-slate-500 leading-relaxed">{root._description}</p>
                                                 )}
 
-                                                {children.length > 0 && (
-                                                    <div>
-                                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                                                            Subcategories
-                                                        </p>
-                                                        <ul className="space-y-1.5">
-                                                            {children.map((child: any) => (
-                                                                <li
-                                                                    key={child._key}
-                                                                    className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2"
-                                                                    title={child._description || child._title}
-                                                                >
-                                                                    {child._title}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
+                                                {children.length > 0 && renderCategoryLevel(root._key)}
                                             </div>
                                         )}
                                     </details>

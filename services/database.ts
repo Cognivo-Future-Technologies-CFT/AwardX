@@ -2017,10 +2017,43 @@ class DatabaseService {
 
   // ── Judging / Scores ──────────────────────────────────────────────────────
 
+  async getSubmissionJudgeAssignmentId(submissionId: string, preferredJudgeId?: string): Promise<string | null> {
+    if (!supabase) throw new Error('Supabase not configured');
+    if (!submissionId) return null;
+
+    let query = supabase
+      .from('submission_judges')
+      .select('id, judge_id')
+      .eq('submission_id', submissionId)
+      .order('assigned_at', { ascending: true })
+      .limit(1);
+
+    if (preferredJudgeId) {
+      query = supabase
+        .from('submission_judges')
+        .select('id, judge_id')
+        .eq('submission_id', submissionId)
+        .eq('judge_id', preferredJudgeId)
+        .limit(1);
+    }
+
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) return null;
+    return data[0].id;
+  }
+
   async submitScores(
     submissionJudgeId: string,
     criteriaScores: { criterionId: string; score: number; comment?: string }[],
     overallComment?: string,
+    criteriaBlueprint?: Array<{
+      name: string;
+      description?: string;
+      weight: number;
+      minScore: number;
+      maxScore: number;
+      sortOrder: number;
+    }>,
   ): Promise<void> {
     if (!supabase) throw new Error('Supabase not configured');
 
@@ -2047,9 +2080,66 @@ class DatabaseService {
     }
 
     const programId = (assignment as any)?.submissions?.program_id;
-    const criterionIds = Array.from(new Set(criteriaScores.map((item) => item.criterionId).filter(Boolean)));
+    let normalizedCriteriaScores = [...criteriaScores];
+    let criterionIds = Array.from(new Set(normalizedCriteriaScores.map((item) => item.criterionId).filter(Boolean)));
     if (criterionIds.length === 0) {
       throw new Error('No valid criteria provided');
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const hasInvalidCriterionIds = criterionIds.some((id) => !uuidRegex.test(id));
+    if (hasInvalidCriterionIds) {
+      const { data: existingCriteria, error: existingCriteriaError } = await supabase
+        .from('judging_criteria')
+        .select('id, sort_order')
+        .eq('program_id', programId)
+        .order('sort_order', { ascending: true });
+
+      if (existingCriteriaError) {
+        throw new Error(existingCriteriaError.message || 'Failed to sync scorecard criteria');
+      }
+
+      let criteriaRows = existingCriteria || [];
+
+      if (criteriaRows.length === 0 && criteriaBlueprint && criteriaBlueprint.length > 0) {
+        const payload = [...criteriaBlueprint]
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((criterion, index) => ({
+            program_id: programId,
+            name: criterion.name,
+            description: criterion.description || '',
+            weight: Number(criterion.weight) || 0,
+            min_score: Number(criterion.minScore) || 0,
+            max_score: Number(criterion.maxScore) || 100,
+            sort_order: index,
+          }));
+
+        const { data: insertedCriteria, error: insertCriteriaError } = await supabase
+          .from('judging_criteria')
+          .insert(payload)
+          .select('id, sort_order')
+          .order('sort_order', { ascending: true });
+
+        if (insertCriteriaError) {
+          throw new Error(insertCriteriaError.message || 'Failed to create scorecard criteria');
+        }
+
+        criteriaRows = insertedCriteria || [];
+      }
+
+      if (criteriaRows.length === 0) {
+        throw new Error('No scorecard criteria are configured for this program yet.');
+      }
+
+      normalizedCriteriaScores = normalizedCriteriaScores.map((criterionScore, index) => {
+        const mapped = criteriaRows[index] || criteriaRows[0];
+        return {
+          ...criterionScore,
+          criterionId: mapped.id,
+        };
+      });
+
+      criterionIds = Array.from(new Set(normalizedCriteriaScores.map((item) => item.criterionId).filter(Boolean)));
     }
 
     const { data: criteriaRows, error: criteriaError } = await supabase
@@ -2062,7 +2152,7 @@ class DatabaseService {
     }
 
     const criteriaById = new Map((criteriaRows || []).map((row: any) => [row.id, row]));
-    for (const cs of criteriaScores) {
+    for (const cs of normalizedCriteriaScores) {
       const criterion = criteriaById.get(cs.criterionId);
       if (!criterion) {
         throw new Error(`Invalid criterion: ${cs.criterionId}`);
@@ -2076,7 +2166,7 @@ class DatabaseService {
     }
     
     // 1. Save individual criterion scores
-    const rows = criteriaScores.map(cs => ({
+    const rows = normalizedCriteriaScores.map(cs => ({
       submission_judge_id: submissionJudgeId,
       criterion_id: cs.criterionId,
       score: cs.score,

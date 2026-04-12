@@ -23,6 +23,38 @@ interface SavedForm {
   createdAt: string;
 }
 
+const ensureMandatoryAwardSelector = (
+  fields: FormField[],
+  pages: FormPage[],
+  awardOptions: string[],
+): FormField[] => {
+  const firstPageId = pages[0]?.id || 'page-1';
+  const options = awardOptions.length > 0 ? awardOptions : ['General'];
+  const existing = fields.find((field) => field.type === 'award_selector');
+
+  const mandatoryAwardField: FormField = existing
+    ? {
+        ...existing,
+        label: existing.label || 'Award Selection',
+        placeholder: existing.placeholder || 'Select award category...',
+        required: true,
+        pageId: existing.pageId || firstPageId,
+        options,
+      }
+    : {
+        id: `field-award-selector-${Date.now()}`,
+        type: 'award_selector',
+        label: 'Award Selection',
+        placeholder: 'Select award category...',
+        required: true,
+        options,
+        pageId: firstPageId,
+      };
+
+  const nonAwardFields = fields.filter((field) => field.type !== 'award_selector');
+  return [mandatoryAwardField, ...nonAwardFields];
+};
+
 const mapDbFieldToFormField = (f: any): FormField => {
   const cfg = f.config || {};
   return {
@@ -67,6 +99,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
+  const [awardOptions, setAwardOptions] = useState<string[]>([]);
 
   useEffect(() => {
     setPortalTarget(document.getElementById('dashboard-header-actions'));
@@ -74,6 +107,18 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
 
   useEffect(() => {
     loadSavedForms();
+    void (async () => {
+      if (!activeEvent) return;
+      const categories = await db.getCategories(activeEvent.id);
+      const options = Array.from(
+        new Set(
+          categories
+            .map((category) => String(category.title || '').trim())
+            .filter(Boolean),
+        ),
+      );
+      setAwardOptions(options);
+    })();
   }, [activeEvent]);
 
   const loadSavedForms = async () => {
@@ -101,7 +146,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     // Prevent duplicate saves
     if (isSaving) return;
 
-    setCurrentForm(fields);
+    const normalizedFields = ensureMandatoryAwardSelector(fields, pages, awardOptions);
+    setCurrentForm(normalizedFields);
     setCurrentPages(pages);
     setCurrentTheme(theme);
 
@@ -111,7 +157,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       setSaveMessage(null);
       try {
         await db.updateForm(selectedFormId, { pages, theme });
-        await db.replaceFormFields(selectedFormId, fields.map(mapFormFieldToDbPayload));
+        await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
         await loadSavedForms();
         setSaveMessage({ type: 'success', text: 'Form saved successfully!' });
         setTimeout(() => setSaveMessage(null), 5000);
@@ -141,7 +187,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       });
 
       await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
-      await db.replaceFormFields((newForm as any).id, currentForm.map(mapFormFieldToDbPayload));
+      const normalizedFields = ensureMandatoryAwardSelector(currentForm, currentPages, awardOptions);
+      await db.replaceFormFields((newForm as any).id, normalizedFields.map(mapFormFieldToDbPayload));
 
       setFormName('');
       setIsSaveModalOpen(false);
@@ -158,7 +205,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   };
 
   const handleLoadForm = (form: SavedForm) => {
-    setCurrentForm(form.fields);
+    const normalizedFields = ensureMandatoryAwardSelector(form.fields, form.pages || currentPages || [], awardOptions);
+    setCurrentForm(normalizedFields);
     setCurrentPages(form.pages || []);
     setCurrentTheme(form.theme);
     setSelectedFormId(form.id);
@@ -253,7 +301,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       if (hasFormData && selectedFormId) {
         void (async () => {
           await db.updateForm(selectedFormId, { pages: currentData.pages, theme: currentData.theme });
-          await db.replaceFormFields(selectedFormId, currentData.fields.map(mapFormFieldToDbPayload));
+          const normalizedFields = ensureMandatoryAwardSelector(currentData.fields, currentData.pages, awardOptions);
+          await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
           await loadSavedForms();
         })();
       }

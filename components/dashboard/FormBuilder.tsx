@@ -229,6 +229,14 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   // --- Actions ---
   // --- Actions (each mutating action records a history snapshot first) ---
   const addField = (type: string) => {
+    if (type === 'award_selector') {
+      const existingAwardField = fields.find((field) => field.type === 'award_selector');
+      if (existingAwardField) {
+        setSelectedFieldId(existingAwardField.id);
+        return;
+      }
+    }
+
     pushHistory();
     const fieldDef = fieldTypes.flatMap(g => g.items).find(t => t.type === type);
     const newField: FormField = {
@@ -237,7 +245,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       label: fieldDef?.label || 'New Field',
       placeholder: '',
       helpText: '',
-      required: false,
+      required: type === 'award_selector',
       pageId: selectedPageId,
       ...(type === 'select' || type === 'radio' || type === 'checkbox'
         ? { options: ['Option 1', 'Option 2', 'Option 3'] }
@@ -255,6 +263,10 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   };
 
   const deleteField = (id: string, e?: React.MouseEvent) => {
+    const targetField = fields.find((field) => field.id === id);
+    if (targetField?.type === 'award_selector') {
+      return;
+    }
     e?.stopPropagation();
     pushHistory();
     setFields(prev => prev.filter(f => f.id !== id));
@@ -262,6 +274,9 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   };
 
   const duplicateField = (field: FormField, e?: React.MouseEvent) => {
+    if (field.type === 'award_selector') {
+      return;
+    }
     e?.stopPropagation();
     pushHistory();
     const newField = { ...field, id: `field-${Date.now()}`, label: `${field.label} (Copy)` };
@@ -519,6 +534,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               {activeFields.map((field, index) => {
                 const isDragging = draggedFieldId === field.id;
                 const isDragOver = dragOverIndex === index && !isDragging;
+                const isMandatoryAwardField = field.type === 'award_selector';
                 
                 return (
                 <motion.div
@@ -593,13 +609,23 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                       {selectedFieldId === field.id && (
                         <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-100 text-slate-400 ml-2 shrink-0">
                           <button
-                            onClick={(e) => { e.stopPropagation(); updateField(field.id, { required: !field.required }); }}
-                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'}`}
-                            title={field.required ? 'Mark optional' : 'Mark required'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isMandatoryAwardField) return;
+                              updateField(field.id, { required: !field.required });
+                            }}
+                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'} ${isMandatoryAwardField ? 'cursor-not-allowed opacity-70' : ''}`}
+                            title={isMandatoryAwardField ? 'Award Selection is mandatory' : field.required ? 'Mark optional' : 'Mark required'}
                           >
                             <span className="text-[10px] px-0.5">{field.required ? 'REQ' : 'OPT'}</span>
                           </button>
-                          <button onClick={(e) => duplicateField(field, e)} className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all" title="Duplicate"><Edit3 className="w-3.5 h-3.5" /></button>
+                          <button
+                            onClick={(e) => duplicateField(field, e)}
+                            className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all"
+                            title="Duplicate"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
                           {isTouchDevice && (
                             <>
                               <button
@@ -624,8 +650,10 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                               </button>
                             </>
                           )}
-                          <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
+                          {!isMandatoryAwardField && (
+                            <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                          )}
+                        </div>
                       )}
             </div>
 
@@ -647,7 +675,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                             placeholder="Help text (optional)..."
                           />
                         </div>
-                        {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' || field.type === 'award_selector') && (
+                        {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
                           <div className="space-y-1.5 pt-2 border-t border-slate-100">
                             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Options</span>
                             {field.options?.map((opt, i) => (
@@ -678,6 +706,13 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                             >
                               <Plus className="w-3 h-3" /> Add Option
                             </button>
+                          </div>
+                        )}
+                        {field.type === 'award_selector' && (
+                          <div className="pt-2 border-t border-slate-100">
+                            <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-2.5 py-2 font-medium">
+                              Award Selection is mandatory and is synced from program award categories.
+                            </p>
                           </div>
                         )}
                       </div>

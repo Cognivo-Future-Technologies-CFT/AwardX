@@ -23,6 +23,38 @@ const defaultTheme: FormTheme = {
   fontFamily: 'Inter, sans-serif',
 };
 
+const ensureMandatoryAwardSelectorField = (
+  fields: FormField[],
+  pages: FormPage[],
+  awardOptions: string[],
+): FormField[] => {
+  const firstPageId = pages[0]?.id || 'page-1';
+  const options = awardOptions.length > 0 ? awardOptions : ['General'];
+  const existing = fields.find((field) => field.type === 'award_selector');
+
+  const mandatoryField: FormField = existing
+    ? {
+        ...existing,
+        label: existing.label || 'Award Selection',
+        placeholder: existing.placeholder || 'Select award category...',
+        required: true,
+        options,
+        pageId: existing.pageId || firstPageId,
+      }
+    : {
+        id: `award-selector-mandatory-${Date.now()}`,
+        type: 'award_selector',
+        label: 'Award Selection',
+        placeholder: 'Select award category...',
+        required: true,
+        options,
+        pageId: firstPageId,
+      };
+
+  const nonAwardFields = fields.filter((field) => field.type !== 'award_selector');
+  return [mandatoryField, ...nonAwardFields];
+};
+
 export const FormSubmissionPage: React.FC = () => {
   const navigate = useNavigate();
   const { formId: formIdParam } = useParams<{ formId?: string }>();
@@ -156,6 +188,16 @@ export const FormSubmissionPage: React.FC = () => {
         setFormPages(form.pages || [{ id: 'page-1', title: 'Page 1', order: 0 }]);
         setTheme(form.theme || defaultTheme);
 
+        const { data: categoryRows } = await supabase
+          .from('categories')
+          .select('title')
+          .eq('program_id', form.program_id)
+          .order('title', { ascending: true });
+
+        const awardOptions = Array.from(
+          new Set((categoryRows || []).map((row: any) => String(row.title || '').trim()).filter(Boolean)),
+        );
+
         const { data: paymentConfigRow } = await supabase
           .from('program_payment_configs')
           .select('*')
@@ -192,7 +234,9 @@ export const FormSubmissionPage: React.FC = () => {
               validation: cfg.validation || undefined,
             };
           });
-          setFormFields(mappedFields);
+          const pages = form.pages || [{ id: 'page-1', title: 'Page 1', order: 0 }];
+          const normalizedFields = ensureMandatoryAwardSelectorField(mappedFields, pages, awardOptions);
+          setFormFields(normalizedFields);
 
           // Prefill identity fields where labels/types match and values are empty.
           const { user } = await auth.getUser();
@@ -208,7 +252,7 @@ export const FormSubmissionPage: React.FC = () => {
 
             setFormData((prev) => {
               const next = { ...prev };
-              for (const field of mappedFields) {
+              for (const field of normalizedFields) {
                 const currentValue = next[field.id];
                 if (currentValue != null && String(currentValue).trim() !== '') continue;
 

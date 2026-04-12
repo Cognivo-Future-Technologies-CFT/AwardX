@@ -6,6 +6,32 @@ import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
 import { ExtensionsMarketplaceModal } from './ExtensionsMarketplaceModal';
+import { db } from '../../../services/database';
+import { roundSubmissions } from '../../../services/supabase';
+
+interface RoundParticipantInsight {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  status: 'active' | 'advanced' | 'eliminated';
+  score?: number | null;
+  votes?: number;
+}
+
+interface RoundJudgeInsight {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  email?: string;
+}
+
+interface RoundCardInsight {
+  participantTotal: number;
+  participantAdvanced: number;
+  participants: RoundParticipantInsight[];
+  judgeTotal: number;
+  judges: RoundJudgeInsight[];
+}
 
 interface ScheduleRoundsViewProps {
   activeEvent: Program | null;
@@ -17,6 +43,165 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExtensionsOpen, setIsExtensionsOpen] = useState(false);
+  const [roundInsights, setRoundInsights] = useState<Record<string, RoundCardInsight>>({});
+  const [isInsightsLoading, setIsInsightsLoading] = useState(false);
+
+  const enforceNominationFirst = useCallback(async (inputRounds: Round[]): Promise<Round[]> => {
+    const ordered = [...inputRounds].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    if (ordered.length === 0) return ordered;
+
+    const nominationIndex = ordered.findIndex(r => r.type === 'Nomination');
+    let normalized = ordered;
+
+    if (nominationIndex === -1) {
+      normalized = ordered.map((round, index) => (
+        index === 0 ? { ...round, type: 'Nomination' as const } : round
+      ));
+    } else if (nominationIndex > 0) {
+      const nominationRound = ordered[nominationIndex];
+      normalized = [nominationRound, ...ordered.filter((_, idx) => idx !== nominationIndex)];
+    }
+
+    const now = new Date().toISOString();
+    const changedRounds = normalized
+      .map((round, index) => ({
+        ...round,
+        order: index,
+        updatedAt: now,
+        version: round.version + 1,
+      }))
+      .filter((round, index) => {
+        const previous = inputRounds.find(r => r.id === round.id);
+        if (!previous) return false;
+        return previous.order !== index || previous.type !== round.type;
+      });
+
+    if (changedRounds.length === 0) {
+      return normalized.map((round, index) => ({ ...round, order: index }));
+    }
+
+    try {
+      const persisted = await Promise.all(
+        changedRounds.map(round => scheduleRoundsService.updateRound(round))
+      );
+      const persistedMap = new Map(persisted.map(round => [round.id, round]));
+      return normalized.map((round, index) => {
+        const persistedRound = persistedMap.get(round.id);
+        if (persistedRound) return persistedRound;
+        return { ...round, order: index };
+      });
+    } catch (error) {
+      console.error('Failed to enforce Nomination-first ordering:', error);
+      return normalized.map((round, index) => ({ ...round, order: index }));
+    }
+  }, []);
+
+  const loadRoundInsights = useCallback(async (targetRounds: Round[]) => {
+    if (!activeEvent || targetRounds.length === 0) {
+      setRoundInsights({});
+      return;
+    }
+
+    setIsInsightsLoading(true);
+    try {
+      const judges = await db.getJudges(activeEvent.id);
+      const judgeMap = new Map(
+        judges.map(judge => [judge.id, {
+          id: judge.id,
+          name: judge.name,
+          avatarUrl: judge.avatar,
+          email: judge.email,
+        }])
+      );
+
+      const insightsEntries = await Promise.all(
+        targetRounds.map(async (round): Promise<[string, RoundCardInsight]> => {
+          if (round.id.startsWith('round-')) {
+            return [round.id, {
+              participantTotal: 0,
+              participantAdvanced: 0,
+              participants: [],
+              judgeTotal: 0,
+              judges: [],
+            }];
+          }
+
+          const { data, error } = await roundSubmissions.getByRound(round.id);
+          if (error || !data) {
+            return [round.id, {
+              participantTotal: 0,
+              participantAdvanced: 0,
+              participants: [],
+              judgeTotal: 0,
+              judges: [],
+            }];
+          }
+
+          const participants: RoundParticipantInsight[] = data.map((row: any) => {
+            const submission = row.submissions || {};
+            const safeStatus = row.status === 'advanced' || row.status === 'eliminated' ? row.status : 'active';
+            return {
+              id: submission.id || row.submission_id,
+              name: submission.applicant_name || submission.title || 'Untitled Submission',
+              avatarUrl: submission.cover_image_url || undefined,
+              status: safeStatus,
+              score: typeof submission.average_score === 'number' ? submission.average_score : null,
+              votes: submission.votes_count || submission.submission_data?.votes || 0,
+            };
+          });
+
+          const judgeIds = new Set<string>();
+          data.forEach((row: any) => {
+            const submissionJudges = row.submissions?.submission_judges || [];
+            submissionJudges.forEach((judgeRef: any) => {
+              if (judgeRef?.judge_id) judgeIds.add(judgeRef.judge_id);
+            });
+          });
+
+          const assignedRoundJudges: RoundJudgeInsight[] = Array.from(judgeIds)
+            .map(judgeId => judgeMap.get(judgeId))
+            .filter(Boolean) as RoundJudgeInsight[];
+
+          let roundJudges: RoundJudgeInsight[] = assignedRoundJudges;
+
+          // For all_judges rounds, display the full judge panel even before explicit assignments exist.
+          if (round.evaluatorStrategy === 'all_judges') {
+            roundJudges = judges.map(judge => ({
+              id: judge.id,
+              name: judge.name,
+              avatarUrl: judge.avatar,
+              email: judge.email,
+            }));
+          } else if (roundJudges.length === 0) {
+            // Fallback for partially configured rounds where assignment rows are not yet present.
+            roundJudges = judges.map(judge => ({
+              id: judge.id,
+              name: judge.name,
+              avatarUrl: judge.avatar,
+              email: judge.email,
+            }));
+          }
+
+          const participantAdvanced = participants.filter(p => p.status === 'advanced').length;
+
+          return [round.id, {
+            participantTotal: participants.length,
+            participantAdvanced,
+            participants,
+            judgeTotal: roundJudges.length,
+            judges: roundJudges,
+          }];
+        })
+      );
+
+      setRoundInsights(Object.fromEntries(insightsEntries));
+    } catch (error) {
+      console.error('Failed to load round insights:', error);
+      setRoundInsights({});
+    } finally {
+      setIsInsightsLoading(false);
+    }
+  }, [activeEvent]);
 
   const loadWorkflow = useCallback(async () => {
     if (!activeEvent) return;
@@ -24,7 +209,8 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     try {
       // Load rounds from database
       const loadedRounds = await scheduleRoundsService.getRounds(activeEvent.id);
-      setRounds(loadedRounds);
+      const normalizedRounds = await enforceNominationFirst(loadedRounds);
+      setRounds(normalizedRounds);
 
       // Load edges from storage
       const loadedEdges = await scheduleRoundsService.getEdges(activeEvent.id);
@@ -38,6 +224,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       setIsLoading(false);
     }
   }, [activeEvent]);
+
+  useEffect(() => {
+    void loadRoundInsights(rounds);
+  }, [rounds, loadRoundInsights]);
 
   useEffect(() => {
     if (activeEvent) {
@@ -322,6 +512,8 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             }
           }}
           programId={activeEvent.id}
+          roundInsights={roundInsights}
+          insightsLoading={isInsightsLoading}
         />
       </div>
     </div>

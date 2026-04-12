@@ -1374,10 +1374,45 @@ export const judges = {
   }) => {
     const { programId, ...judgePayload } = judge;
     const org = await organizations.getCurrent();
+
+    // Reuse existing judge in this organization when the email already exists.
+    // This avoids duplicate-key errors and lets invite/add flows behave idempotently.
+    const normalizedEmail = (judgePayload.email || '').trim().toLowerCase();
+    if (org.data?.id && normalizedEmail) {
+      const { data: existingJudge } = await supabase
+        .from('judges')
+        .select('*, invite_token')
+        .eq('organization_id', org.data.id)
+        .ilike('email', normalizedEmail)
+        .maybeSingle();
+
+      if (existingJudge) {
+        // Reassign judge to the current program when needed.
+        if (programId && existingJudge.program_id !== programId) {
+          const { data: updatedJudge, error: updateError } = await supabase
+            .from('judges')
+            .update({
+              program_id: programId,
+              name: existingJudge.name || judgePayload.name,
+            })
+            .eq('id', existingJudge.id)
+            .eq('organization_id', org.data.id)
+            .select('*, invite_token')
+            .single();
+
+          if (updateError) return { data: null, error: updateError };
+          return { data: { ...updatedJudge, reused_existing: true }, error: null };
+        }
+
+        return { data: { ...existingJudge, reused_existing: true }, error: null };
+      }
+    }
+
     const { data, error } = await supabase
       .from('judges')
       .insert({
         ...judgePayload,
+        email: normalizedEmail || judgePayload.email,
         organization_id: org.data?.id,
         program_id: programId || null,
       })
@@ -1387,10 +1422,31 @@ export const judges = {
   },
 
   invite: async (email: string, name: string, programId?: string) => {
-    // Create judge record with auto-generated invite_token
+    // Create/reuse judge record first.
     const { data, error } = await judges.create({ name, email, programId });
-    // data now includes invite_token for constructing the magic link
-    return { data, error };
+    if (error || !data?.id) {
+      return { data, error };
+    }
+
+    // Always rotate invite token on invite to guarantee a fresh valid link.
+    const freshToken = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`) as string;
+    const { data: rotated, error: rotateError } = await supabase
+      .from('judges')
+      .update({
+        invite_token: freshToken,
+        invite_token_used_at: null,
+        status: 'invited',
+        accepted_at: null,
+      })
+      .eq('id', data.id)
+      .select('*, invite_token')
+      .single();
+
+    if (rotateError) {
+      return { data, error: rotateError };
+    }
+
+    return { data: { ...rotated, reused_existing: (data as any).reused_existing === true }, error: null };
   },
 
   updateStatus: async (id: string, status: string) => {
@@ -2760,7 +2816,7 @@ export const roundSubmissions = {
       .from('round_submissions')
       .select(`
         *,
-        submissions(id, title, description, cover_image_url, status, average_score, votes_count, applicant_name, applicant_email, category_id, submission_data)
+        submissions(id, title, description, cover_image_url, status, average_score, votes_count, applicant_name, applicant_email, category_id, submission_data, submission_judges(judge_id))
       `)
       .eq('round_id', roundId)
       .order('enrolled_at', { ascending: true });
