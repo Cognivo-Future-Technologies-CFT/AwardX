@@ -5,6 +5,86 @@ import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redis
 
 const router = Router();
 
+function validateEdgesAsDag(roundIds: string[], edges: Array<{ source_round_id?: string; target_round_id?: string }>) {
+  const roundIdSet = new Set(roundIds);
+  const adjacency = new Map<string, Set<string>>();
+  const indegree = new Map<string, number>();
+  const seenPairs = new Set<string>();
+
+  for (const roundId of roundIds) {
+    adjacency.set(roundId, new Set());
+    indegree.set(roundId, 0);
+  }
+
+  for (const edge of edges) {
+    const source = String(edge.source_round_id || '');
+    const target = String(edge.target_round_id || '');
+
+    if (!source || !target) {
+      return { ok: false, error: 'Each edge must include source_round_id and target_round_id' };
+    }
+    if (!roundIdSet.has(source) || !roundIdSet.has(target)) {
+      return { ok: false, error: 'Edges must connect existing rounds in this program' };
+    }
+    if (source === target) {
+      return { ok: false, error: 'Self-referential round edges are not allowed' };
+    }
+
+    const pairKey = `${source}->${target}`;
+    if (seenPairs.has(pairKey)) {
+      return { ok: false, error: `Duplicate edge detected: ${source} -> ${target}` };
+    }
+    seenPairs.add(pairKey);
+
+    const neighbors = adjacency.get(source)!;
+    if (!neighbors.has(target)) {
+      neighbors.add(target);
+      indegree.set(target, (indegree.get(target) || 0) + 1);
+    }
+  }
+
+  const queue: string[] = [];
+  for (const [node, degree] of indegree.entries()) {
+    if (degree === 0) queue.push(node);
+  }
+
+  let visited = 0;
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    visited += 1;
+    for (const neighbor of adjacency.get(node) || []) {
+      const nextDegree = (indegree.get(neighbor) || 0) - 1;
+      indegree.set(neighbor, nextDegree);
+      if (nextDegree === 0) queue.push(neighbor);
+    }
+  }
+
+  if (visited !== roundIds.length) {
+    return { ok: false, error: 'Round graph contains a cycle and cannot be saved' };
+  }
+
+  return { ok: true };
+}
+
+function validateEdgeCondition(raw: any) {
+  const condition = raw && typeof raw === 'object' ? raw : { type: 'always' };
+  const type = String(condition.type || 'always').toLowerCase();
+  const allowed = new Set(['always', 'if_shortlisted', 'if_score_gte', 'manual_approval', 'custom_logic']);
+
+  if (!allowed.has(type)) {
+    return { ok: false, error: `Unsupported edge condition type: ${type}` };
+  }
+
+  if (type === 'if_score_gte') {
+    const value = Number((condition as any).score ?? (condition as any).value);
+    if (!Number.isFinite(value)) {
+      return { ok: false, error: 'if_score_gte condition requires a numeric score threshold' };
+    }
+  }
+
+  return { ok: true };
+}
+
 async function invalidateSchedule(programId: string) {
   await Promise.all([
     deleteCache(cacheKeys.programRounds(programId)),
@@ -182,6 +262,29 @@ router.put('/:programId/edges', requireAuth, async (req, res) => {
 
   try {
     const supabase = getSupabaseAdmin();
+
+    const { data: roundRows, error: roundsError } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('program_id', programId);
+
+    if (roundsError) {
+      return res.status(500).json({ error: roundsError.message || 'Failed to validate round graph' });
+    }
+
+    const roundIds = (roundRows || []).map((row: any) => row.id);
+
+    for (const edge of edges) {
+      const conditionValidation = validateEdgeCondition(edge?.condition);
+      if (!conditionValidation.ok) {
+        return res.status(400).json({ error: conditionValidation.error });
+      }
+    }
+
+    const dagValidation = validateEdgesAsDag(roundIds, edges);
+    if (!dagValidation.ok) {
+      return res.status(400).json({ error: dagValidation.error });
+    }
 
     const { error: deleteError } = await supabase.from('round_edges').delete().eq('program_id', programId);
     if (deleteError) {

@@ -18,6 +18,7 @@ const WorkflowPage = lazy(() => import('./components/pages/WorkflowPage').then((
 const FormSubmissionPage = lazy(() => import('./components/pages/FormSubmissionPage').then((m) => ({ default: m.FormSubmissionPage })));
 const PublicProgramPage = lazy(() => import('./components/pages/PublicProgramPage').then((m) => ({ default: m.PublicProgramPage })));
 const JudgePortalPage = lazy(() => import('./components/pages/JudgePortalPage').then((m) => ({ default: m.JudgePortalPage })));
+const TeamInvitePage = lazy(() => import('./components/pages/TeamInvitePage').then((m) => ({ default: m.TeamInvitePage })));
 const MySubmissionsPage = lazy(() => import('./components/pages/MySubmissionsPage').then((m) => ({ default: m.MySubmissionsPage })));
 const PublicVotingPage = lazy(() => import('./components/pages/PublicVotingPage').then((m) => ({ default: m.PublicVotingPage })));
 
@@ -198,6 +199,8 @@ const App: React.FC = () => {
         <Route path="/form/:formId" element={<FormSubmissionPage />} />
         <Route path="/judge" element={<JudgePortalPage />} />
         <Route path="/judge/:token" element={<JudgePortalPage />} />
+        <Route path="/team-invite" element={<TeamInvitePage />} />
+        <Route path="/team-invite/:token" element={<TeamInvitePage />} />
         <Route path="/program" element={<PublicProgramPage />} />
         <Route path="/program/:slug" element={<PublicProgramPage />} />
         <Route path="/voting/:roundId" element={<PublicVotingPage />} />

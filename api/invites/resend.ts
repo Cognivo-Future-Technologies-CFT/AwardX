@@ -97,7 +97,7 @@ export default async function handler(req: any, res: any) {
       }
 
       const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
-      const inviteUrl = `${siteUrl}/signup?teamInviteToken=${rotatedToken}`;
+      const inviteUrl = `${siteUrl}/team-invite/${rotatedToken}`;
       const programTitle = (inviteRow as any).programs?.title || programTitleFallback || 'your workspace';
       const roleName = (inviteRow as any).roles?.name || 'Team member';
       const subject = `AwardX invite: ${programTitle}`;

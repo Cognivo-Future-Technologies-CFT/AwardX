@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { AlertCircle, CalendarDays, ChevronDown, Trophy, ArrowRight } from 'lucide-react';
@@ -119,6 +119,38 @@ export const PublicProgramPage: React.FC = () => {
         retry: false,
     });
 
+    const categories = data?.awards || [];
+    const categoryHierarchy = useMemo(() => {
+        const normalized = categories.map((cat: any, index: number) => ({
+            ...cat,
+            _key: String(cat?.id ?? `category-${index}`),
+            _title: cat?.title || cat?.name || 'Untitled Category',
+            _description: cat?.description || '',
+            _parentKey: cat?.parent_id != null
+                ? String(cat.parent_id)
+                : cat?.parentId != null
+                    ? String(cat.parentId)
+                    : '',
+        }));
+
+        const byKey = new Map<string, any>();
+        normalized.forEach((cat: any) => byKey.set(cat._key, cat));
+
+        const roots: any[] = [];
+        const childrenByParent: Record<string, any[]> = {};
+
+        normalized.forEach((cat: any) => {
+            if (cat._parentKey && byKey.has(cat._parentKey)) {
+                if (!childrenByParent[cat._parentKey]) childrenByParent[cat._parentKey] = [];
+                childrenByParent[cat._parentKey].push(cat);
+            } else {
+                roots.push(cat);
+            }
+        });
+
+        return { roots, childrenByParent };
+    }, [categories]);
+
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-900">
@@ -153,7 +185,6 @@ export const PublicProgramPage: React.FC = () => {
     const aboutBody: string = aboutSection?.content?.body || aboutSection?.content?.description || data.program.description || '';
 
     const deadline: string | undefined = (data.schedule as any)?.deadline || data.program.deadline;
-    const categories = data.awards || [];
     const rounds = data.rounds || [];
     const milestones: any[] = (data.schedule as any)?.milestones || [];
     const faqs = data.faqs || [];
@@ -257,19 +288,51 @@ export const PublicProgramPage: React.FC = () => {
                                 Recognizing excellence across {categories.length} {categories.length === 1 ? 'category' : 'categories'}
                             </p>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {categories.map((cat: any, i: number) => (
-                                <div key={cat.id || i}
-                                    className="bg-white rounded-2xl border border-slate-200 p-6 hover:border-indigo-300 hover:shadow-md transition-all group cursor-default">
-                                    <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center mb-4 group-hover:bg-indigo-600 transition-colors">
-                                        <Trophy className="w-5 h-5 text-indigo-600 group-hover:text-white transition-colors" />
-                                    </div>
-                                    <h3 className="font-bold text-slate-900 leading-snug">{cat.title || cat.name}</h3>
-                                    {cat.description && (
-                                        <p className="text-sm text-slate-500 mt-2 leading-relaxed line-clamp-3">{cat.description}</p>
-                                    )}
-                                </div>
-                            ))}
+                        <div className="space-y-4">
+                            {categoryHierarchy.roots.map((root: any) => {
+                                const children = categoryHierarchy.childrenByParent[root._key] || [];
+                                return (
+                                    <details key={root._key} className="bg-white rounded-xl border border-slate-200 open:border-slate-300 overflow-hidden">
+                                        <summary className="list-none cursor-pointer flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <Trophy className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                                <span className="text-sm font-semibold text-slate-900 truncate">{root._title}</span>
+                                                {children.length > 0 && (
+                                                    <span className="text-xs text-slate-500">({children.length})</span>
+                                                )}
+                                            </div>
+                                            <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                                        </summary>
+
+                                        {(root._description || children.length > 0) && (
+                                            <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+                                                {root._description && (
+                                                    <p className="text-sm text-slate-500 leading-relaxed">{root._description}</p>
+                                                )}
+
+                                                {children.length > 0 && (
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                                                            Subcategories
+                                                        </p>
+                                                        <ul className="space-y-1.5">
+                                                            {children.map((child: any) => (
+                                                                <li
+                                                                    key={child._key}
+                                                                    className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2"
+                                                                    title={child._description || child._title}
+                                                                >
+                                                                    {child._title}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </details>
+                                );
+                            })}
                         </div>
                         <div className="mt-10 text-center">
                             <a href={nominateUrl}

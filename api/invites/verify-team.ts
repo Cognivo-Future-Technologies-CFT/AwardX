@@ -3,6 +3,35 @@ import { verifyTeamSchema } from '../_utils/validation';
 import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
 import { getAuthenticatedUser } from '../_utils/authUser';
 
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+function normalizeInviteToken(raw: unknown): string {
+  if (!raw) return '';
+  const text = (() => {
+    try {
+      return decodeURIComponent(String(raw));
+    } catch {
+      return String(raw);
+    }
+  })().trim();
+
+  const directMatch = text.match(UUID_RE);
+  if (directMatch?.[0]) return directMatch[0];
+
+  try {
+    const maybeUrl = new URL(text);
+    const queryCandidate = maybeUrl.searchParams.get('teamInviteToken') || maybeUrl.searchParams.get('token') || maybeUrl.searchParams.get('inviteToken');
+    const queryMatch = queryCandidate?.match(UUID_RE);
+    if (queryMatch?.[0]) return queryMatch[0];
+    const pathMatch = maybeUrl.pathname.match(UUID_RE);
+    if (pathMatch?.[0]) return pathMatch[0];
+  } catch {
+    // Not a URL, ignore.
+  }
+
+  return '';
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -17,8 +46,9 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const tokenCandidate = req.method === 'GET' ? req.query?.token : req.body?.token;
-  const parsed = verifyTeamSchema.safeParse({ token: tokenCandidate });
+  const tokenCandidate = req.method === 'GET' ? (req.query?.token || req.query?.teamInviteToken || req.query?.inviteToken || req.query?.url) : req.body?.token;
+  const normalizedToken = normalizeInviteToken(tokenCandidate);
+  const parsed = verifyTeamSchema.safeParse({ token: normalizedToken });
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid token format', details: parsed.error.flatten() });
     return;

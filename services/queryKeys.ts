@@ -64,6 +64,8 @@ export const queryKeys = {
   },
   invites: {
     pending: (organizationId: string) => ['invites', 'pending', organizationId] as const,
+    requestTraces: (organizationId: string, programId: string) =>
+      ['invites', 'request-traces', organizationId, programId] as const,
   },
   leaderboard: {
     byProgram: (programId: string) => ['leaderboard', 'program', programId] as const,

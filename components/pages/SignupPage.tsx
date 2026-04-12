@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Check, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { auth } from '../../services/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 function humanizeAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -36,6 +36,16 @@ const GoogleIcon = () => (
 
 export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const nextPath = params.get('next');
+
+  React.useEffect(() => {
+    const teamInviteToken = params.get('teamInviteToken');
+    if (teamInviteToken) {
+      navigate(`/team-invite/${teamInviteToken}`, { replace: true });
+    }
+  }, [navigate, params]);
   const [showPassword, setShowPassword] = React.useState(false);
   const [fullName, setFullName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -47,6 +57,9 @@ export const SignupPage: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
+      if (nextPath) {
+        sessionStorage.setItem('postAuthRedirect', nextPath);
+      }
       const { error: authError } = await auth.signInWithProvider('google');
       if (authError) {
         setError(humanizeAuthError(authError.message));
@@ -70,8 +83,8 @@ export const SignupPage: React.FC = () => {
         setError(humanizeAuthError(authError.message));
         setIsLoading(false);
       } else {
-        // Successfully signed up, navigate to dashboard
-        navigate('/dashboard');
+        // Successfully signed up
+        navigate(nextPath || '/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to sign up');
@@ -232,7 +245,7 @@ export const SignupPage: React.FC = () => {
           </form>
 
            <p className="mt-8 text-center text-sm text-slate-500">
-             Already have an account? <button onClick={() => navigate('/login')} className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">Log in</button>
+             Already have an account? <button onClick={() => navigate(nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : '/login')} className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">Log in</button>
            </p>
         </motion.div>
         

@@ -37,7 +37,8 @@ export default async function handler(req: any, res: any) {
 
     let supabase: any;
     try {
-      supabase = createSupabaseAdmin(auth.token || undefined);
+      // Use service-role client for server-side invite creation and enforce authorization explicitly in code.
+      supabase = createSupabaseAdmin();
     } catch (envError: any) {
       res.status(503).json({ error: envError?.message || 'Server environment is not configured for invites' });
       return;
@@ -101,7 +102,17 @@ export default async function handler(req: any, res: any) {
     const subject = `AwardX invite: ${programTitle}`;
     const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
     const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
-    const resolvedInviteUrl = inviteUrl || `${siteUrl}/signup?teamInviteToken=${inviteRow.token}`;
+    const resolvedInviteUrl = (() => {
+      if (!inviteUrl) return `${siteUrl}/team-invite/${inviteRow.token}`;
+      if (inviteUrl.includes(inviteRow.token)) return inviteUrl;
+
+      const normalizedBase = inviteUrl.replace(/\/$/, '');
+      if (/\/team-invite$/i.test(normalizedBase)) {
+        return `${normalizedBase}/${inviteRow.token}`;
+      }
+
+      return `${siteUrl}/team-invite/${inviteRow.token}`;
+    })();
     const inviteLine = `Accept your invite: ${resolvedInviteUrl}`;
 
     const { id: emailLogId } = await createEmailLog(supabase, {
@@ -147,7 +158,8 @@ export default async function handler(req: any, res: any) {
       html: `<div style="font-family:Arial,sans-serif;line-height:1.6">
         <h2>The AwardX team for ${programTitle} wants you to join</h2>
         <p>${roleLine}</p>
-        <p>${inviteLine}</p>
+        <p><a href="${resolvedInviteUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600">Accept Team Invite</a></p>
+        <p style="font-size:12px;color:#64748b">If the button does not work, copy this link into your browser:<br/>${resolvedInviteUrl}</p>
       </div>`,
     });
 

@@ -669,68 +669,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const visibleLeftNav = filterNav(leftNavItems);
   const visibleRightNav = filterNav(rightNavItems);
   const rootCategories = categories.filter(c => c.parentId === null);
-  const headerNavigationLinks = useMemo<HeaderNavigationLink[]>(() => {
-    const overviewLink: HeaderNavigationLink = {
-      label: 'Overview',
-      submenu: false,
-      onSelect: () => onChangeView('overview'),
-    };
-
-    const operationLinks: HeaderNavItem[] = visibleLeftNav
-      .filter((item) => item.id !== 'overview')
-      .map((item) => ({
-        label: item.label,
-        description: `Open ${item.label} view`,
-        onSelect: () => onChangeView(item.id),
-      }));
-
-    const workspaceLinks: HeaderNavItem[] = visibleRightNav.map((item) => ({
-      label: item.label,
-      onSelect: () => onChangeView(item.id),
-    }));
-
-    const quickLinks: HeaderNavItem[] = [
-      {
-        label: 'Open Settings',
-        icon: 'InfoIcon' as const,
-        onSelect: () => onChangeView('settings'),
-      },
-      {
-        label: 'Audit Logs',
-        icon: 'BookOpenIcon' as const,
-        onSelect: () => onChangeView('logs'),
-      },
-      {
-        label: 'Teams & Roles',
-        icon: 'LifeBuoyIcon' as const,
-        onSelect: () => onChangeView('teams'),
-      },
-    ];
-
-    const links: HeaderNavigationLink[] = [
-      overviewLink,
-      {
-        label: 'Operations',
-        submenu: true as const,
-        type: 'description',
-        items: operationLinks,
-      },
-      {
-        label: 'Workspace',
-        submenu: true as const,
-        type: 'simple',
-        items: workspaceLinks,
-      },
-      {
-        label: 'Quick Actions',
-        submenu: true as const,
-        type: 'icon',
-        items: quickLinks,
-      },
-    ];
-
-    return links.filter((link) => !link.submenu || link.items.length > 0);
-  }, [onChangeView, visibleLeftNav, visibleRightNav]);
+  const headerNavigationLinks = useMemo<HeaderNavigationLink[]>(() => [], []);
 
   // Demo-only user switching was removed for Supabase-backed auth.
   const handleUserSwitch = (_userId: string) => {

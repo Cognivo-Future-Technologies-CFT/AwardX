@@ -69,7 +69,7 @@ const PendingInviteRow: React.FC<{
     revoking: boolean;
 }> = ({ invite, siteOrigin, programTitle, onResend, onRevoke, resending, revoking }) => {
     const [copied, setCopied] = useState(false);
-    const inviteLink = `${siteOrigin}/signup?teamInviteToken=${invite.token}`;
+    const inviteLink = `${siteOrigin}/team-invite/${invite.token}`;
 
     const copyLink = async () => {
         try {
@@ -196,9 +196,15 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [revokingId, setRevokingId] = useState<string | null>(null);
     const [requestTraces, setRequestTraces] = useState<EmailApiRequestTrace[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
+    const eventId = activeEvent?.id ?? '';
+    const eventTitle = activeEvent?.title || 'your workspace';
 
     const appendRequestTrace = (trace: EmailApiRequestTrace) => {
         setRequestTraces((prev) => [trace, ...prev].slice(0, 40));
+        if (!eventId) return;
+        void db.addInviteRequestTrace(eventId, trace).catch((err) => {
+            console.warn('Failed to persist invite request trace:', err);
+        });
     };
 
     // Modals
@@ -213,14 +219,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         permissions: [],
         color: 'bg-slate-100 text-slate-700'
     });
-
-    if (!activeEvent) {
-        return (
-            <div className="flex items-center justify-center h-full text-slate-500">
-                Select a program to manage team roles.
-            </div>
-        );
-    }
 
     // Close menu on outside click
     useEffect(() => {
@@ -241,8 +239,9 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // ── Queries ────────────────────────────────────────────────────────────────
     const { data: members = [], isLoading: membersLoading } = useQuery({
-        queryKey: queryKeys.teams.members(activeEvent.id),
-        queryFn: () => db.getTeamMembers(activeEvent.id),
+        queryKey: queryKeys.teams.members(eventId),
+        queryFn: () => db.getTeamMembers(eventId),
+        enabled: !!eventId,
         staleTime: 30_000,
     });
 
@@ -253,9 +252,17 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         staleTime: 30_000,
     });
 
+    const { data: persistedRequestTraces = [] } = useQuery({
+        queryKey: queryKeys.invites.requestTraces(orgId ?? '', eventId),
+        queryFn: () => db.getInviteRequestTraces(eventId, { days: 7, limit: 40 }),
+        enabled: !!orgId && !!eventId,
+        staleTime: 15_000,
+    });
+
     const { data: rawRoles = [] } = useQuery({
-        queryKey: queryKeys.teams.roles(activeEvent.id),
-        queryFn: () => db.getRoles(activeEvent.id),
+        queryKey: queryKeys.teams.roles(eventId),
+        queryFn: () => db.getRoles(eventId),
+        enabled: !!eventId,
         staleTime: 5 * 60_000,
     });
 
@@ -268,6 +275,10 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         if (!inviteRoleId && rawRoles[0]?.id) setInviteRoleId(rawRoles[0].id);
     }, [rawRoles]);
 
+    useEffect(() => {
+        setRequestTraces(persistedRequestTraces);
+    }, [persistedRequestTraces]);
+
     // ── Mutations ──────────────────────────────────────────────────────────────
     const inviteMutation = useMutation({
         mutationFn: async (vars: { email: string; roleId: string }) => {
@@ -277,9 +288,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                 email: vars.email,
                 roleId: vars.roleId,
                 roleName,
-                programTitle: activeEvent.title || 'your workspace',
-                programId: activeEvent.id,
-                inviteUrl: `${siteUrl}/signup`,
+                programTitle: eventTitle,
+                programId: eventId,
             }, { onTrace: appendRequestTrace });
             return result || { ok: true, emailSent: true };
         },
@@ -288,7 +298,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             toast.error(`Error: ${message}`);
         },
         onSuccess: (result: any) => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(activeEvent.id) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
             if (orgId) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.invites.pending(orgId) });
             }
@@ -305,15 +315,15 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const removeMutation = useMutation({
         mutationFn: (memberId: string) => db.removeTeamMember(memberId),
         onMutate: async (memberId) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.teams.members(activeEvent.id) });
-            const previous = queryClient.getQueryData<TeamMember[]>(queryKeys.teams.members(activeEvent.id));
-            queryClient.setQueryData<TeamMember[]>(queryKeys.teams.members(activeEvent.id), old =>
+            await queryClient.cancelQueries({ queryKey: queryKeys.teams.members(eventId) });
+            const previous = queryClient.getQueryData<TeamMember[]>(queryKeys.teams.members(eventId));
+            queryClient.setQueryData<TeamMember[]>(queryKeys.teams.members(eventId), old =>
                 (old ?? []).filter(m => m.memberId !== memberId)
             );
             return { previous };
         },
         onError: (_err, _vars, context) => {
-            queryClient.setQueryData(queryKeys.teams.members(activeEvent.id), context?.previous);
+            queryClient.setQueryData(queryKeys.teams.members(eventId), context?.previous);
             toast.error('Failed to remove member');
         },
         onSuccess: () => toast.success('Member removed'),
@@ -321,9 +331,9 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     const roleChangeMutation = useMutation({
         mutationFn: (vars: { memberId: string; roleId: string }) =>
-            db.updateTeamMemberRole(vars.memberId, vars.roleId, activeEvent.id),
+            db.updateTeamMemberRole(vars.memberId, vars.roleId, eventId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(activeEvent.id) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
             toast.success('Role updated');
             setIsChangeRoleModalOpen(false);
         },
@@ -334,7 +344,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const handleResend = async (invite: PendingInvite) => {
         setResendingId(invite.id);
         try {
-            await resendTeamInvite(invite.id, activeEvent.title, { onTrace: appendRequestTrace });
+            await resendTeamInvite(invite.id, eventTitle, { onTrace: appendRequestTrace });
             toast.success(`Invite resent to ${invite.email}`);
             if (orgId) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.invites.pending(orgId) });
@@ -367,6 +377,20 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         }
     };
 
+    const handleClearRequestTraces = async () => {
+        if (!eventId) return;
+        try {
+            await db.clearInviteRequestTraces(eventId);
+            setRequestTraces([]);
+            if (orgId) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.invites.requestTraces(orgId, eventId) });
+            }
+        } catch (err) {
+            console.warn('Failed to clear invite request traces:', err);
+            setRequestTraces([]);
+        }
+    };
+
     // ── Role editor ────────────────────────────────────────────────────────────
     const handleCreateRole = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -384,10 +408,10 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     name: editingRole.name,
                     permissions: editingRole.permissions || [],
                     color: editingRole.color,
-                    programId: activeEvent?.id,
+                    programId: eventId,
                 });
             }
-            queryClient.invalidateQueries({ queryKey: queryKeys.teams.roles(activeEvent.id) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.teams.roles(eventId) });
             toast.success('Role saved');
             setIsRoleModalOpen(false);
             setEditingRole({ name: '', permissions: [], color: 'bg-slate-100 text-slate-700' });
@@ -455,8 +479,16 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // Filter pending invites for this program (or org-level invites)
     const filteredPendingInvites = pendingInvites.filter(
-        inv => !inv.programId || inv.programId === activeEvent.id
+        inv => !inv.programId || inv.programId === eventId
     );
+
+    if (!activeEvent) {
+        return (
+            <div className="flex items-center justify-center h-full text-slate-500">
+                Select a program to manage team roles.
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
@@ -499,7 +531,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     <h2 className="text-sm font-bold text-slate-800">Outgoing Invite Requests</h2>
                     <button
                         type="button"
-                        onClick={() => setRequestTraces([])}
+                        onClick={handleClearRequestTraces}
                         className="text-xs font-semibold text-slate-600 hover:text-slate-800"
                     >
                         Clear

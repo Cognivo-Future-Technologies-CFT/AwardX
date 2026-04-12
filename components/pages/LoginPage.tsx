@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff, Gavel, Star, TrendingUp } from 'lucide-react';
 import { auth } from '../../services/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 function humanizeAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -36,6 +36,16 @@ const GoogleIcon = () => (
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const nextPath = params.get('next');
+
+  React.useEffect(() => {
+    const teamInviteToken = params.get('teamInviteToken');
+    if (teamInviteToken) {
+      navigate(`/team-invite/${teamInviteToken}`, { replace: true });
+    }
+  }, [navigate, params]);
   const [showPassword, setShowPassword] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -46,6 +56,9 @@ export const LoginPage: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
+      if (nextPath) {
+        sessionStorage.setItem('postAuthRedirect', nextPath);
+      }
       const { error: authError } = await auth.signInWithProvider('google');
       if (authError) {
         setError(humanizeAuthError(authError.message));
@@ -76,6 +89,8 @@ export const LoginPage: React.FC = () => {
           sessionStorage.removeItem('formReturnUrl');
           // Redirect back to the form
           window.location.href = returnUrl;
+        } else if (nextPath) {
+          navigate(nextPath);
         } else {
           // Successfully logged in, navigate to dashboard
           navigate('/dashboard');

@@ -28,6 +28,12 @@ export const AuthCallback: React.FC = () => {
           
           // Wait a moment to show success state, then redirect
           setTimeout(() => {
+            const postAuthRedirect = sessionStorage.getItem('postAuthRedirect');
+            if (postAuthRedirect) {
+              sessionStorage.removeItem('postAuthRedirect');
+              navigate(postAuthRedirect, { replace: true });
+              return;
+            }
             navigate('/dashboard', { replace: true });
           }, 1000);
         } else {

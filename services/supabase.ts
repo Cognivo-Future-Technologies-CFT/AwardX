@@ -86,6 +86,58 @@ export const resolveMediaPublicUrl = (value?: string | null): string => {
   return raw;
 };
 
+const extractStorageBucketAndPath = (value?: string | null): { bucket: string; path: string } | null => {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+
+  const parseStorageRoute = (input: string): { bucket: string; path: string } | null => {
+    const match = input.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/?#]+)\/([^?#]+)/i);
+    if (!match) return null;
+    const bucket = decodeURIComponent(match[1] || '').trim();
+    const path = decodeURIComponent(match[2] || '').trim();
+    if (!bucket || !path) return null;
+    return { bucket, path };
+  };
+
+  const fromUrl = parseStorageRoute(raw);
+  if (fromUrl) return fromUrl;
+
+  if (raw.startsWith('/storage/v1/object/')) {
+    return parseStorageRoute(raw);
+  }
+
+  const normalized = raw.replace(/^\/+/, '');
+  const avatarsBucket = import.meta.env.VITE_STORAGE_BUCKET_AVATARS || 'media';
+  const submissionsBucket = import.meta.env.VITE_STORAGE_BUCKET_SUBMISSIONS || 'media';
+  const assetsBucket = import.meta.env.VITE_STORAGE_BUCKET_PROGRAM_ASSETS || 'media';
+
+  if (normalized.startsWith('avatars/')) return { bucket: avatarsBucket, path: normalized };
+  if (normalized.startsWith('submissions/')) return { bucket: submissionsBucket, path: normalized };
+  if (normalized.startsWith('program-pages/')) return { bucket: assetsBucket, path: normalized };
+
+  return null;
+};
+
+export const resolveMediaUrl = async (value?: string | null, expiresIn = 60 * 60 * 24 * 7): Promise<string> => {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+
+  const parsed = extractStorageBucketAndPath(raw);
+  if (!parsed || !supabase) {
+    return resolveMediaPublicUrl(raw);
+  }
+
+  const { data, error } = await supabase.storage
+    .from(parsed.bucket)
+    .createSignedUrl(parsed.path, expiresIn);
+
+  if (error || !data?.signedUrl) {
+    return resolveMediaPublicUrl(raw);
+  }
+
+  return data.signedUrl;
+};
+
 // Refresh cache (call after login or when org changes)
 export const refreshUserCache = async () => {
   // No-op beyond triggering fresh reads.
@@ -1137,20 +1189,53 @@ export const submissions = {
   },
 
   assignJudges: async (submissionId: string, judgeIds: string[], replaceExisting = false) => {
-    if (replaceExisting) {
-      await supabase
-        .from('submission_judges')
-        .delete()
-        .eq('submission_id', submissionId);
-    }
     const assignments = judgeIds.map(judgeId => ({
       submission_id: submissionId,
       judge_id: judgeId,
     }));
-    const { data, error } = await supabase
-      .from('submission_judges')
-      .upsert(assignments, { onConflict: 'submission_id,judge_id' })
-      .select();
+
+    if (replaceExisting && judgeIds.length === 0) {
+      const { error } = await supabase
+        .from('submission_judges')
+        .delete()
+        .eq('submission_id', submissionId);
+      return { data: [], error };
+    }
+
+    const { data, error } = assignments.length > 0
+      ? await supabase
+          .from('submission_judges')
+          .upsert(assignments, { onConflict: 'submission_id,judge_id' })
+          .select()
+      : { data: [], error: null };
+
+    if (!error && replaceExisting && judgeIds.length > 0) {
+      const { data: existingRows, error: existingError } = await supabase
+        .from('submission_judges')
+        .select('id, judge_id')
+        .eq('submission_id', submissionId);
+
+      if (existingError) {
+        return { data, error: existingError };
+      }
+
+      const keep = new Set(judgeIds);
+      const idsToDelete = (existingRows || [])
+        .filter((row: any) => !keep.has(row.judge_id))
+        .map((row: any) => row.id);
+
+      if (idsToDelete.length > 0) {
+        const { error: cleanupError } = await supabase
+          .from('submission_judges')
+          .delete()
+          .in('id', idsToDelete);
+
+        if (cleanupError) {
+          return { data, error: cleanupError };
+        }
+      }
+    }
+
     return { data, error };
   },
 
@@ -1929,7 +2014,7 @@ export const settings = {
     // Always provide email from auth (profiles may not store it)
     const merged = profile ? { ...profile, email: user.email } : { id: user.id, email: user.email };
     if (merged && typeof merged === 'object') {
-      (merged as any).avatar_url = resolveMediaPublicUrl((merged as any).avatar_url);
+      (merged as any).avatar_url = await resolveMediaUrl((merged as any).avatar_url);
     }
 
     // Best-effort: persist email into profiles so other features (like "Add User by email") can look it up.
@@ -2258,32 +2343,52 @@ export const cms = {
 
 export const storage = {
   uploadAvatar: async (file: File, userId: string) => {
+    if (!supabase) {
+      return { url: null, path: null, bucket: null, error: { message: 'Supabase is not configured.' } };
+    }
+
+    const bucket = import.meta.env.VITE_STORAGE_BUCKET_AVATARS || 'media';
     const fileExt = file.name.split('.').pop();
     const fileName = `avatars/${userId}-${Date.now()}.${fileExt}`;
     const { data, error } = await supabase.storage
-      .from('media')
-      .upload(fileName, file, { upsert: true });
+      .from(bucket)
+      .upload(fileName, file, {
+        contentType: file.type || undefined,
+      });
 
     if (data) {
-      const { data: urlData } = supabase.storage
-        .from('media')
-        .getPublicUrl(fileName);
-      return { url: urlData.publicUrl, error: null };
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(fileName, 60 * 60 * 24 * 7);
+
+      return {
+        url: signedData?.signedUrl || null,
+        path: data.path,
+        bucket,
+        error: signedError || null,
+      };
     }
-    return { url: null, error };
+    return { url: null, path: null, bucket, error };
   },
 
   uploadSubmissionFile: async (file: File, submissionId: string) => {
+    if (!supabase) {
+      return { path: null, bucket: null, error: { message: 'Supabase is not configured.' } };
+    }
+
+    const bucket = import.meta.env.VITE_STORAGE_BUCKET_SUBMISSIONS || 'media';
     const fileExt = file.name.split('.').pop();
     const fileName = `submissions/${submissionId}/${Date.now()}-${file.name}`;
     const { data, error } = await supabase.storage
-      .from('media')
-      .upload(fileName, file);
+      .from(bucket)
+      .upload(fileName, file, {
+        contentType: file.type || undefined,
+      });
 
     if (data) {
-      return { path: data.path, error: null };
+      return { path: data.path, bucket, error: null };
     }
-    return { path: null, error };
+    return { path: null, bucket, error };
   },
 
   uploadProgramPageAsset: async (file: File, programId: string, sectionType?: string, fieldKey?: string) => {
@@ -2291,7 +2396,7 @@ export const storage = {
       return { url: null, path: null, bucket: null, error: { message: 'Supabase is not configured.' } };
     }
 
-    const configuredBucket = import.meta.env.VITE_SUPABASE_PAGE_ASSETS_BUCKET || 'media';
+    const configuredBucket = import.meta.env.VITE_STORAGE_BUCKET_PROGRAM_ASSETS || 'media';
     const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
     const baseName = file.name.replace(/\.[^/.]+$/, '');
     const safeName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -2304,7 +2409,6 @@ export const storage = {
       .from(configuredBucket)
       .upload(filePath, file, {
         cacheControl: '3600',
-        upsert: true,
         contentType: file.type || undefined,
       });
 
@@ -2312,15 +2416,15 @@ export const storage = {
       return { url: null, path: null, bucket: configuredBucket, error };
     }
 
-    const { data: publicData } = supabase.storage
+    const { data: signedData, error: signedError } = await supabase.storage
       .from(configuredBucket)
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 60 * 60 * 24 * 7);
 
     return {
-      url: publicData?.publicUrl || null,
+      url: signedData?.signedUrl || null,
       path: filePath,
       bucket: configuredBucket,
-      error: null,
+      error: signedError || null,
     };
   },
 

@@ -50,6 +50,19 @@ export interface DashboardNotification {
   createdAt: string;
 }
 
+export interface InviteRequestTrace {
+  path: string;
+  url: string;
+  method: 'POST';
+  attempt: number;
+  startedAt: string;
+  finishedAt: string;
+  status: number | null;
+  ok: boolean;
+  error: string | null;
+  requestBody: Record<string, any>;
+}
+
 export interface MySubmissionPortalItem {
   id: string;
   title: string;
@@ -1095,7 +1108,7 @@ class DatabaseService {
       status: this.mapSubmissionStatus(s.status) as Submission['status'],
       score: s.average_score ? Math.round(s.average_score) : null,
       date: s.submitted_at ? new Date(s.submitted_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      image: s.cover_image_url || `https://source.unsplash.com/random/50x50?${s.id}`,
+      image: s.cover_image_url || `https://picsum.photos/seed/${encodeURIComponent(s.id || 'submission')}/50/50`,
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
       votes: s.votes_count || s.submission_data?.votes || 0,
       submissionData: s.submission_data || {},
@@ -1864,8 +1877,9 @@ class DatabaseService {
     try {
       await this.enrollSubmissionInFirstRound(form.program_id, submissionId);
     } catch (e) {
-      // Non-fatal: submission was created but pipeline enrollment failed
-      console.warn('[pipeline] Failed to auto-enroll submission in first round:', e);
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      console.error('[pipeline] Failed to auto-enroll submission in first round:', e);
+      throw new Error(`Submission created but failed to enroll in round pipeline: ${message}`);
     }
 
     return data;
@@ -2009,6 +2023,57 @@ class DatabaseService {
     overallComment?: string,
   ): Promise<void> {
     if (!supabase) throw new Error('Supabase not configured');
+
+    if (!submissionJudgeId) throw new Error('submissionJudgeId is required');
+    if (!Array.isArray(criteriaScores) || criteriaScores.length === 0) {
+      throw new Error('At least one criterion score is required');
+    }
+
+    const orgId = await getCurrentOrgId();
+    if (!orgId) throw new Error('Not authenticated');
+
+    const { data: assignment, error: assignmentError } = await supabase
+      .from('submission_judges')
+      .select('id, submission_id, submissions!inner(program_id, programs!inner(organization_id))')
+      .eq('id', submissionJudgeId)
+      .maybeSingle();
+    if (assignmentError || !assignment) {
+      throw new Error(assignmentError?.message || 'Invalid submission assignment');
+    }
+
+    const assignmentOrgId = (assignment as any)?.submissions?.programs?.organization_id;
+    if (!assignmentOrgId || assignmentOrgId !== orgId) {
+      throw new Error('You are not allowed to score this assignment');
+    }
+
+    const programId = (assignment as any)?.submissions?.program_id;
+    const criterionIds = Array.from(new Set(criteriaScores.map((item) => item.criterionId).filter(Boolean)));
+    if (criterionIds.length === 0) {
+      throw new Error('No valid criteria provided');
+    }
+
+    const { data: criteriaRows, error: criteriaError } = await supabase
+      .from('judging_criteria')
+      .select('id, min_score, max_score')
+      .eq('program_id', programId)
+      .in('id', criterionIds);
+    if (criteriaError) {
+      throw new Error(criteriaError.message || 'Failed to validate judging criteria');
+    }
+
+    const criteriaById = new Map((criteriaRows || []).map((row: any) => [row.id, row]));
+    for (const cs of criteriaScores) {
+      const criterion = criteriaById.get(cs.criterionId);
+      if (!criterion) {
+        throw new Error(`Invalid criterion: ${cs.criterionId}`);
+      }
+      const min = Number(criterion.min_score ?? 0);
+      const max = Number(criterion.max_score ?? 10);
+      const score = Number(cs.score);
+      if (!Number.isFinite(score) || score < min || score > max) {
+        throw new Error(`Score for criterion ${cs.criterionId} must be between ${min} and ${max}`);
+      }
+    }
     
     // 1. Save individual criterion scores
     const rows = criteriaScores.map(cs => ({
@@ -2141,6 +2206,81 @@ class DatabaseService {
     if (error) throw new Error(error.message || 'Failed to cancel invite');
   }
 
+  async getInviteRequestTraces(programId: string, options?: { days?: number; limit?: number }): Promise<InviteRequestTrace[]> {
+    if (!supabase) return [];
+
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return [];
+
+    const days = Math.max(1, Math.min(30, options?.days || 7));
+    const limit = Math.max(1, Math.min(100, options?.limit || 40));
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('invite_request_traces')
+      .select('path, url, method, attempt, started_at, finished_at, http_status, ok, error_message, request_body')
+      .eq('organization_id', orgId)
+      .eq('program_id', programId)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return (data as any[]).map((row) => ({
+      path: row.path,
+      url: row.url,
+      method: (row.method || 'POST') as 'POST',
+      attempt: Number(row.attempt || 1),
+      startedAt: row.started_at,
+      finishedAt: row.finished_at,
+      status: row.http_status ?? null,
+      ok: !!row.ok,
+      error: row.error_message || null,
+      requestBody: row.request_body || {},
+    }));
+  }
+
+  async addInviteRequestTrace(programId: string, trace: InviteRequestTrace): Promise<void> {
+    if (!supabase) return;
+
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return;
+
+    await supabase
+      .from('invite_request_traces')
+      .insert({
+        organization_id: orgId,
+        program_id: programId,
+        path: trace.path,
+        url: trace.url,
+        method: trace.method,
+        attempt: trace.attempt,
+        started_at: trace.startedAt,
+        finished_at: trace.finishedAt,
+        http_status: trace.status,
+        ok: trace.ok,
+        error_message: trace.error,
+        request_body: trace.requestBody || {},
+      });
+  }
+
+  async clearInviteRequestTraces(programId: string): Promise<void> {
+    if (!supabase) return;
+
+    const orgId = await getCurrentOrgId();
+    if (!orgId) return;
+
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    await supabase
+      .from('invite_request_traces')
+      .delete()
+      .eq('organization_id', orgId)
+      .eq('program_id', programId)
+      .gte('created_at', cutoff);
+  }
+
   // ========================================================================
   // ROUND PIPELINE — Form-to-Round Enrollment
   // ========================================================================
@@ -2154,9 +2294,11 @@ class DatabaseService {
     // Get all rounds for the program
     const { data: allRounds } = await supabase
       .from('rounds')
-      .select('id')
+      .select('id, type, sort_order, start_date')
       .eq('program_id', programId);
-    if (!allRounds || allRounds.length === 0) return;
+    if (!allRounds || allRounds.length === 0) {
+      throw new Error('No rounds configured for this program');
+    }
 
     // Get all edges to find which rounds are targets (have incoming edges)
     const { data: edges } = await supabase
@@ -2168,10 +2310,32 @@ class DatabaseService {
     // Root rounds = rounds with no incoming edges
     const rootRounds = allRounds.filter(r => !targetIds.has(r.id));
 
-    if (rootRounds.length === 0) return;
+    if (rootRounds.length === 0) {
+      throw new Error('No root round found in schedule configuration');
+    }
+
+    const sortedRoots = [...rootRounds].sort((a: any, b: any) => {
+      const aSort = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER);
+      const bSort = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER);
+      if (aSort !== bSort) return aSort - bSort;
+      return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+    });
+
+    const nominatedRoot = sortedRoots.find((r: any) => {
+      const t = String(r.type || '').toLowerCase();
+      return t === 'nomination' || t === 'submission';
+    });
+
+    const selectedRoot = nominatedRoot || sortedRoots[0];
+    if (rootRounds.length > 1) {
+      console.warn('[pipeline] Multiple root rounds found; selected root round:', selectedRoot.id);
+    }
 
     // Enroll in the first root round (typically the nomination/submission round)
-    await roundSubmissions.enroll(rootRounds[0].id, submissionId);
+    const { error: enrollError } = await roundSubmissions.enroll(selectedRoot.id, submissionId);
+    if (enrollError) {
+      throw new Error(enrollError.message || 'Failed to enroll submission in first round');
+    }
   }
 
   async getActiveFormForProgram(programId: string): Promise<string | null> {

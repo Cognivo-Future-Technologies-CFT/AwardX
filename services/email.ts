@@ -71,8 +71,23 @@ async function postJson(path: string, payload: Record<string, any>, onTrace?: Em
       });
 
       if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        const errorMessage = body.error || `Email API returned ${resp.status}`;
+        const contentType = resp.headers.get('content-type') || '';
+        let parsedBody: any = {};
+        let rawBody = '';
+
+        if (contentType.includes('application/json')) {
+          parsedBody = await resp.json().catch(() => ({}));
+        } else {
+          rawBody = await resp.text().catch(() => '');
+        }
+
+        const detail =
+          parsedBody?.error ||
+          parsedBody?.message ||
+          (rawBody ? rawBody.replace(/\s+/g, ' ').trim().slice(0, 240) : '');
+        const errorMessage = detail
+          ? `Email API returned ${resp.status}: ${detail}`
+          : `Email API returned ${resp.status}`;
 
         onTrace?.({
           path,
