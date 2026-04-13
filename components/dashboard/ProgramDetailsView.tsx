@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
 import { PaymentConfig, Program } from '../../services/models';
 import { Button } from '../Button';
-import { Calendar, Image as ImageIcon, Type, Link as LinkIcon, Save, AlertCircle, CreditCard, DollarSign } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Type, Link as LinkIcon, Save, AlertCircle, CreditCard, DollarSign, CheckCircle } from 'lucide-react';
 
 interface ProgramDetailsViewProps {
     activeEvent: Program | null;
@@ -286,6 +286,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                     <option value="EUR">EUR</option>
                                     <option value="GBP">GBP</option>
                                     <option value="CAD">CAD</option>
+                                    <option value="INR">INR</option>
                                 </select>
                             </div>
 
@@ -321,6 +322,61 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                             />
                         </div>
+
+                        {paymentConfig.provider === 'Razorpay' && (
+                          <div className="space-y-4 pt-2">
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-1">Razorpay Key ID</label>
+                              <input
+                                type="text"
+                                value={paymentConfig.publicKey || ''}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  paymentConfig: { ...paymentConfig, publicKey: e.target.value },
+                                })}
+                                placeholder="rzp_live_..."
+                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-semibold text-slate-700 mb-1">Razorpay Key Secret</label>
+                              <input
+                                type="password"
+                                value={paymentConfig.secretKey || ''}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  paymentConfig: { ...paymentConfig, secretKey: e.target.value },
+                                })}
+                                placeholder="••••••••••••"
+                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                              />
+                              <p className="text-xs text-slate-500 mt-1">Found in your Razorpay Dashboard &rarr; Settings &rarr; API Keys</p>
+                            </div>
+                            <div className={`flex items-center gap-3 p-3 rounded-lg border ${
+                              paymentConfig.publicKey && paymentConfig.secretKey
+                                ? 'bg-green-50 border-green-200 text-green-700'
+                                : 'bg-amber-50 border-amber-200 text-amber-700'
+                            }`}>
+                              {paymentConfig.publicKey && paymentConfig.secretKey ? (
+                                <>
+                                  <CheckCircle className="w-5 h-5 text-green-600" />
+                                  <div>
+                                    <p className="text-sm font-semibold">Razorpay configured</p>
+                                    <p className="text-xs opacity-75">Payment collection is ready</p>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                                  <div>
+                                    <p className="text-sm font-semibold">Razorpay not configured</p>
+                                    <p className="text-xs opacity-75">Add both Key ID and Key Secret to enable payments</p>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
                     </div>
                 </section>
 

@@ -259,6 +259,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     onChangeView(view);
   };
 
+  // Listen for navigate-to custom events (used by FormBuilder payment popup etc.)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === 'string') onChangeView(detail);
+    };
+    window.addEventListener('navigate-to', handler);
+    return () => window.removeEventListener('navigate-to', handler);
+  }, [onChangeView]);
+
   const searchResults = useMemo<UniversalSearchResult[]>(() => {
     const query = searchQuery.trim().toLowerCase();
     const programs = allProgramsQuery.data || [];

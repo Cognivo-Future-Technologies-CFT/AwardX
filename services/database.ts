@@ -1581,6 +1581,8 @@ class DatabaseService {
     pageSize?: number;
     search?: string;
     type?: 'create' | 'update' | 'delete' | 'warning';
+    startDate?: string;
+    endDate?: string;
   }): Promise<PaginatedResult<Log>> {
     if (!supabase) {
       return { items: [], total: 0, page: 1, pageSize: 20, hasMore: false };
@@ -1608,6 +1610,13 @@ class DatabaseService {
     const search = options?.search?.trim();
     if (search) {
       query = query.or(`action.ilike.%${search}%,details.ilike.%${search}%,user_name.ilike.%${search}%`);
+    }
+
+    if (options?.startDate) {
+      query = query.gte('created_at', new Date(options.startDate).toISOString());
+    }
+    if (options?.endDate) {
+      query = query.lte('created_at', new Date(options.endDate + 'T23:59:59').toISOString());
     }
 
     const { data, error, count } = await query.range(offset, offset + pageSize - 1);

@@ -98,17 +98,30 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   };
 
   const handleSave = async () => {
-    if (formData.startCondition.type !== 'fixed_datetime' || formData.endCondition.type !== 'fixed_datetime') {
-      setError('Start and end time are required. Please set fixed start and end dates.');
-      return;
+    // Only validate dates when fixed_datetime is selected
+    if (formData.startCondition.type === 'fixed_datetime') {
+      if (!(formData.startCondition as any).datetime) {
+        setError('Start date/time is required when using fixed datetime.');
+        return;
+      }
     }
-    if (!formData.startCondition.datetime || !formData.endCondition.datetime) {
-      setError('Start and end time are required.');
-      return;
+    if (formData.endCondition.type === 'fixed_datetime') {
+      if (!(formData.endCondition as any).datetime) {
+        setError('End date/time is required when using fixed datetime.');
+        return;
+      }
     }
-    if (new Date(formData.endCondition.datetime) <= new Date(formData.startCondition.datetime)) {
-      setError('End time must be after the start time.');
-      return;
+    // Validate date ordering only when both are fixed_datetime
+    if (
+      formData.startCondition.type === 'fixed_datetime' &&
+      formData.endCondition.type === 'fixed_datetime' &&
+      (formData.startCondition as any).datetime &&
+      (formData.endCondition as any).datetime
+    ) {
+      if (new Date((formData.endCondition as any).datetime) <= new Date((formData.startCondition as any).datetime)) {
+        setError('End time must be after the start time.');
+        return;
+      }
     }
     setIsSaving(true);
     setError(null);

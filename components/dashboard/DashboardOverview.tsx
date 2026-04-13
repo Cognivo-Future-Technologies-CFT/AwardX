@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus, ChevronDown, LayoutTemplate, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus, ChevronDown, LayoutTemplate, CheckCircle2, AlertCircle, ChevronRight, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
@@ -219,6 +219,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
               ? `Tracking performance for "${activeEvent.title}"`
               : "Here's your demo environment status."}
           </p>
+        </div>
+        <div className="flex-1 max-w-md">
+          <div
+            className="relative cursor-pointer group"
+            onClick={() => {
+              // Trigger the universal search palette (Cmd+K)
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+            }}
+          >
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+            <div className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-400 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer flex items-center justify-between">
+              <span>Search programs, submissions...</span>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono text-slate-500">&#8984;K</kbd>
+            </div>
+          </div>
         </div>
         <div className="flex gap-3">
           <button

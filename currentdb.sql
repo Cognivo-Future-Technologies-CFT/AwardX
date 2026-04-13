@@ -1,6 +1,39 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.advancement_details (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  advancement_event_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  outcome character varying NOT NULL CHECK (outcome::text = ANY (ARRAY['advanced'::character varying, 'eliminated'::character varying, 'held'::character varying, 'override'::character varying]::text[])),
+  rank integer,
+  score numeric,
+  was_at_cutoff_boundary boolean DEFAULT false,
+  override_reason text,
+  CONSTRAINT advancement_details_pkey PRIMARY KEY (id),
+  CONSTRAINT advancement_details_advancement_event_id_fkey FOREIGN KEY (advancement_event_id) REFERENCES public.advancement_events(id),
+  CONSTRAINT advancement_details_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
+);
+CREATE TABLE public.advancement_events (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  round_id uuid NOT NULL,
+  target_round_id uuid,
+  program_id uuid,
+  trigger_type character varying NOT NULL DEFAULT 'manual'::character varying CHECK (trigger_type::text = ANY (ARRAY['manual'::character varying, 'automatic'::character varying, 'override'::character varying]::text[])),
+  criteria_used jsonb DEFAULT '{}'::jsonb,
+  advanced_count integer DEFAULT 0,
+  eliminated_count integer DEFAULT 0,
+  had_ties boolean DEFAULT false,
+  notes text,
+  executed_by uuid,
+  executed_at timestamp with time zone NOT NULL DEFAULT now(),
+  status character varying DEFAULT 'completed'::character varying,
+  CONSTRAINT advancement_events_pkey PRIMARY KEY (id),
+  CONSTRAINT advancement_events_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id),
+  CONSTRAINT advancement_events_target_round_id_fkey FOREIGN KEY (target_round_id) REFERENCES public.rounds(id),
+  CONSTRAINT advancement_events_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
+  CONSTRAINT advancement_events_executed_by_fkey FOREIGN KEY (executed_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.audit_logs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   organization_id uuid,
@@ -192,6 +225,25 @@ CREATE TABLE public.judge_comments (
   submitted_at timestamp with time zone DEFAULT now(),
   CONSTRAINT judge_comments_pkey PRIMARY KEY (id),
   CONSTRAINT judge_comments_submission_judge_id_fkey FOREIGN KEY (submission_judge_id) REFERENCES public.submission_judges(id)
+);
+CREATE TABLE public.judge_group_members (
+  group_id uuid NOT NULL,
+  judge_id uuid NOT NULL,
+  added_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_group_members_pkey PRIMARY KEY (group_id, judge_id),
+  CONSTRAINT judge_group_members_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.judge_groups(id),
+  CONSTRAINT judge_group_members_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id)
+);
+CREATE TABLE public.judge_groups (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid NOT NULL,
+  name character varying NOT NULL,
+  label character varying,
+  color character varying DEFAULT '#6366f1'::character varying,
+  sort_order integer DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT judge_groups_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_groups_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
 CREATE TABLE public.judges (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -538,10 +590,12 @@ CREATE TABLE public.programs (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   created_by uuid,
+  active_form_id uuid,
   CONSTRAINT programs_pkey PRIMARY KEY (id),
   CONSTRAINT programs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT programs_event_type_id_fkey FOREIGN KEY (event_type_id) REFERENCES public.event_types(id),
-  CONSTRAINT programs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+  CONSTRAINT programs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id),
+  CONSTRAINT programs_active_form_id_fkey FOREIGN KEY (active_form_id) REFERENCES public.program_forms(id)
 );
 CREATE TABLE public.public_votes (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -550,9 +604,13 @@ CREATE TABLE public.public_votes (
   ip_address character varying,
   user_agent text,
   created_at timestamp with time zone DEFAULT now(),
+  round_id uuid,
+  voter_name text,
+  voter_email text,
   CONSTRAINT public_votes_pkey PRIMARY KEY (id),
   CONSTRAINT public_votes_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
-  CONSTRAINT public_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+  CONSTRAINT public_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT public_votes_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id)
 );
 CREATE TABLE public.role_permissions (
   role_id uuid NOT NULL,
@@ -583,10 +641,30 @@ CREATE TABLE public.round_edges (
   condition jsonb DEFAULT '{"type": "always"}'::jsonb,
   sort_order integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
+  source_handle character varying,
+  target_handle character varying,
+  data_stream character varying,
+  name character varying,
   CONSTRAINT round_edges_pkey PRIMARY KEY (id),
   CONSTRAINT round_edges_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
   CONSTRAINT round_edges_source_round_id_fkey FOREIGN KEY (source_round_id) REFERENCES public.rounds(id),
   CONSTRAINT round_edges_target_round_id_fkey FOREIGN KEY (target_round_id) REFERENCES public.rounds(id)
+);
+CREATE TABLE public.round_submissions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  round_id uuid NOT NULL,
+  submission_id uuid NOT NULL,
+  status character varying NOT NULL DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'advanced'::character varying, 'eliminated'::character varying]::text[])),
+  source_round_id uuid,
+  carried_score numeric,
+  enrolled_at timestamp with time zone NOT NULL DEFAULT now(),
+  advanced_at timestamp with time zone,
+  eliminated_at timestamp with time zone,
+  elimination_reason text,
+  CONSTRAINT round_submissions_pkey PRIMARY KEY (id),
+  CONSTRAINT round_submissions_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id),
+  CONSTRAINT round_submissions_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
+  CONSTRAINT round_submissions_source_round_id_fkey FOREIGN KEY (source_round_id) REFERENCES public.rounds(id)
 );
 CREATE TABLE public.round_transitions (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -704,10 +782,12 @@ CREATE TABLE public.submission_judges (
   assigned_by uuid,
   status character varying DEFAULT 'pending'::character varying,
   completed_at timestamp with time zone,
+  round_id uuid,
   CONSTRAINT submission_judges_pkey PRIMARY KEY (id),
   CONSTRAINT submission_judges_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id),
   CONSTRAINT submission_judges_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
-  CONSTRAINT submission_judges_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.profiles(id)
+  CONSTRAINT submission_judges_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.profiles(id),
+  CONSTRAINT submission_judges_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id)
 );
 CREATE TABLE public.submissions (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -793,6 +873,20 @@ CREATE TABLE public.user_workspace_state (
   CONSTRAINT user_workspace_state_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_workspace_state_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
   CONSTRAINT user_workspace_state_active_program_id_fkey FOREIGN KEY (active_program_id) REFERENCES public.programs(id)
+);
+CREATE TABLE public.voting_configs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  round_id uuid NOT NULL UNIQUE,
+  votes_per_user integer NOT NULL DEFAULT 5 CHECK (votes_per_user > 0),
+  votes_per_submission integer NOT NULL DEFAULT 1 CHECK (votes_per_submission > 0),
+  require_auth boolean NOT NULL DEFAULT false,
+  allow_anonymous boolean NOT NULL DEFAULT true,
+  show_results_publicly boolean NOT NULL DEFAULT false,
+  show_leaderboard boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT voting_configs_pkey PRIMARY KEY (id),
+  CONSTRAINT voting_configs_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id)
 );
 CREATE TABLE public.winner_announcements (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

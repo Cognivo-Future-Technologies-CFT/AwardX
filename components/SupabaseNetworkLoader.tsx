@@ -17,12 +17,21 @@ export const SupabaseNetworkLoader: React.FC = () => {
     return null;
   }
 
+  // Slim top progress bar instead of intrusive circular spinner
   return (
-    <div className="supabase-network-loader" role="status" aria-live="polite" aria-label="Loading data">
-      <div className="supabase-network-loader__overlay" />
-      <div className="supabase-network-loader__spinner-wrap">
-        <div className="supabase-network-loader__spinner" />
-      </div>
+    <div
+      className="fixed top-0 left-0 right-0 z-[9999] h-[3px] pointer-events-none"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading data"
+    >
+      <div
+        className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 rounded-r-full"
+        style={{
+          animation: 'network-progress 1.4s ease-in-out infinite',
+          transformOrigin: 'left',
+        }}
+      />
     </div>
   );
 };

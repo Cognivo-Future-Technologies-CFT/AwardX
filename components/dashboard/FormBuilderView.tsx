@@ -554,6 +554,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               initialPages={currentPages.length > 0 ? currentPages : undefined}
               initialTheme={currentTheme}
               isSaving={isSaving}
+              paymentConfigured={!!(activeEvent?.paymentConfig?.enabled && activeEvent?.paymentConfig?.publicKey)}
+              paymentProvider={activeEvent?.paymentConfig?.provider || 'Razorpay'}
             />
           ) : (
             <div className="h-full bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 text-center p-8">

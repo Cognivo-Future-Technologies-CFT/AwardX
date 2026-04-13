@@ -4,7 +4,7 @@ import {
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
   MoreVertical, ArrowUp, ArrowDown, X, AlertCircle, Palette, Layers,
   ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award,
-  CheckCircle, XCircle
+  CheckCircle, XCircle, CreditCard
 } from 'lucide-react';
 import { Button } from '../Button';
 import { useConfirm } from '../ConfirmDialog';
@@ -52,6 +52,8 @@ interface FormBuilderProps {
   initialPages?: FormPage[];
   initialTheme?: FormTheme;
   isSaving?: boolean;
+  paymentConfigured?: boolean;
+  paymentProvider?: string;
 }
 
 export interface FormBuilderRef {
@@ -84,6 +86,12 @@ const fieldTypes = [
       { type: 'number', label: 'Number', icon: Layout, description: 'Quantities, scores' },
       { type: 'award_selector', label: 'Award Selector', icon: Award, description: 'Pick award category' },
     ]
+  },
+  {
+    group: 'Advanced',
+    items: [
+      { type: 'payment', label: 'Payment', icon: CreditCard, description: 'Collect fees via Razorpay' },
+    ]
   }
 ];
 
@@ -105,7 +113,9 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   initialFields = [],
   initialPages,
   initialTheme = defaultTheme,
-  isSaving = false
+  isSaving = false,
+  paymentConfigured = false,
+  paymentProvider
 }, ref) => {
   const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
 
@@ -120,6 +130,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState<string>(pages[0]?.id || 'page-1');
+  const [showPaymentPopup, setShowPaymentPopup] = useState(false);
 
   const [isPreview, setIsPreview] = useState(false);
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
@@ -240,6 +251,12 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         setSelectedFieldId(existingAwardField.id);
         return;
       }
+    }
+
+    // Payment field: show popup if not configured
+    if (type === 'payment' && !paymentConfigured) {
+      setShowPaymentPopup(true);
+      return;
     }
 
     pushHistory();
@@ -486,6 +503,16 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
               <ChevronDown className="w-4 h-4 text-indigo-400" />
+            </div>
+          </div>
+        );
+      case 'payment':
+        return (
+          <div className={`relative ${!paymentConfigured ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className="border-2 border-dashed border-emerald-300 bg-emerald-50/50 rounded-xl p-6 text-center">
+              <CreditCard className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-emerald-800">Payment Collection</p>
+              <p className="text-xs text-emerald-600 mt-1">Submission fee will be collected via {paymentProvider || 'Razorpay'}</p>
             </div>
           </div>
         );
@@ -968,102 +995,130 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       <div className="w-full xl:w-80 bg-white border-t xl:border-t-0 xl:border-l border-slate-200 flex flex-col z-20 shadow-xl shadow-slate-200/50 max-h-[42vh] xl:max-h-none">
         <div className="p-5 border-b border-slate-100">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest">
-            Theme Settings
+            Field Properties
           </h2>
-                  </div>
+        </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-            <div className="space-y-6">
-                  <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-500 uppercase">Brand Colors</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Primary</label>
-                    <div className="flex items-center gap-2 border p-2 rounded-lg">
-                      <input type="color" value={theme.primaryColor} onChange={e => setTheme({ ...theme, primaryColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
-                      <span className="text-xs font-mono">{theme.primaryColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Secondary</label>
-                    <div className="flex items-center gap-2 border p-2 rounded-lg">
-                      <input type="color" value={theme.secondaryColor} onChange={e => setTheme({ ...theme, secondaryColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
-                      <span className="text-xs font-mono">{theme.secondaryColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Background</label>
-                    <div className="flex items-center gap-2 border p-2 rounded-lg">
-                      <input type="color" value={theme.backgroundColor} onChange={e => setTheme({ ...theme, backgroundColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
-                      <span className="text-xs font-mono">{theme.backgroundColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Text</label>
-                    <div className="flex items-center gap-2 border p-2 rounded-lg">
-                      <input type="color" value={theme.textColor} onChange={e => setTheme({ ...theme, textColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
-                      <span className="text-xs font-mono">{theme.textColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Border</label>
-                    <div className="flex items-center gap-2 border p-2 rounded-lg">
-                      <input type="color" value={theme.borderColor} onChange={e => setTheme({ ...theme, borderColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
-                      <span className="text-xs font-mono">{theme.borderColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Button Text</label>
-                    <div className="flex items-center gap-2 border p-2 rounded-lg">
-                      <input type="color" value={theme.buttonTextColor} onChange={e => setTheme({ ...theme, buttonTextColor: e.target.value })} className="w-6 h-6 rounded cursor-pointer border-none bg-transparent" />
-                      <span className="text-xs font-mono">{theme.buttonTextColor}</span>
-                    </div>
-                  </div>
-                    </div>
-                  </div>
-
-              <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Text Typography</label>
-                <div className="relative">
-                  <select
-                    value={theme.fontFamily}
-                    onChange={e => setTheme({ ...theme, fontFamily: e.target.value })}
-                    className="w-full p-3 pr-10 border border-slate-200 rounded-lg text-sm bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-slate-300 shadow-sm"
+          {selectedFieldId && fields.find(f => f.id === selectedFieldId) ? (() => {
+            const field = fields.find(f => f.id === selectedFieldId)!;
+            return (
+              <div className="space-y-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Label</label>
+                  <input
+                    type="text"
+                    value={field.label}
+                    onChange={e => updateField(field.id, { label: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Placeholder</label>
+                  <input
+                    type="text"
+                    value={field.placeholder || ''}
+                    onChange={e => updateField(field.id, { placeholder: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                    placeholder="Enter placeholder text..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Help Text</label>
+                  <input
+                    type="text"
+                    value={field.helpText || ''}
+                    onChange={e => updateField(field.id, { helpText: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                    placeholder="Additional guidance for this field..."
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-white">
+                  <span className="text-sm font-medium text-slate-700">Required</span>
+                  <button
+                    type="button"
+                    onClick={() => updateField(field.id, { required: !field.required })}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${field.required ? 'bg-indigo-600' : 'bg-slate-300'}`}
                   >
-                    <option value="Inter, sans-serif">Inter (Modern)</option>
-                    <option value="serif">Serif (Elegant)</option>
-                    <option value="monospace">Monospace (Technical)</option>
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  </div>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${field.required ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                  </button>
                 </div>
-                </div>
-
-                  <div className="space-y-3">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Style</label>
-                <div className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-white hover:border-slate-300 transition-colors shadow-sm">
-                  <span className="text-sm font-medium text-slate-700">Rounded Corners</span>
-                  <div className="relative">
-                    <select
-                      value={theme.borderRadius}
-                      onChange={e => setTheme({ ...theme, borderRadius: e.target.value })}
-                      className="text-sm pr-8 pl-3 py-1.5 border-none bg-transparent text-right font-semibold text-indigo-600 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none cursor-pointer appearance-none hover:text-indigo-700 transition-colors"
-                    >
-                      <option value="0px">None</option>
-                      <option value="0.5rem">Medium</option>
-                      <option value="1rem">Large</option>
-                      <option value="9999px">Full</option>
-                    </select>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
-                    </div>
+                {field.type === 'text' || field.type === 'textarea' || field.type === 'number' ? (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Validation</label>
+                    {field.type === 'number' ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 mb-1 block">Min</label>
+                          <input type="number" value={field.validation?.min ?? ''} onChange={e => updateField(field.id, { validation: { ...field.validation, min: e.target.value ? Number(e.target.value) : undefined } })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 mb-1 block">Max</label>
+                          <input type="number" value={field.validation?.max ?? ''} onChange={e => updateField(field.id, { validation: { ...field.validation, max: e.target.value ? Number(e.target.value) : undefined } })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 mb-1 block">Min Length</label>
+                          <input type="number" value={field.validation?.min ?? ''} onChange={e => updateField(field.id, { validation: { ...field.validation, min: e.target.value ? Number(e.target.value) : undefined } })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 mb-1 block">Max Length</label>
+                          <input type="number" value={field.validation?.max ?? ''} onChange={e => updateField(field.id, { validation: { ...field.validation, max: e.target.value ? Number(e.target.value) : undefined } })} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                    </div>
+                ) : null}
               </div>
+            );
+          })() : (
+            <div className="flex flex-col items-center justify-center h-full text-center py-12">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                <Settings className="w-7 h-7 text-slate-400" />
+              </div>
+              <p className="text-sm font-semibold text-slate-600">No field selected</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-[180px]">Click on a form field in the canvas to edit its properties here.</p>
             </div>
+          )}
         </div>
       </div>
+
+      {/* Payment Not Configured Popup */}
+      {showPaymentPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 max-w-sm w-full mx-4 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-center w-14 h-14 bg-amber-100 rounded-2xl mx-auto">
+              <CreditCard className="w-7 h-7 text-amber-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-bold text-slate-900">Payment Not Configured</h3>
+              <p className="text-sm text-slate-500">
+                You need to set up a payment provider (Razorpay, Stripe, or PayPal) in your program settings before adding a payment field.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={() => {
+                  setShowPaymentPopup(false);
+                  // Navigate to settings/billing via dispatching a navigation event
+                  window.dispatchEvent(new CustomEvent('navigate-to', { detail: 'program-details' }));
+                }}
+                className="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
+              >
+                Go to Billing &amp; Plan Settings
+              </button>
+              <button
+                onClick={() => setShowPaymentPopup(false)}
+                className="w-full px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
