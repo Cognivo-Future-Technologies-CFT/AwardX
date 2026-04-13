@@ -110,14 +110,39 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     void (async () => {
       if (!activeEvent) return;
       const categories = await db.getCategories(activeEvent.id);
-      const options = Array.from(
-        new Set(
-          categories
-            .map((category) => String(category.title || '').trim())
-            .filter(Boolean),
-        ),
-      );
-      setAwardOptions(options);
+      // Build parent->child hierarchy for award options
+      const parentCategories = categories.filter(c => !c.parentId);
+      const childMap = new Map<string, typeof categories>();
+      categories.forEach(c => {
+        if (c.parentId) {
+          const children = childMap.get(c.parentId) || [];
+          children.push(c);
+          childMap.set(c.parentId, children);
+        }
+      });
+
+      const hierarchicalOptions: string[] = [];
+      parentCategories.forEach(parent => {
+        const children = childMap.get(parent.id) || [];
+        if (children.length > 0) {
+          // Add children under parent prefix
+          children.forEach(child => {
+            hierarchicalOptions.push(`${parent.title} \u2192 ${child.title}`);
+          });
+        } else {
+          hierarchicalOptions.push(parent.title);
+        }
+      });
+
+      // Also add orphan categories (children without visible parents)
+      const allParentIds = new Set(parentCategories.map(p => p.id));
+      categories.forEach(c => {
+        if (c.parentId && !allParentIds.has(c.parentId)) {
+          hierarchicalOptions.push(c.title);
+        }
+      });
+
+      setAwardOptions(hierarchicalOptions.length > 0 ? hierarchicalOptions : categories.map(c => c.title));
     })();
   }, [activeEvent]);
 
@@ -170,6 +195,34 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     } else {
       // New form - open modal to get name
       setIsSaveModalOpen(true);
+    }
+  };
+
+  const handlePublishFromBuilder = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+    if (!selectedFormId) {
+      // Save first if no form selected
+      handleSave(fields, pages, theme);
+      return;
+    }
+
+    const targetForm = savedForms.find(f => f.id === selectedFormId);
+    if (!targetForm) return;
+
+    setSaveMessage(null);
+    try {
+      // Save the form first
+      const normalizedFields = ensureMandatoryAwardSelector(fields, pages, awardOptions);
+      await db.updateForm(selectedFormId, { pages, theme, is_active: !targetForm.isActive });
+      await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
+      await loadSavedForms();
+      setSaveMessage({
+        type: 'success',
+        text: targetForm.isActive ? 'Form unpublished.' : 'Form saved and published!'
+      });
+      setTimeout(() => setSaveMessage(null), 5000);
+    } catch (error: any) {
+      setSaveMessage({ type: 'error', text: error?.message || 'Failed to publish form.' });
+      setTimeout(() => setSaveMessage(null), 5000);
     }
   };
 
@@ -495,6 +548,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               key={formBuilderKey}
               ref={formBuilderRef}
               onSave={handleSave}
+              onPublish={handlePublishFromBuilder}
+              isPublished={savedForms.find(f => f.id === selectedFormId)?.isActive}
               initialFields={currentForm}
               initialPages={currentPages.length > 0 ? currentPages : undefined}
               initialTheme={currentTheme}

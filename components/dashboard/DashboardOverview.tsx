@@ -13,7 +13,7 @@ interface DashboardOverviewProps {
   onNavigate?: (view: string) => void;
 }
 
-const StatCard = ({ title, value, change, isPositive, icon: Icon, color, onClick }: any) => (
+const StatCard = React.memo(({ title, value, change, isPositive, icon: Icon, color, onClick }: any) => (
   <motion.button
     type="button"
     initial={{ opacity: 0, y: 10 }}
@@ -33,7 +33,8 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, color, onClick
     <div className="text-slate-500 text-sm font-medium mb-1">{title}</div>
     <div className="text-2xl font-bold text-slate-900">{value}</div>
   </motion.button>
-);
+));
+StatCard.displayName = 'StatCard';
 
 // ── Form Selector ─────────────────────────────────────────────────────────────
 const FormSelectorSection: React.FC<{ activeEvent: Program | null; onNavigate?: (v: string) => void }> = ({ activeEvent, onNavigate }) => {
@@ -43,7 +44,7 @@ const FormSelectorSection: React.FC<{ activeEvent: Program | null; onNavigate?: 
     queryKey: ['forms-overview', activeEvent?.id ?? ''],
     queryFn: () => databaseService.getForms(activeEvent!.id),
     enabled: !!activeEvent?.id,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   const attachMutation = useMutation({
@@ -197,7 +198,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
   const statsQuery = useQuery({
     queryKey: ['dashboard-overview-stats', activeEvent?.id || 'all'],
     queryFn: () => databaseService.getStats(activeEvent?.id),
-    refetchInterval: 5000,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
   const isLoading = statsQuery.isLoading;

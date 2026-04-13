@@ -1295,6 +1295,20 @@ class DatabaseService {
     });
   }
 
+  async unassignJudgesFromSubmissions(submissionIds: string[], judgeIds?: string[]) {
+    for (const submissionId of submissionIds) {
+      const { error } = await submissions.unassignJudges(submissionId, judgeIds);
+      if (error) throw new Error(error.message || 'Failed to unassign judges');
+    }
+    await this.safeAuditLog({
+      action: 'Unassigned judges from submissions',
+      actionType: 'update',
+      resourceType: 'submission',
+      details: `${submissionIds.length} submissions`,
+      metadata: { submissionIds, judgeIds },
+    });
+  }
+
   // Judges
   async getJudges(programId?: string): Promise<Judge[]> {
     const { data, error } = await judges.getAll(programId);

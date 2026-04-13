@@ -5,11 +5,8 @@ export default RoundType;
 
 export type EvaluationLogic =
   | 'scoring'
-  | 'rubric'
-  | 'yes_no'
-  | 'weighted'
-  | 'ranking'
-  | 'consensus';
+  | 'voting'
+  | 'ranking';
 
 export type EvaluatorStrategy =
   | 'all_judges'

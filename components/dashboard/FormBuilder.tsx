@@ -3,7 +3,8 @@ import {
   GripVertical, Trash2, Settings, Eye, Save, Plus, Type, FileText,
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
   MoreVertical, ArrowUp, ArrowDown, X, AlertCircle, Palette, Layers,
-  ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award
+  ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award,
+  CheckCircle, XCircle
 } from 'lucide-react';
 import { Button } from '../Button';
 import { useConfirm } from '../ConfirmDialog';
@@ -45,6 +46,8 @@ export interface FormTheme {
 
 interface FormBuilderProps {
   onSave?: (fields: FormField[], pages: FormPage[], theme: FormTheme) => void;
+  onPublish?: (fields: FormField[], pages: FormPage[], theme: FormTheme) => void;
+  isPublished?: boolean;
   initialFields?: FormField[];
   initialPages?: FormPage[];
   initialTheme?: FormTheme;
@@ -97,6 +100,8 @@ const defaultTheme: FormTheme = {
 
 export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   onSave,
+  onPublish,
+  isPublished,
   initialFields = [],
   initialPages,
   initialTheme = defaultTheme,
@@ -468,17 +473,19 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       case 'award_selector':
         return (
           <div className="relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <Award className="w-4 h-4 text-amber-500" />
+            </div>
             <select
               disabled={isReadOnly}
-              className="w-full p-3 pr-10 border border-slate-200 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="w-full p-3 pl-10 pr-10 border border-indigo-200 rounded-xl bg-indigo-50/30 text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium"
               style={style}
             >
               <option value="" disabled>{field.placeholder || 'Select award category...'}</option>
               {field.options?.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-1">
-              <Award className="w-4 h-4 text-amber-500" />
-              <ChevronDown className="w-4 h-4 text-slate-400" />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <ChevronDown className="w-4 h-4 text-indigo-400" />
             </div>
           </div>
         );
@@ -935,6 +942,19 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             <Button variant="primary" onClick={handleSave} disabled={isSaving} className="shadow-lg shadow-indigo-500/20">
               <Save className="w-4 h-4 mr-2" /> {isSaving ? 'Saving...' : 'Save Form'}
             </Button>
+            {onPublish && (
+              <Button
+                variant={isPublished ? 'outline' : 'primary'}
+                onClick={() => onPublish(fields, pages, theme)}
+                className={isPublished ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20'}
+              >
+                {isPublished ? (
+                  <><XCircle className="w-4 h-4 mr-2" /> Unpublish</>
+                ) : (
+                  <><CheckCircle className="w-4 h-4 mr-2" /> Publish</>
+                )}
+              </Button>
+            )}
                     </div>
                   </div>
 

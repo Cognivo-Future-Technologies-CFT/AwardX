@@ -340,6 +340,39 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   }, [activeEvent]);
 
 
+  const handleAdvanceRound = useCallback(async (roundId: string) => {
+    const currentRound = rounds.find(r => r.id === roundId);
+    if (!currentRound) return;
+
+    const sortedRounds = [...rounds].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const currentIndex = sortedRounds.findIndex(r => r.id === roundId);
+    const nextRound = sortedRounds[currentIndex + 1];
+
+    if (!confirm(`Advance from "${currentRound.name}"${nextRound ? ` to "${nextRound.name}"` : ''}? This will mark the current round as completed.`)) {
+      return;
+    }
+
+    try {
+      await handleRoundUpdate({
+        ...currentRound,
+        status: 'completed',
+        updatedAt: new Date().toISOString(),
+        version: currentRound.version + 1,
+      });
+
+      if (nextRound) {
+        await handleRoundUpdate({
+          ...nextRound,
+          status: 'active',
+          updatedAt: new Date().toISOString(),
+          version: nextRound.version + 1,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to advance round:', error);
+    }
+  }, [rounds, handleRoundUpdate]);
+
   const createNewRound = useCallback(() => {
     if (!activeEvent) return;
 
@@ -514,6 +547,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
           programId={activeEvent.id}
           roundInsights={roundInsights}
           insightsLoading={isInsightsLoading}
+          onAdvanceRound={handleAdvanceRound}
         />
       </div>
     </div>

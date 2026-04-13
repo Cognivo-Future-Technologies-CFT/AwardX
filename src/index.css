@@ -251,3 +251,67 @@ html {
     linear-gradient(to right, rgba(99, 102, 241, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
 }
+
+.supabase-network-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  animation: supabase-loader-fade-in 180ms ease-out;
+}
+
+.supabase-network-loader__overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--background) 78%, transparent);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+}
+
+.supabase-network-loader__spinner-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
+  box-shadow: 0 16px 42px color-mix(in oklab, var(--primary) 14%, transparent);
+}
+
+.supabase-network-loader__spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 3px solid color-mix(in oklab, var(--muted) 72%, transparent);
+  border-top-color: var(--primary);
+  border-right-color: color-mix(in oklab, var(--primary) 75%, white);
+  animation: supabase-loader-spin 860ms linear infinite;
+}
+
+@keyframes supabase-loader-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes supabase-loader-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

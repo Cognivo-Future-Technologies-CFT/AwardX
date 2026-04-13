@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useConfirm } from '../ConfirmDialog';
-import { Filter, Download, Eye, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles } from 'lucide-react';
+import { Filter, Download, Eye, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles } from 'lucide-react';
 
 import { db } from '../../services/database';
 import { Program, Submission } from '../../services/models';
@@ -173,11 +173,22 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
       }
    };
 
-   const handleBulkAction = async (action: 'Accept' | 'Reject' | 'Delete' | 'Shortlist' | 'AssignJudge') => {
+   const handleBulkAction = async (action: 'Accept' | 'Reject' | 'Delete' | 'Shortlist' | 'AssignJudge' | 'UnassignJudge') => {
       if (selectedIds.length === 0) return;
 
       if (action === 'AssignJudge') {
          setIsJudgeModalOpen(true);
+         return;
+      }
+
+      if (action === 'UnassignJudge') {
+         setIsBulkProcessing(true);
+         try {
+            await db.unassignJudgesFromSubmissions(selectedIds);
+            await refreshSubmissions();
+         } finally {
+            setIsBulkProcessing(false);
+         }
          return;
       }
 
@@ -650,6 +661,9 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                      <div className="w-px h-6 bg-slate-800 mx-3"></div>
                      <button onClick={() => handleBulkAction('AssignJudge')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-blue-400 flex items-center gap-2 group disabled:opacity-40">
                         <User className="w-4 h-4 group-hover:scale-110 transition-transform" /> ASSIGN JUDGES
+                     </button>
+                     <button onClick={() => handleBulkAction('UnassignJudge')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-slate-900 rounded-xl transition-all text-xs font-black text-amber-400 flex items-center gap-2 group disabled:opacity-40">
+                        <UserX className="w-4 h-4 group-hover:scale-110 transition-transform" /> UNASSIGN
                      </button>
                      <div className="w-px h-6 bg-slate-800 mx-3"></div>
                      <button onClick={() => handleBulkAction('Delete')} disabled={isBulkProcessing} className="px-4 py-2 hover:bg-rose-950/30 rounded-xl transition-all text-xs font-black text-slate-500 hover:text-rose-400 flex items-center gap-2 group disabled:opacity-40">

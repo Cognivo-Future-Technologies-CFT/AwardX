@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { trackSupabaseRequest } from './supabaseLoading';
 
 // Environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -7,10 +8,16 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 // Check if Supabase is configured
 const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
 
+const trackedSupabaseFetch: typeof fetch = (input, init) =>
+  trackSupabaseRequest(() => fetch(input, init));
+
 // Create Supabase client (untyped for flexibility until database is set up)
 // After running the SQL schema, regenerate types with: npx supabase gen types typescript --project-id YOUR_PROJECT_ID > services/database.types.ts
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      fetch: trackedSupabaseFetch,
+    },
     auth: {
       autoRefreshToken: true,
       persistSession: true,
@@ -1238,6 +1245,16 @@ export const submissions = {
     }
 
     return { data, error };
+  },
+
+  unassignJudges: async (submissionId: string, judgeIds?: string[]) => {
+    if (!supabase) return { error: { message: 'Supabase not configured' } };
+    let query = supabase.from('submission_judges').delete().eq('submission_id', submissionId);
+    if (judgeIds && judgeIds.length > 0) {
+      query = query.in('judge_id', judgeIds);
+    }
+    const { error } = await query;
+    return { error };
   },
 
   // Public Voting

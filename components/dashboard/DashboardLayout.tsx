@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
-  UserCog, Edit, Workflow, Layout, Command
+  UserCog, Edit, Workflow, Layout, Command, Globe
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,7 +22,7 @@ interface DashboardUser {
   joinedDate: string;
 }
 import { db as databaseService } from '../../services/database';
-import { auth, realtime } from '../../services/supabase';
+import { auth, realtime, supabase } from '../../services/supabase';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -163,6 +163,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -183,6 +185,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   });
   const [allUsers, setAllUsers] = useState<DashboardUser[]>([]);
   const [permissionsReady, setPermissionsReady] = useState(false);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const [showMobileSearch, setShowMobileSearch] = useState(false);
 
@@ -565,11 +568,29 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [queryClient]);
 
   useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
     // Fetch real user data from Supabase
     const fetchUserData = async () => {
       try {
         await databaseService.initialize();
         setPermissionsReady(true);
+        // After init, permissions are cached in databaseService.
+        // Derive userPermissions from PERMISSIONS constants that pass hasPermission.
+        try {
+          const loadedPerms = Object.values(PERMISSIONS).filter(p => databaseService.hasPermission(p));
+          setUserPermissions(loadedPerms);
+        } catch {
+          setUserPermissions(Object.values(PERMISSIONS)); // fallback to all
+        }
         const realUser = await databaseService.getCurrentUser();
         if (realUser) {
           setCurrentUser(realUser);
@@ -652,6 +673,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'judging',           label: 'Judging',            icon: Gavel,           permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'templates',         label: 'Form Builder',       icon: LayoutTemplate,  permission: PERMISSIONS.MANAGE_FORMS },
+    { id: 'voting',            label: 'Public Voting',      icon: Globe,           permission: PERMISSIONS.MANAGE_PROGRAMS },
     ...(activeEvent?.type === 'Other' ? [{ id: 'custom-grid', label: 'Grid Builder', icon: Layout, permission: PERMISSIONS.MANAGE_PROGRAMS }] : []),
   ];
 
@@ -664,7 +686,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings, permission: PERMISSIONS.MANAGE_SETTINGS },
   ];
 
-  const filterNav = (items: any[]) => items.filter(item => databaseService.hasPermission(item.permission));
+  const canAccess = (requiredPermission?: string) => {
+    if (!requiredPermission) return true;
+    if (currentUser.role === 'Admin' || currentUser.role === 'Owner') return true;
+    return userPermissions.includes(requiredPermission);
+  };
+
+  const filterNav = (items: any[]) => items.filter(item => databaseService.hasPermission(item.permission) && canAccess(item.permission));
 
   const visibleLeftNav = filterNav(leftNavItems);
   const visibleRightNav = filterNav(rightNavItems);
@@ -854,6 +882,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onToggleLive={() => setIsTestMode((prev) => !prev)}
             onBackToHub={onSwitchEvent}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+            notifications={notifications}
+            isNotificationsOpen={isNotificationsOpen}
+            onToggleNotifications={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            onMarkAllRead={async () => {
+              if (!supabase) return;
+              const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
+              if (unreadIds.length > 0) {
+                await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
+                queryClient.invalidateQueries({ queryKey: ['notifications'] });
+              }
+            }}
+            onMarkRead={async (id: string) => {
+              if (!supabase) return;
+              await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+              queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            }}
+            notificationsRef={notificationsRef}
           />
         )}
 

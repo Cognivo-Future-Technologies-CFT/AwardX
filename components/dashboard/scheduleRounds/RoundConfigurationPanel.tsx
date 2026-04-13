@@ -216,11 +216,8 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                   className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all appearance-none cursor-pointer"
                 >
                   <option value="scoring">Scoring</option>
-                  <option value="rubric">Rubric</option>
-                  <option value="yes_no">Yes/No</option>
-                  <option value="weighted">Weighted</option>
+                  <option value="voting">Voting</option>
                   <option value="ranking">Ranking</option>
-                  <option value="consensus">Consensus</option>
                 </select>
               </div>
               <div className="space-y-1.5">

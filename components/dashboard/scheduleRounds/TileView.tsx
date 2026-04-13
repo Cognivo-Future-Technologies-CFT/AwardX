@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Round } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
-import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar } from 'lucide-react';
+import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar, ChevronRight } from 'lucide-react';
 import { Button } from '../../Button';
 import { Reorder } from 'framer-motion';
 import { Modal } from '../../Modal';
@@ -41,6 +41,7 @@ interface TileViewProps {
   programId: string;
   roundInsights?: Record<string, RoundCardInsight>;
   insightsLoading?: boolean;
+  onAdvanceRound?: (roundId: string) => void;
 }
 
 export const TileView: React.FC<TileViewProps> = ({
@@ -53,6 +54,7 @@ export const TileView: React.FC<TileViewProps> = ({
   programId,
   roundInsights,
   insightsLoading,
+  onAdvanceRound,
 }) => {
   const [items, setItems] = useState(rounds);
   const [participantsListRoundId, setParticipantsListRoundId] = useState<string | null>(null);
@@ -274,7 +276,11 @@ export const TileView: React.FC<TileViewProps> = ({
                             )}
                           </div>
                           <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                            {insightsLoading ? 'Participants...' : `${roundInsights?.[round.id]?.participantTotal || 0} nominations`}
+                            {insightsLoading
+                              ? 'Participants...'
+                              : (roundInsights?.[round.id]?.participantTotal || 0) > 0
+                                ? `${roundInsights[round.id].participantTotal} nominations`
+                                : 'Enroll submissions'}
                           </span>
                           {!insightsLoading && (roundInsights?.[round.id]?.participantAdvanced || 0) > 0 && (
                             <span className="text-[11px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
@@ -307,7 +313,11 @@ export const TileView: React.FC<TileViewProps> = ({
                             )}
                           </div>
                           <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                            {insightsLoading ? 'Judges...' : `${roundInsights?.[round.id]?.judgeTotal || 0} judges`}
+                            {insightsLoading
+                              ? 'Judges...'
+                              : (roundInsights?.[round.id]?.judgeTotal || 0) > 0
+                                ? `${roundInsights[round.id].judgeTotal} judges`
+                                : 'No judges yet'}
                           </span>
                         </button>
 
@@ -341,10 +351,25 @@ export const TileView: React.FC<TileViewProps> = ({
                     {round.shortlistConfig.enabled && (
                       <div className="mt-3 pt-3 border-t border-slate-100">
                         <span className="text-xs text-indigo-600 font-medium">
-                          Shortlist: {round.shortlistConfig.method === 'percentage' 
-                            ? `${round.shortlistConfig.value}%` 
+                          Shortlist: {round.shortlistConfig.method === 'percentage'
+                            ? `${round.shortlistConfig.value}%`
                             : `${round.shortlistConfig.value} entries`}
                         </span>
+                      </div>
+                    )}
+
+                    {(round.status === 'active' || round.status === 'completed') && (
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (onAdvanceRound) onAdvanceRound(round.id);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" /> Advance to Next Round
+                        </button>
                       </div>
                     )}
                   </div>

@@ -18,6 +18,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Analytics } from '@vercel/analytics/react';
 import { Toaster } from 'sonner';
 import { initSentry } from './services/sentry';
+import { SupabaseNetworkLoader } from './components/SupabaseNetworkLoader';
 
 initSentry();
 
@@ -43,6 +44,7 @@ root.render(
       <BrowserRouter>
         <AuthProvider>
           <ProgramProvider>
+            <SupabaseNetworkLoader />
             <App />
             <Analytics />
             <Toaster richColors position="top-right" />
