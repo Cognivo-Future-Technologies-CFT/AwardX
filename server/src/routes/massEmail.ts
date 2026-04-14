@@ -61,6 +61,15 @@ async function canSendMassEmail(userId: string, programId: string): Promise<bool
   });
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Replace {{variable}} placeholders with values from the vars map. */
 function interpolate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
@@ -218,6 +227,16 @@ router.post('/:programId/rounds/:roundId/send', requireAuth, async (req: Authent
 
     const results: Array<{ email: string; ok: boolean; messageId?: string; error?: string }> = [];
 
+    // Prepare all recipients with their personalized content
+    const prepared: Array<{
+      index: number;
+      row: any;
+      normalizedEmail: string;
+      personalizedSubject: string;
+      personalizedBody: string;
+      htmlBody: string;
+    }> = [];
+
     for (let i = 0; i < targetRows.length; i++) {
       const row = targetRows[i] as any;
       const sub = row.submissions || {};
@@ -234,14 +253,14 @@ router.post('/:programId/rounds/:roundId/send', requireAuth, async (req: Authent
       const normalizedEmail = recipientEmail.toLowerCase().trim();
 
       const vars: Record<string, string> = {
-        name: recipientName,
-        email: normalizedEmail,
-        submission_title: sub.title || 'Untitled',
-        round_title: round.title,
-        program_title: program.title,
+        name: escapeHtml(recipientName),
+        email: escapeHtml(normalizedEmail),
+        submission_title: escapeHtml(sub.title || 'Untitled'),
+        round_title: escapeHtml(round.title),
+        program_title: escapeHtml(program.title),
         rank: String(i + 1),
         total: String(targetRows.length),
-        segment,
+        segment: escapeHtml(segment),
       };
 
       const personalizedSubject = interpolate(subject, vars);
@@ -257,81 +276,98 @@ router.post('/:programId/rounds/:roundId/send', requireAuth, async (req: Authent
 <table role="presentation" width="560" style="max-width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
 <tr><td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 40px;text-align:center;">
 <h1 style="margin:0;font-size:22px;font-weight:700;color:#fff;">AwardX</h1>
-<p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,.8);">${program.title}</p>
+<p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,.8);">${escapeHtml(program.title)}</p>
 </td></tr>
 <tr><td style="padding:36px 40px;">
 <div style="font-size:15px;line-height:1.75;color:#334155;">${personalizedBody.replace(/\n/g, '<br/>')}</div>
 </td></tr>
 <tr><td style="background:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
-<p style="margin:0;font-size:11px;color:#94a3b8;">Sent by AwardX on behalf of ${program.title}</p>
+<p style="margin:0;font-size:11px;color:#94a3b8;">Sent by AwardX on behalf of ${escapeHtml(program.title)}</p>
 </td></tr>
 </table></td></tr></table>
 </body></html>`;
 
-      // Log to email_logs
-      let emailLogId: string | null = null;
-      try {
-        const { data: logEntry } = await supabase
-          .from('email_logs')
-          .insert({
-            organization_id: program.organization_id,
-            program_id: programId,
-            recipient_email: normalizedEmail,
-            template_key: `mass_${segment}`,
-            template_version: 'v1',
-            context_json: {
-              roundId,
-              roundTitle: round.title,
-              segment,
-              submissionId: row.submission_id,
-              rank: i + 1,
-              total: targetRows.length,
-            },
-            status: 'pending',
-          })
-          .select('id')
-          .single();
-        emailLogId = logEntry?.id || null;
-      } catch {
-        // Non-fatal — continue even if DB log fails
-      }
+      prepared.push({ index: i, row, normalizedEmail, personalizedSubject, personalizedBody, htmlBody });
+    }
 
-      try {
-        const { data: sendData, error: sendError } = await resend.emails.send({
-          from: fromAddress,
-          to: normalizedEmail,
-          subject: personalizedSubject,
-          html: htmlBody,
-          text: personalizedBody,
-        });
-
-        const now = new Date().toISOString();
-        if (sendError) {
-          if (emailLogId) {
-            await supabase
-              .from('email_logs')
-              .update({ status: 'failed', error_message: sendError.message, updated_at: now })
-              .eq('id', emailLogId);
-          }
-          results.push({ email: normalizedEmail, ok: false, error: sendError.message });
-        } else {
-          if (emailLogId) {
-            await supabase
-              .from('email_logs')
-              .update({ status: 'sent', resend_message_id: sendData?.id || null, sent_at: now, updated_at: now })
-              .eq('id', emailLogId);
-          }
-          results.push({ email: normalizedEmail, ok: true, messageId: sendData?.id });
-        }
-      } catch (err: any) {
-        const now = new Date().toISOString();
-        if (emailLogId) {
-          await supabase
+    // Send in batches of 10 concurrently
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < prepared.length; i += BATCH_SIZE) {
+      const batch = prepared.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.allSettled(batch.map(async (item) => {
+        // Log to email_logs
+        let emailLogId: string | null = null;
+        try {
+          const { data: logEntry } = await supabase
             .from('email_logs')
-            .update({ status: 'failed', error_message: err?.message || 'Unknown error', updated_at: now })
-            .eq('id', emailLogId);
+            .insert({
+              organization_id: program.organization_id,
+              program_id: programId,
+              recipient_email: item.normalizedEmail,
+              template_key: `mass_${segment}`,
+              template_version: 'v1',
+              context_json: {
+                roundId,
+                roundTitle: round.title,
+                segment,
+                submissionId: item.row.submission_id,
+                rank: item.index + 1,
+                total: targetRows.length,
+              },
+              status: 'pending',
+            })
+            .select('id')
+            .single();
+          emailLogId = logEntry?.id || null;
+        } catch {
+          // Non-fatal -- continue even if DB log fails
         }
-        results.push({ email: normalizedEmail, ok: false, error: err?.message || 'Send failed' });
+
+        try {
+          const { data: sendData, error: sendError } = await resend.emails.send({
+            from: fromAddress,
+            to: item.normalizedEmail,
+            subject: item.personalizedSubject,
+            html: item.htmlBody,
+            text: item.personalizedBody,
+          });
+
+          const now = new Date().toISOString();
+          if (sendError) {
+            if (emailLogId) {
+              await supabase
+                .from('email_logs')
+                .update({ status: 'failed', error_message: sendError.message, updated_at: now })
+                .eq('id', emailLogId);
+            }
+            return { email: item.normalizedEmail, ok: false, error: sendError.message } as const;
+          } else {
+            if (emailLogId) {
+              await supabase
+                .from('email_logs')
+                .update({ status: 'sent', resend_message_id: sendData?.id || null, sent_at: now, updated_at: now })
+                .eq('id', emailLogId);
+            }
+            return { email: item.normalizedEmail, ok: true, messageId: sendData?.id } as const;
+          }
+        } catch (err: any) {
+          const now = new Date().toISOString();
+          if (emailLogId) {
+            await supabase
+              .from('email_logs')
+              .update({ status: 'failed', error_message: err?.message || 'Unknown error', updated_at: now })
+              .eq('id', emailLogId);
+          }
+          return { email: item.normalizedEmail, ok: false, error: err?.message || 'Send failed' } as const;
+        }
+      }));
+
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled') {
+          results.push(result.value);
+        } else {
+          results.push({ email: '(unknown)', ok: false, error: result.reason?.message || 'Batch send failed' });
+        }
       }
     }
 

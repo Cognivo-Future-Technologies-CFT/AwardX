@@ -147,9 +147,13 @@ router.put('/:id', requireAuth, async (req, res) => {
 			updated_at: new Date().toISOString(),
 		};
 
+		const filteredUpdates = Object.fromEntries(
+			Object.entries(updates).filter(([, v]) => v !== undefined)
+		);
+
 		const { data, error } = await supabase
 			.from('organizations')
-			.update(updates)
+			.update(filteredUpdates)
 			.eq('id', id)
 			.select(ORG_SELECT)
 			.single();

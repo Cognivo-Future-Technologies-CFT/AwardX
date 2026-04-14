@@ -17,13 +17,16 @@ export default async function handler(req: any, res: any) {
   }
 
   const configuredSecret = process.env.RESEND_WEBHOOK_SECRET || '';
-  if (configuredSecret) {
-    const authHeader = String(req.headers?.authorization || '');
-    const expected = `Bearer ${configuredSecret}`;
-    if (authHeader !== expected) {
-      res.status(401).json({ error: 'Unauthorized webhook request' });
-      return;
-    }
+  if (!configuredSecret) {
+    res.status(500).json({ error: 'RESEND_WEBHOOK_SECRET is not configured; cannot verify webhook' });
+    return;
+  }
+
+  const authHeader = String(req.headers?.authorization || '');
+  const expected = `Bearer ${configuredSecret}`;
+  if (authHeader !== expected) {
+    res.status(401).json({ error: 'Unauthorized webhook request' });
+    return;
   }
 
   const parsed = resendWebhookSchema.safeParse(req.body || {});

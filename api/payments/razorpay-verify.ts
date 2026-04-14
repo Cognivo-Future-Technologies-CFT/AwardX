@@ -37,6 +37,30 @@ export default async function handler(req: any, res: any) {
     }
 
     const supabase = createSupabaseAdmin();
+
+    // Verify that the submission's stored payment_id matches the Razorpay order
+    const { data: submission, error: submissionError } = await supabase
+      .from('submissions')
+      .select('id, payment_id')
+      .eq('id', submissionId)
+      .maybeSingle();
+
+    if (submissionError || !submission) {
+      logWarn('payments.razorpay_verify.submission_not_found', { submissionId });
+      res.status(404).json({ error: 'Submission not found' });
+      return;
+    }
+
+    if (submission.payment_id !== razorpayOrderId) {
+      logWarn('payments.razorpay_verify.order_mismatch', {
+        submissionId,
+        expected: submission.payment_id,
+        received: razorpayOrderId,
+      });
+      res.status(400).json({ error: 'Razorpay order ID does not match the submission' });
+      return;
+    }
+
     const { error } = await supabase
       .from('submissions')
       .update({

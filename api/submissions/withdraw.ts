@@ -64,7 +64,8 @@ export default async function handler(req: any, res: any) {
         submission_data: mergedSubmissionData,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', submissionId);
+      .eq('id', submissionId)
+      .eq('applicant_id', user.id);
 
     if (updateError) {
       res.status(500).json({ error: updateError.message || 'Failed to withdraw submission' });

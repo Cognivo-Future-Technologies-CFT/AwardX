@@ -36,7 +36,7 @@ async function canManageAdvancement(userId: string, programId: string) {
     .select('status, roles(name, permissions)')
     .eq('organization_id', program.organization_id)
     .eq('user_id', userId)
-    .in('status', ['active', 'pending']);
+    .eq('status', 'active');
 
   return (memberships || []).some((membership: any) => {
     const roleName = String(membership.roles?.name || '').toLowerCase().trim();

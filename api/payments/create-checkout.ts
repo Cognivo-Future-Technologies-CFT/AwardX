@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import Razorpay from 'razorpay';
 import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
 import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../_utils/authUser';
 import { createCheckoutSchema } from '../_utils/validation';
 import { logError, logInfo, logWarn } from '../_utils/logger';
 
@@ -10,6 +11,12 @@ const toMinorUnits = (amount: number) => Math.max(0, Math.round(amount * 100));
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const { user, error: authError } = await getAuthenticatedUser(req);
+  if (authError || !user) {
+    res.status(401).json({ error: authError || 'Unauthorized' });
     return;
   }
 
@@ -69,6 +76,19 @@ export default async function handler(req: any, res: any) {
     if (!submission) {
       logWarn('payments.create_checkout.submission_not_found', { submissionId, programId });
       res.status(404).json({ error: 'Submission not found' });
+      return;
+    }
+
+    // Verify the authenticated user owns this submission
+    const { data: fullSubmission } = await supabase
+      .from('submissions')
+      .select('applicant_id')
+      .eq('id', submissionId)
+      .maybeSingle();
+
+    if (fullSubmission?.applicant_id && fullSubmission.applicant_id !== user.id) {
+      logWarn('payments.create_checkout.not_owner', { submissionId, userId: user.id });
+      res.status(403).json({ error: 'You can only pay for your own submissions' });
       return;
     }
 

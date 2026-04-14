@@ -108,7 +108,7 @@ async function buildRoundLeaderboard(roundId: string): Promise<RoundLeaderboard 
     // Normalize judge score to 0-100
     const judgeScore =
       scoreData && scoreData.totalWeight > 0
-        ? Math.round(((scoreData.totalWeighted / scoreData.totalWeight) * 100) / 100) // already on 0-100 scale via weight normalization
+        ? Math.round((scoreData.totalWeighted / scoreData.totalWeight) * 100) / 100 // already on 0-100 scale via weight normalization
         : null;
 
     const voteCount = voteMap[subId] || 0;

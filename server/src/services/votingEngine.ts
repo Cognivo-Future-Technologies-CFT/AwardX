@@ -78,10 +78,32 @@ async function getVoterVoteCount(roundId: string, voterInfo: VoterInfo) {
   if (voterInfo.userId) {
     query = query.eq('user_id', voterInfo.userId);
   } else if (voterInfo.ipAddress) {
+    // For anonymous voters, always check IP address
     query = query.eq('ip_address', voterInfo.ipAddress);
+    // Also match on user_agent when available, to tighten fingerprinting
+    if (voterInfo.userAgent) {
+      query = query.eq('user_agent', voterInfo.userAgent);
+    }
   }
 
   const { data, count } = await query;
+
+  // For anonymous voters, also check if there are any votes from this IP
+  // regardless of user_agent, to prevent trivial bypass by changing UA
+  if (!voterInfo.userId && voterInfo.ipAddress) {
+    const { count: ipOnlyCount } = await supabase
+      .from('public_votes')
+      .select('id', { count: 'exact' })
+      .eq('round_id', roundId)
+      .eq('ip_address', voterInfo.ipAddress)
+      .is('user_id', null);
+
+    return {
+      total: Math.max(count || 0, ipOnlyCount || 0),
+      submissionIds: (data || []).map(v => v.submission_id),
+    };
+  }
+
   return {
     total: count || 0,
     submissionIds: (data || []).map(v => v.submission_id),
@@ -211,18 +233,15 @@ export async function castVote(
 
   if (insertError) return { ok: false, error: insertError.message };
 
-  // Increment votes_count on the submission
-  const { data: sub } = await supabase
-    .from('submissions')
-    .select('votes_count')
-    .eq('id', submissionId)
-    .single();
-
-  if (sub) {
-    await supabase
-      .from('submissions')
-      .update({ votes_count: (sub.votes_count || 0) + 1 })
-      .eq('id', submissionId);
+  // Increment votes_count on the submission (atomic via RPC, with fallback)
+  const { error: rpcError } = await supabase.rpc('increment_submission_votes', { submission_id: submissionId });
+  if (rpcError) {
+    // Fallback: use the old pattern but log the error
+    console.warn('RPC not available, using non-atomic increment:', rpcError.message);
+    const { data: sub } = await supabase.from('submissions').select('votes_count').eq('id', submissionId).single();
+    if (sub) {
+      await supabase.from('submissions').update({ votes_count: (sub.votes_count || 0) + 1 }).eq('id', submissionId);
+    }
   }
 
   return { ok: true };

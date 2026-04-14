@@ -35,7 +35,7 @@ export default async function handler(req: any, res: any) {
     const deadlineDate = new Date(deadlineIso);
     const formattedDeadline = Number.isNaN(deadlineDate.getTime())
       ? deadlineIso
-      : deadlineDate.toLocaleDateString();
+      : deadlineDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
     const title = 'Deadline approaching';
     const body = `"${programTitle}" closes on ${formattedDeadline}.`;

@@ -108,19 +108,20 @@ export default async function handler(req: any, res: any) {
   try {
     let event: Stripe.Event;
 
-    if (typeof signature === 'string' && webhookSecret) {
-      const rawBody = await readRawBody(req);
-      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-    } else {
-      logWarn('payments.stripe_webhook.unsigned_fallback', {});
-      const fallbackParsed = stripeWebhookFallbackSchema.safeParse(req.body || {});
-      if (!fallbackParsed.success) {
-        logWarn('payments.stripe_webhook.invalid_payload', { details: fallbackParsed.error.flatten() });
-        res.status(400).json({ error: 'Invalid webhook payload', details: fallbackParsed.error.flatten() });
-        return;
-      }
-      event = fallbackParsed.data as unknown as Stripe.Event;
+    if (!webhookSecret) {
+      logWarn('payments.stripe_webhook.secret_not_configured', {});
+      res.status(400).json({ error: 'STRIPE_WEBHOOK_SECRET is not configured; cannot verify webhook signature' });
+      return;
     }
+
+    if (typeof signature !== 'string') {
+      logWarn('payments.stripe_webhook.missing_signature', {});
+      res.status(400).json({ error: 'Missing stripe-signature header' });
+      return;
+    }
+
+    const rawBody = await readRawBody(req);
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
 
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object as Stripe.Checkout.Session;

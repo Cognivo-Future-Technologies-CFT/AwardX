@@ -352,11 +352,20 @@ export async function executeAdvancement(
   let lockAcquired = false;
   const releaseFinalizeLock = async () => {
     if (!lockAcquired) return;
-    await supabase
-      .from('rounds')
-      .update({ is_finalized: false })
-      .eq('id', roundId)
-      .eq('is_finalized', true);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const { error } = await supabase
+          .from('rounds')
+          .update({ is_finalized: false })
+          .eq('id', roundId)
+          .eq('is_finalized', true);
+        if (!error) break;
+        console.warn(`Lock release attempt ${attempt + 1} failed:`, error.message);
+      } catch (e) {
+        console.warn(`Lock release attempt ${attempt + 1} threw:`, e);
+      }
+      if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+    }
     lockAcquired = false;
   };
 

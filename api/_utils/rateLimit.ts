@@ -7,6 +7,18 @@ type HitMap = Map<string, number[]>;
 
 const rateLimitStore: HitMap = new Map();
 
+// Cleanup stale rate limit entries every 60 seconds
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entries] of rateLimitStore.entries()) {
+      const valid = entries.filter((ts: number) => now - ts < 15 * 60 * 1000);
+      if (valid.length === 0) rateLimitStore.delete(key);
+      else rateLimitStore.set(key, valid);
+    }
+  }, 60_000);
+}
+
 export const getClientIp = (req: any): string => {
   const forwarded = req.headers?.['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.length > 0) {

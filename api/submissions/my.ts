@@ -70,8 +70,11 @@ export default async function handler(req: any, res: any) {
 
       for (const judgeAssignment of row.submission_judges || []) {
         const judgeName = judgeAssignment.judges?.name || 'Judge';
-        const overallComment = judgeAssignment.judge_comments?.overall_comment || null;
-        const recommendation = judgeAssignment.judge_comments?.recommendation || null;
+        const comments = Array.isArray(judgeAssignment.judge_comments)
+          ? judgeAssignment.judge_comments[0]
+          : judgeAssignment.judge_comments;
+        const overallComment = comments?.overall_comment || null;
+        const recommendation = comments?.recommendation || null;
         const scoredCriteriaCount = (judgeAssignment.scores || []).length;
 
         if (overallComment || scoredCriteriaCount > 0) {

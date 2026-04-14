@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../_utils/authUser';
 import { stripeConnectStatusSchema } from '../_utils/validation';
 import { deriveStripeConnectStatus } from '../_utils/stripeConnect';
 import { logError, logInfo, logWarn } from '../_utils/logger';
@@ -7,6 +8,12 @@ import { logError, logInfo, logWarn } from '../_utils/logger';
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const { user, error: authError } = await getAuthenticatedUser(req);
+  if (authError || !user) {
+    res.status(401).json({ error: authError || 'Unauthorized' });
     return;
   }
 
@@ -27,6 +34,30 @@ export default async function handler(req: any, res: any) {
 
   try {
     const supabase = createSupabaseAdmin();
+
+    // Verify the user is a member of the program's organization
+    const { data: program } = await supabase
+      .from('programs')
+      .select('organization_id')
+      .eq('id', programId)
+      .maybeSingle();
+
+    if (!program) {
+      res.status(404).json({ error: 'Program not found' });
+      return;
+    }
+
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('organization_id', program.organization_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this program\'s organization' });
+      return;
+    }
     const { data: paymentConfig, error: configError } = await supabase
       .from('program_payment_configs')
       .select('id, provider, provider_account_id, connected, onboarding_completed')

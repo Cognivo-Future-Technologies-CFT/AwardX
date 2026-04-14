@@ -14,6 +14,18 @@ type HitMap = Map<string, number[]>;
 
 const rateLimitStore: HitMap = new Map();
 
+// Cleanup stale rate limit entries every 60 seconds
+if (typeof setInterval !== 'undefined') {
+	setInterval(() => {
+		const now = Date.now();
+		for (const [key, entries] of rateLimitStore.entries()) {
+			const valid = entries.filter((ts: number) => now - ts < 15 * 60 * 1000);
+			if (valid.length === 0) rateLimitStore.delete(key);
+			else rateLimitStore.set(key, valid);
+		}
+	}, 60_000);
+}
+
 function getClientIp(req: any): string {
 	const forwarded = req.headers?.['x-forwarded-for'];
 	if (typeof forwarded === 'string' && forwarded.length > 0) {
@@ -39,6 +51,15 @@ function enforceRateLimit(key: string, maxRequests: number, windowMs: number): R
 	freshHits.push(now);
 	rateLimitStore.set(key, freshHits);
 	return { ok: true, retryAfterSeconds: 0 };
+}
+
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -547,9 +568,9 @@ router.post('/team', async (req, res) => {
 			subject: `AwardX invite: ${programTitle}`,
 			text: `The AwardX team for ${programTitle} wants you to join this event.\n${roleLine}\nAccept your invite: ${inviteUrl}`,
 			html: `<div style="font-family:Arial,sans-serif;line-height:1.6">
-				<h2>The AwardX team for ${programTitle} wants you to join</h2>
-				<p>${roleLine}</p>
-				<p>Accept your invite: <a href="${inviteUrl}">${inviteUrl}</a></p>
+				<h2>The AwardX team for ${escapeHtml(programTitle)} wants you to join</h2>
+				<p>${escapeHtml(roleLine)}</p>
+				<p>Accept your invite: <a href="${inviteUrl}">${escapeHtml(inviteUrl)}</a></p>
 			</div>`,
 		});
 
@@ -647,9 +668,9 @@ router.post('/judge', async (req, res) => {
 			text: `Hi ${judgeName},\n\nYou have been invited to judge "${programTitle}".\n\nAccess your portal: ${actionUrl}\n\nBest,\nThe AwardX team`,
 			html: `<div style="font-family:Arial,sans-serif;line-height:1.6">
 				<h2>You're Invited to Judge</h2>
-				<p>for <strong>${programTitle}</strong></p>
-				<p>Hi ${judgeName},</p>
-				<p>Click to access your judging portal: <a href="${actionUrl}">${actionUrl}</a></p>
+				<p>for <strong>${escapeHtml(programTitle)}</strong></p>
+				<p>Hi ${escapeHtml(judgeName)},</p>
+				<p>Click to access your judging portal: <a href="${actionUrl}">${escapeHtml(actionUrl)}</a></p>
 			</div>`,
 		});
 
@@ -766,7 +787,61 @@ router.post('/resend', async (req, res) => {
 			return res.json({ ok: true, id: mailData?.id });
 		}
 
-		return res.status(400).json({ error: 'Judge resend not implemented in this endpoint' });
+		// Judge resend
+		const { data: judgeRow, error: judgeErr } = await supabase
+			.from('judges')
+			.select('id, organization_id, program_id, email, name, status, invite_token, invite_token_used_at, programs(title)')
+			.eq('id', recordId)
+			.single();
+
+		if (judgeErr || !judgeRow) return res.status(404).json({ error: 'Judge invite record not found' });
+
+		const canManageJudgeOrg = await canManage(supabase, authResult.user.id, judgeRow.organization_id);
+		if (!canManageJudgeOrg) return res.status(403).json({ error: 'Insufficient permissions' });
+
+		if (judgeRow.status !== 'invited' && judgeRow.status !== 'active') {
+			return res.status(400).json({ error: 'Only invited or active judges can receive a resend' });
+		}
+
+		const newJudgeToken = randomUUID();
+		const { error: rotateJudgeErr } = await supabase
+			.from('judges')
+			.update({ invite_token: newJudgeToken, invite_token_used_at: null })
+			.eq('id', judgeRow.id)
+			.in('status', ['invited', 'active']);
+
+		if (rotateJudgeErr) {
+			return res.status(500).json({ error: rotateJudgeErr.message || 'Failed to rotate judge invite token' });
+		}
+
+		const judgeInviteUrl = `${siteUrl}/judge/${newJudgeToken}`;
+		const judgeProgramTitle = (judgeRow as any).programs?.title || programTitleFallback || 'your workspace';
+		const judgeName = judgeRow.name || 'Judge';
+
+		const judgeEmailLogId = await createEmailLog(supabase, {
+			organizationId: judgeRow.organization_id,
+			programId: judgeRow.program_id,
+			inviteId: null,
+			recipientEmail: judgeRow.email,
+			templateKey: 'judge_invite_resend',
+			context: { judgeName, programTitle: judgeProgramTitle, inviteUrl: judgeInviteUrl },
+		});
+
+		const { data: judgeMailData, error: judgeSendErr } = await resend.emails.send({
+			from: getFromAddress(),
+			to: judgeRow.email,
+			subject: `You're invited to judge: ${judgeProgramTitle}`,
+			text: `Hi ${judgeName},\n\nYou have been invited to judge "${judgeProgramTitle}".\n\nClick the link below to access your judging portal:\n${judgeInviteUrl}\n\nBest,\nThe AwardX team`,
+			html: `<!doctype html><html><body style="font-family:Arial,sans-serif;line-height:1.6"><h2>You're Invited to Judge</h2><p>for <strong>${judgeProgramTitle}</strong></p><p>Hi ${judgeName},</p><p>You have been selected as a judge. Access your portal using this secure link:</p><p><a href="${judgeInviteUrl}">Access Judging Portal</a></p></body></html>`,
+		});
+
+		if (judgeSendErr) {
+			if (judgeEmailLogId) await updateEmailLog(supabase, judgeEmailLogId, 'failed', { errorMessage: judgeSendErr.message });
+			return res.status(500).json({ error: judgeSendErr.message });
+		}
+
+		if (judgeEmailLogId) await updateEmailLog(supabase, judgeEmailLogId, 'sent', { resendMessageId: judgeMailData?.id });
+		return res.json({ ok: true, id: judgeMailData?.id, inviteType: 'judge', recordId: judgeRow.id });
 	} catch (err: any) {
 		console.error('Invite resend error:', err);
 		return res.status(500).json({ error: err?.message || 'Failed to resend invite' });

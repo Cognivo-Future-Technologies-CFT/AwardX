@@ -6,6 +6,15 @@ import { createEmailLog, updateEmailLog } from '../_utils/emailLogs';
 import { getAuthenticatedUser } from '../_utils/authUser';
 import { canManageInvites } from '../_utils/invitePermissions';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -48,7 +57,8 @@ export default async function handler(req: any, res: any) {
   const fromAddress = process.env.RESEND_FROM || 'AwardX <onboarding@resend.dev>';
   const subject = `You're invited to judge: ${programTitle}`;
   const previewText = `You have been invited to judge ${programTitle}. Click to access your judging portal.`;
-  const actionUrl = inviteUrl || 'https://awardstuff.vercel.app/';
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app';
+  const actionUrl = inviteUrl || `${siteUrl}/judge/verify?token=${encodeURIComponent(inviteId || '')}`;
   const judgeName = name || 'Judge';
   const normalizedEmail = email.toLowerCase().trim();
   let supabase: any;
@@ -102,10 +112,10 @@ export default async function handler(req: any, res: any) {
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <title>${subject}</title>
+    <title>${escapeHtml(subject)}</title>
   </head>
   <body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-    <span style="display:none;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">${previewText}</span>
+    <span style="display:none;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">${escapeHtml(previewText)}</span>
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;">
       <tr>
         <td align="center" style="padding:40px 20px;">
@@ -120,10 +130,10 @@ export default async function handler(req: any, res: any) {
             <tr>
               <td style="padding:40px;">
                 <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">You're Invited to Judge</h2>
-                <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.5;">for <strong style="color:#4f46e5;">${programTitle}</strong></p>
+                <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.5;">for <strong style="color:#4f46e5;">${escapeHtml(programTitle)}</strong></p>
 
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">Hi ${judgeName},</p>
-                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">You've been selected as a judge for <strong>${programTitle}</strong>. Click the button below to access your judging portal where you can review the assigned submissions and provide your scores.</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">Hi ${escapeHtml(judgeName)},</p>
+                <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">You've been selected as a judge for <strong>${escapeHtml(programTitle)}</strong>. Click the button below to access your judging portal where you can review the assigned submissions and provide your scores.</p>
 
                 <!-- CTA Button -->
                 <div style="text-align:center;margin:32px 0;">

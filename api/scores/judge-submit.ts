@@ -49,6 +49,11 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    if (judge.status !== 'active') {
+      res.status(403).json({ error: 'Judge account is no longer active' });
+      return;
+    }
+
     // 2. Authorise: confirm the judge owns this submission_judge row.
     const { data: assignment, error: assignmentError } = await supabase
       .from('submission_judges')

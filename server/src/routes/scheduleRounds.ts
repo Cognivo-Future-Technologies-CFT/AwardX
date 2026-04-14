@@ -194,18 +194,24 @@ router.put('/:programId/rounds/:id', requireAuth, async (req, res) => {
   try {
     const supabase = getSupabaseAdmin();
     const payload = req.body || {};
+    const updates = {
+      title: payload.title,
+      description: payload.description,
+      type: payload.type,
+      start_date: payload.start_date,
+      end_date: payload.end_date,
+      status: payload.status,
+      sort_order: payload.sort_order,
+      settings: payload.settings,
+    };
+
+    const filteredUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    );
+
     const { data, error } = await supabase
       .from('rounds')
-      .update({
-        title: payload.title,
-        description: payload.description,
-        type: payload.type,
-        start_date: payload.start_date,
-        end_date: payload.end_date,
-        status: payload.status,
-        sort_order: payload.sort_order,
-        settings: payload.settings,
-      })
+      .update(filteredUpdates)
       .eq('id', id)
       .eq('program_id', programId)
       .select()
