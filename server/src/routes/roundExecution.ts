@@ -5,9 +5,11 @@ import {
   completeRound,
   finalizeRound,
   cancelRound,
+  getRound,
   getRoundStatus,
   getPipelineStatus,
 } from '../services/roundEngine.js';
+import { canManageProgram } from '../middleware/programManagement.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
 const router = Router();
@@ -23,12 +25,16 @@ async function invalidateRound(programId: string) {
 router.post('/rounds/:roundId/activate', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { roundId } = req.params;
   try {
+    const round = await getRound(roundId);
+    if (!round) return res.status(404).json({ error: 'Round not found' });
+
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
     const result = await activateRound(roundId, req.userId || 'admin');
     if (!result.ok) return res.status(400).json({ error: result.error });
 
-    // Invalidate cache — need program ID from round
-    const status = await getRoundStatus(roundId);
-    if (status) await invalidateRound(status.program_id);
+    await invalidateRound(round.program_id);
 
     return res.json({ ok: true });
   } catch (error: any) {
@@ -39,11 +45,16 @@ router.post('/rounds/:roundId/activate', requireAuth, async (req: AuthenticatedR
 router.post('/rounds/:roundId/complete', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { roundId } = req.params;
   try {
+    const round = await getRound(roundId);
+    if (!round) return res.status(404).json({ error: 'Round not found' });
+
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
     const result = await completeRound(roundId, req.userId || 'admin');
     if (!result.ok) return res.status(400).json({ error: result.error });
 
-    const status = await getRoundStatus(roundId);
-    if (status) await invalidateRound(status.program_id);
+    await invalidateRound(round.program_id);
 
     return res.json({ ok: true });
   } catch (error: any) {
@@ -54,11 +65,16 @@ router.post('/rounds/:roundId/complete', requireAuth, async (req: AuthenticatedR
 router.post('/rounds/:roundId/finalize', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { roundId } = req.params;
   try {
+    const round = await getRound(roundId);
+    if (!round) return res.status(404).json({ error: 'Round not found' });
+
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
     const result = await finalizeRound(roundId, req.userId || 'admin');
     if (!result.ok) return res.status(400).json({ error: result.error });
 
-    const status = await getRoundStatus(roundId);
-    if (status) await invalidateRound(status.program_id);
+    await invalidateRound(round.program_id);
 
     return res.json({ ok: true });
   } catch (error: any) {
@@ -69,11 +85,16 @@ router.post('/rounds/:roundId/finalize', requireAuth, async (req: AuthenticatedR
 router.post('/rounds/:roundId/cancel', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { roundId } = req.params;
   try {
+    const round = await getRound(roundId);
+    if (!round) return res.status(404).json({ error: 'Round not found' });
+
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
     const result = await cancelRound(roundId, req.userId || 'admin');
     if (!result.ok) return res.status(400).json({ error: result.error });
 
-    const status = await getRoundStatus(roundId);
-    if (status) await invalidateRound(status.program_id);
+    await invalidateRound(round.program_id);
 
     return res.json({ ok: true });
   } catch (error: any) {

@@ -1,51 +1,11 @@
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
-import { getSupabaseAdmin } from '../supabase.js';
+import { canManageProgram } from '../middleware/programManagement.js';
 import { getRound } from '../services/roundEngine.js';
 import { executeAdvancement, getAdvancementHistory, previewAdvancement } from '../services/advancementEngine.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
 const router = Router();
-
-const ALLOWED_ROLE_NAMES = new Set(['admin', 'program manager']);
-const ALLOWED_PERMISSION_KEYS = new Set(['manage_programs', 'manage_judging']);
-
-async function canManageAdvancement(userId: string, programId: string) {
-  const supabase = getSupabaseAdmin();
-
-  const { data: program } = await supabase
-    .from('programs')
-    .select('organization_id')
-    .eq('id', programId)
-    .maybeSingle();
-
-  if (!program?.organization_id) return false;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (profile?.organization_id === program.organization_id) {
-    return true;
-  }
-
-  const { data: memberships } = await supabase
-    .from('organization_members')
-    .select('status, roles(name, permissions)')
-    .eq('organization_id', program.organization_id)
-    .eq('user_id', userId)
-    .eq('status', 'active');
-
-  return (memberships || []).some((membership: any) => {
-    const roleName = String(membership.roles?.name || '').toLowerCase().trim();
-    const rolePermissions = Array.isArray(membership.roles?.permissions)
-      ? membership.roles.permissions.map((value: unknown) => String(value).toLowerCase().trim())
-      : [];
-    return ALLOWED_ROLE_NAMES.has(roleName) || rolePermissions.some((permission: string) => ALLOWED_PERMISSION_KEYS.has(permission));
-  });
-}
 
 router.post('/rounds/:roundId/preview', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { roundId } = req.params;
@@ -54,7 +14,7 @@ router.post('/rounds/:roundId/preview', requireAuth, async (req: AuthenticatedRe
     const round = await getRound(roundId);
     if (!round) return res.status(404).json({ error: 'Round not found' });
 
-    const permitted = await canManageAdvancement(req.userId || '', round.program_id);
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
     if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
     const data = await previewAdvancement(roundId, req.body?.criteriaOverride);
@@ -71,7 +31,7 @@ router.post('/rounds/:roundId/execute', requireAuth, async (req: AuthenticatedRe
     const round = await getRound(roundId);
     if (!round) return res.status(404).json({ error: 'Round not found' });
 
-    const permitted = await canManageAdvancement(req.userId || '', round.program_id);
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
     if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
     const result = await executeAdvancement(
@@ -118,7 +78,7 @@ router.post('/rounds/:roundId/override', requireAuth, async (req: AuthenticatedR
     const round = await getRound(roundId);
     if (!round) return res.status(404).json({ error: 'Round not found' });
 
-    const permitted = await canManageAdvancement(req.userId || '', round.program_id);
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
     if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
     const result = await executeAdvancement(
@@ -154,7 +114,7 @@ router.get('/programs/:programId/history', requireAuth, async (req: Authenticate
   const { programId } = req.params;
 
   try {
-    const permitted = await canManageAdvancement(req.userId || '', programId);
+    const permitted = await canManageProgram(req.userId || '', programId);
     if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
 
     const data = await wrapWithCache(cacheKeys.advancementHistory(programId), cacheTtls.short, async () => {

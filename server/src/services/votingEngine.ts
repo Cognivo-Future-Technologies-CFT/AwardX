@@ -219,7 +219,7 @@ export async function castVote(
   if (!enrollment) return { ok: false, error: 'Submission is not part of this voting round.' };
 
   // Cast the vote
-  const { error: insertError } = await supabase
+  const { data: insertedVote, error: insertError } = await supabase
     .from('public_votes')
     .insert({
       round_id: roundId,
@@ -229,19 +229,20 @@ export async function castVote(
       user_agent: voterInfo.userAgent || null,
       voter_email: voterInfo.email || null,
       voter_name: voterInfo.name || null,
-    });
+    })
+    .select('id')
+    .single();
 
   if (insertError) return { ok: false, error: insertError.message };
 
-  // Increment votes_count on the submission (atomic via RPC, with fallback)
+  // Increment votes_count on the submission via atomic RPC.
+  // If this fails, rollback the inserted vote to avoid count drift.
   const { error: rpcError } = await supabase.rpc('increment_submission_votes', { submission_id: submissionId });
   if (rpcError) {
-    // Fallback: use the old pattern but log the error
-    console.warn('RPC not available, using non-atomic increment:', rpcError.message);
-    const { data: sub } = await supabase.from('submissions').select('votes_count').eq('id', submissionId).single();
-    if (sub) {
-      await supabase.from('submissions').update({ votes_count: (sub.votes_count || 0) + 1 }).eq('id', submissionId);
+    if (insertedVote?.id) {
+      await supabase.from('public_votes').delete().eq('id', insertedVote.id);
     }
+    return { ok: false, error: rpcError.message || 'Failed to record vote count' };
   }
 
   return { ok: true };

@@ -349,56 +349,17 @@ export async function executeAdvancement(
     return { ok: false, error: 'Round is already finalized.' };
   }
 
-  let lockAcquired = false;
-  const releaseFinalizeLock = async () => {
-    if (!lockAcquired) return;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const { error } = await supabase
-          .from('rounds')
-          .update({ is_finalized: false })
-          .eq('id', roundId)
-          .eq('is_finalized', true);
-        if (!error) break;
-        console.warn(`Lock release attempt ${attempt + 1} failed:`, error.message);
-      } catch (e) {
-        console.warn(`Lock release attempt ${attempt + 1} threw:`, e);
-      }
-      if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-    }
-    lockAcquired = false;
-  };
-
-  const { data: lockRow, error: lockError } = await supabase
-    .from('rounds')
-    .update({ is_finalized: true })
-    .eq('id', roundId)
-    .eq('status', 'completed')
-    .eq('is_finalized', false)
-    .select('id')
-    .maybeSingle();
-
-  if (lockError) {
-    return { ok: false, error: lockError.message || 'Failed to lock round for advancement.' };
-  }
-  if (!lockRow) {
-    return { ok: false, error: 'Round is already being advanced or finalized.' };
-  }
-  lockAcquired = true;
-
   try {
     // Get preview
     const preview = await previewAdvancement(roundId, criteriaOverride);
 
     // Handle empty scores
     if (preview.hasEmptyScores && !overrides?.length) {
-      await releaseFinalizeLock();
       return { ok: false, paused: true, reason: 'no_scores', error: 'No scores submitted. Cannot auto-advance with empty data.' };
     }
 
     // Handle ties (if no resolutions provided)
     if (preview.ties.length > 0 && !tieResolutions?.length && !overrides?.length) {
-      await releaseFinalizeLock();
       return {
         ok: false,
         paused: true,
@@ -452,114 +413,10 @@ export async function executeAdvancement(
 
     const targetRound = successors.length > 0 ? successors[0] : null;
 
-    // Create advancement event
-    const criteria = criteriaOverride || round.advancement_criteria || { type: 'all_pass' };
-    const { data: event, error: eventError } = await supabase
-      .from('advancement_events')
-      .insert({
-        round_id: roundId,
-        target_round_id: targetRound?.id || null,
-        trigger_type: triggeredBy === 'scheduler_auto' ? 'automatic' : 'manual',
-        criteria_used: criteria,
-        total_participants: preview.totalParticipants,
-        advanced_count: advancingSet.size,
-        eliminated_count: eliminatedSet.size,
-        had_ties: preview.ties.length > 0,
-        tie_resolution: tieResolutions || null,
-        executed_by: triggeredBy && triggeredBy !== 'scheduler_auto' ? triggeredBy : null,
-      })
-      .select()
-      .single();
-
-    if (eventError || !event) {
-      await releaseFinalizeLock();
-      return { ok: false, error: eventError?.message || 'Failed to create advancement event' };
-    }
-
     // Build score lookup for details
     const allScored = [...preview.advancing, ...preview.eliminated, ...preview.ties];
     const scoreMap = new Map(allScored.map(p => [p.submissionId, p]));
-
-    // Create advancement details
-    const details: Array<any> = [];
-
-    for (const subId of advancingSet) {
-      const p = scoreMap.get(subId);
-      const override = overrides?.find(o => o.submissionId === subId);
-      details.push({
-        advancement_event_id: event.id,
-        submission_id: subId,
-        outcome: override ? 'override_advanced' : 'advanced',
-        rank: p?.rank || null,
-        score: p?.score || null,
-        vote_count: p?.voteCount || null,
-        was_at_cutoff_boundary: preview.ties.some(t => t.submissionId === subId),
-        override_reason: override?.reason || null,
-      });
-    }
-
-    for (const subId of eliminatedSet) {
-      const p = scoreMap.get(subId);
-      const override = overrides?.find(o => o.submissionId === subId);
-      details.push({
-        advancement_event_id: event.id,
-        submission_id: subId,
-        outcome: override ? 'override_eliminated' : 'eliminated',
-        rank: p?.rank || null,
-        score: p?.score || null,
-        vote_count: p?.voteCount || null,
-        was_at_cutoff_boundary: preview.ties.some(t => t.submissionId === subId),
-        override_reason: override?.reason || null,
-      });
-    }
-
-    if (details.length > 0) {
-      const { error: detailsError } = await supabase.from('advancement_details').insert(details);
-      if (detailsError) {
-        await releaseFinalizeLock();
-        return { ok: false, error: detailsError.message || 'Failed to create advancement details' };
-      }
-    }
-
-    // Update round_submissions statuses
-    const roundType = String(round.type || '').toLowerCase();
-    const isShortlistingRound = roundType === 'shortlisting';
-
-    for (const subId of advancingSet) {
-      const { error: advanceError } = await supabase
-        .from('round_submissions')
-        .update({ status: 'advanced', advanced_at: new Date().toISOString() })
-        .eq('round_id', roundId)
-        .eq('submission_id', subId);
-      if (advanceError) {
-        await releaseFinalizeLock();
-        return { ok: false, error: advanceError.message || 'Failed to update advanced participants' };
-      }
-
-      if (isShortlistingRound) {
-        await supabase
-          .from('submissions')
-          .update({ status: 'shortlisted' })
-          .eq('id', subId);
-      }
-    }
-
-    for (const subId of eliminatedSet) {
-      const override = overrides?.find(o => o.submissionId === subId);
-      const { error: eliminateError } = await supabase
-        .from('round_submissions')
-        .update({
-          status: 'eliminated',
-          eliminated_at: new Date().toISOString(),
-          elimination_reason: override?.reason || `Eliminated in round: ${round.title}`,
-        })
-        .eq('round_id', roundId)
-        .eq('submission_id', subId);
-      if (eliminateError) {
-        await releaseFinalizeLock();
-        return { ok: false, error: eliminateError.message || 'Failed to update eliminated participants' };
-      }
-    }
+    const enrollmentsByRound = new Map<string, Array<Record<string, any>>>();
 
     // Enroll advancing participants in successor round(s) that match edge conditions.
     if (edges.length > 0 && advancingSet.size > 0) {
@@ -583,7 +440,6 @@ export async function executeAdvancement(
           .map((row: any) => row.id)
       );
 
-      const enrollmentsByRound = new Map<string, Array<Record<string, any>>>();
       const unroutedSubmissionIds: string[] = [];
 
       for (const participant of advancingParticipants) {
@@ -617,25 +473,82 @@ export async function executeAdvancement(
       }
 
       if (unroutedSubmissionIds.length > 0) {
-        await releaseFinalizeLock();
         return {
           ok: false,
           error: `Failed to route ${unroutedSubmissionIds.length} advancing participant(s) to a successor round based on edge conditions.`,
         };
       }
+    }
 
-      for (const [targetRoundId, rows] of enrollmentsByRound.entries()) {
-        if (rows.length === 0) continue;
+    const advancingDetails = Array.from(advancingSet).map((subId) => {
+      const participant = scoreMap.get(subId);
+      const override = overrides?.find((o) => o.submissionId === subId);
+      return {
+        submission_id: subId,
+        outcome: override ? 'override_advanced' : 'advanced',
+        rank: participant?.rank || null,
+        score: participant?.score || null,
+        vote_count: participant?.voteCount || null,
+        was_at_cutoff_boundary: preview.ties.some((tie) => tie.submissionId === subId),
+        override_reason: override?.reason || null,
+      };
+    });
 
-        const { error: enrollError } = await supabase
-          .from('round_submissions')
-          .upsert(rows, { onConflict: 'round_id,submission_id' });
-        if (enrollError) {
-          await releaseFinalizeLock();
-          return { ok: false, error: enrollError.message || 'Failed to enroll advancing participants in next round' };
-        }
-      }
+    const eliminatedDetails = Array.from(eliminatedSet).map((subId) => {
+      const participant = scoreMap.get(subId);
+      const override = overrides?.find((o) => o.submissionId === subId);
+      return {
+        submission_id: subId,
+        outcome: override ? 'override_eliminated' : 'eliminated',
+        rank: participant?.rank || null,
+        score: participant?.score || null,
+        vote_count: participant?.voteCount || null,
+        was_at_cutoff_boundary: preview.ties.some((tie) => tie.submissionId === subId),
+        override_reason: override?.reason || null,
+        elimination_reason: override?.reason || `Eliminated in round: ${round.title}`,
+      };
+    });
 
+    const enrollmentRows = Array.from(enrollmentsByRound.values()).flat();
+    const criteria = criteriaOverride || round.advancement_criteria || { type: 'all_pass' };
+    const txEnabled = process.env.ROUND_ADVANCEMENT_TX_ENABLED !== 'false';
+    if (!txEnabled) {
+      return { ok: false, error: 'Transactional advancement is disabled by ROUND_ADVANCEMENT_TX_ENABLED=false.' };
+    }
+
+    const triggerType = triggeredBy === 'scheduler_auto' ? 'automatic' : 'manual';
+    const transitionActor = triggeredBy || 'admin';
+    const executedBy = triggeredBy && triggeredBy !== 'scheduler_auto' ? triggeredBy : null;
+
+    const { data: txData, error: txError } = await supabase.rpc('execute_round_advancement_tx', {
+      p_round_id: roundId,
+      p_target_round_id: targetRound?.id || null,
+      p_trigger_type: triggerType,
+      p_transition_triggered_by: transitionActor,
+      p_executed_by: executedBy,
+      p_criteria_used: criteria,
+      p_total_participants: preview.totalParticipants,
+      p_had_ties: preview.ties.length > 0,
+      p_tie_resolution: tieResolutions || null,
+      p_advanced: advancingDetails,
+      p_eliminated: eliminatedDetails,
+      p_enrollments: enrollmentRows,
+      p_audit_details: `Advanced ${advancingSet.size}, eliminated ${eliminatedSet.size} from "${round.title}"`,
+      p_audit_metadata: {
+        target_round_id: targetRound?.id || null,
+        advanced_count: advancingSet.size,
+        eliminated_count: eliminatedSet.size,
+      },
+    });
+
+    if (txError) {
+      return { ok: false, error: txError.message || 'Failed to execute transactional advancement' };
+    }
+
+    const txRow = Array.isArray(txData) ? txData[0] : txData;
+    const eventId = txRow?.event_id;
+
+    if (enrollmentsByRound.size > 0) {
       // Auto-assign judges for successor rounds that received enrollments.
       const { data: judgingConfig } = await supabase
         .from('judging_config')
@@ -663,47 +576,13 @@ export async function executeAdvancement(
       }
     }
 
-    // Log transition
-    const { error: transitionError } = await supabase.from('round_transitions').insert({
-      round_id: roundId,
-      from_status: 'completed',
-      to_status: 'finalized',
-      triggered_by: triggeredBy || 'admin',
-      metadata: { advancement_event_id: event.id },
-    });
-    if (transitionError) {
-      await releaseFinalizeLock();
-      return { ok: false, error: transitionError.message || 'Failed to log round transition' };
-    }
-
-    // Audit log
-    const { error: auditError } = await supabase.from('audit_logs').insert({
-      action: 'Advanced participants',
-      action_type: 'advancement',
-      resource_type: 'round',
-      resource_id: roundId,
-      details: `Advanced ${advancingSet.size}, eliminated ${eliminatedSet.size} from "${round.title}"`,
-      metadata: {
-        event_id: event.id,
-        target_round_id: targetRound?.id,
-        advanced_count: advancingSet.size,
-        eliminated_count: eliminatedSet.size,
-      },
-    });
-    if (auditError) {
-      await releaseFinalizeLock();
-      return { ok: false, error: auditError.message || 'Failed to write advancement audit log' };
-    }
-
-    lockAcquired = false;
     return {
       ok: true,
-      eventId: event.id,
+      eventId,
       advancedCount: advancingSet.size,
       eliminatedCount: eliminatedSet.size,
     };
   } catch (error: any) {
-    await releaseFinalizeLock();
     return { ok: false, error: error?.message || 'Failed to execute advancement' };
   }
 }
