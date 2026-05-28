@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { castVote } from '../../../server/src/services/votingEngine.ts';
 
-const getSupabaseAdmin = vi.fn();
+const mocks = vi.hoisted(() => ({
+  getSupabaseAdmin: vi.fn(),
+}));
 
 vi.mock('../../../server/src/supabase.js', () => ({
-  getSupabaseAdmin,
+  getSupabaseAdmin: mocks.getSupabaseAdmin,
 }));
 
 function promiseQuery<T>(result: T) {
@@ -26,7 +28,7 @@ describe('votingEngine vote count consistency', () => {
     const deleteEq = vi.fn(async () => ({ error: null }));
     const rpc = vi.fn(async () => ({ error: { message: 'rpc missing' } }));
 
-    getSupabaseAdmin.mockReturnValue({
+    mocks.getSupabaseAdmin.mockReturnValue({
       rpc,
       from: (table: string) => {
         if (table === 'rounds') {
@@ -103,7 +105,7 @@ describe('votingEngine vote count consistency', () => {
     const deleteEq = vi.fn(async () => ({ error: null }));
     const rpc = vi.fn(async () => ({ error: null }));
 
-    getSupabaseAdmin.mockReturnValue({
+    mocks.getSupabaseAdmin.mockReturnValue({
       rpc,
       from: (table: string) => {
         if (table === 'rounds') {

@@ -3,9 +3,11 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const canManageProgram = vi.fn();
-const getRound = vi.fn();
-const autoRandomAssign = vi.fn();
+const mocks = vi.hoisted(() => ({
+  canManageProgram: vi.fn(),
+  getRound: vi.fn(),
+  autoRandomAssign: vi.fn(),
+}));
 
 vi.mock('../../../server/src/middleware/auth.js', () => ({
   requireAuth: (req: any, _res: any, next: any) => {
@@ -15,15 +17,15 @@ vi.mock('../../../server/src/middleware/auth.js', () => ({
 }));
 
 vi.mock('../../../server/src/middleware/programManagement.js', () => ({
-  canManageProgram,
+  canManageProgram: mocks.canManageProgram,
 }));
 
 vi.mock('../../../server/src/services/roundEngine.js', () => ({
-  getRound,
+  getRound: mocks.getRound,
 }));
 
 vi.mock('../../../server/src/services/judgeAssignment.js', () => ({
-  autoRandomAssign,
+  autoRandomAssign: mocks.autoRandomAssign,
   autoSegmentedAssign: vi.fn(),
   manualAssign: vi.fn(),
   getAssignmentsByRound: vi.fn(async () => []),
@@ -55,13 +57,13 @@ import judgeAssignmentRouter from '../../../server/src/routes/judgeAssignment.ts
 describe('judgeAssignment route authorization and validation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getRound.mockResolvedValue({ id: 'round-1', program_id: 'server-program' });
-    canManageProgram.mockResolvedValue(true);
-    autoRandomAssign.mockResolvedValue({ ok: true, assigned: 4 });
+    mocks.getRound.mockResolvedValue({ id: 'round-1', program_id: 'server-program' });
+    mocks.canManageProgram.mockResolvedValue(true);
+    mocks.autoRandomAssign.mockResolvedValue({ ok: true, assigned: 4 });
   });
 
   it('blocks assignment when caller lacks permissions', async () => {
-    canManageProgram.mockResolvedValue(false);
+    mocks.canManageProgram.mockResolvedValue(false);
 
     const app = express();
     app.use(express.json());
@@ -74,7 +76,7 @@ describe('judgeAssignment route authorization and validation', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Insufficient permissions');
-    expect(autoRandomAssign).not.toHaveBeenCalled();
+    expect(mocks.autoRandomAssign).not.toHaveBeenCalled();
   });
 
   it('derives program_id from round server-side', async () => {
@@ -89,7 +91,7 @@ describe('judgeAssignment route authorization and validation', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(autoRandomAssign).toHaveBeenCalledWith('round-1', 'server-program', 2, 'manager-1');
+    expect(mocks.autoRandomAssign).toHaveBeenCalledWith('round-1', 'server-program', 2, 'manager-1');
   });
 
   it('returns field-level 400 errors for invalid assignment config', async () => {

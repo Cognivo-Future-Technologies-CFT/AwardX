@@ -3,17 +3,19 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScheduleRoundsView } from '../../../components/dashboard/scheduleRounds/ScheduleRoundsView';
 
-const getRounds = vi.fn();
-const getEdges = vi.fn();
-const saveEdges = vi.fn();
-const updateRound = vi.fn();
+const mocks = vi.hoisted(() => ({
+  getRounds: vi.fn(),
+  getEdges: vi.fn(),
+  saveEdges: vi.fn(),
+  updateRound: vi.fn(),
+}));
 
 vi.mock('../../../services/scheduleRoundsDb', () => ({
   scheduleRoundsService: {
-    getRounds,
-    getEdges,
-    saveEdges,
-    updateRound,
+    getRounds: mocks.getRounds,
+    getEdges: mocks.getEdges,
+    saveEdges: mocks.saveEdges,
+    updateRound: mocks.updateRound,
     createRound: vi.fn(),
     deleteRound: vi.fn(),
   },
@@ -85,17 +87,17 @@ function buildRound(id: string, order: number) {
 describe('ScheduleRoundsView edge persistence guards', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    updateRound.mockResolvedValue(buildRound('round-1', 0));
-    getRounds.mockResolvedValue([buildRound('round-1', 0), buildRound('round-2', 1)]);
+    mocks.updateRound.mockResolvedValue(buildRound('db-round-1', 0));
+    mocks.getRounds.mockResolvedValue([buildRound('db-round-1', 0), buildRound('db-round-2', 1)]);
   });
 
   it('does not overwrite existing custom graph edges on passive reorder', async () => {
-    getEdges.mockResolvedValue([
+    mocks.getEdges.mockResolvedValue([
       {
         id: 'edge-custom',
         programId: 'program-1',
-        sourceRoundId: 'round-1',
-        targetRoundId: 'round-2',
+        sourceRoundId: 'db-round-1',
+        targetRoundId: 'db-round-2',
         condition: { type: 'if_score_gte', score: 80 },
         order: 0,
         createdAt: new Date().toISOString(),
@@ -104,35 +106,35 @@ describe('ScheduleRoundsView edge persistence guards', () => {
 
     render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
-    await waitFor(() => expect(getRounds).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.getRounds).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId('reorder-rounds'));
 
     await waitFor(() => {
-      expect(saveEdges).not.toHaveBeenCalled();
+      expect(mocks.saveEdges).not.toHaveBeenCalled();
     });
   });
 
   it('persists linear edges when no custom workflow exists', async () => {
-    getEdges.mockResolvedValue([
+    mocks.getEdges.mockResolvedValue([
       {
         id: 'edge-1',
         programId: 'program-1',
-        sourceRoundId: 'round-1',
-        targetRoundId: 'round-2',
+        sourceRoundId: 'db-round-1',
+        targetRoundId: 'db-round-2',
         condition: { type: 'always' },
         order: 0,
         createdAt: new Date().toISOString(),
       },
     ]);
-    saveEdges.mockResolvedValue([]);
+    mocks.saveEdges.mockResolvedValue([]);
 
     render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
-    await waitFor(() => expect(getRounds).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.getRounds).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId('reorder-rounds'));
 
     await waitFor(() => {
-      expect(saveEdges).toHaveBeenCalled();
+      expect(mocks.saveEdges).toHaveBeenCalled();
     });
   });
 });

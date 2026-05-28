@@ -3,8 +3,10 @@ import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ensureCanManageProgram = vi.fn();
-const getSupabaseAdmin = vi.fn();
+const mocks = vi.hoisted(() => ({
+  ensureCanManageProgram: vi.fn(),
+  getSupabaseAdmin: vi.fn(),
+}));
 
 vi.mock('../../../server/src/middleware/auth.js', () => ({
   requireAuth: (req: any, _res: any, next: any) => {
@@ -14,11 +16,11 @@ vi.mock('../../../server/src/middleware/auth.js', () => ({
 }));
 
 vi.mock('../../../server/src/middleware/programManagement.js', () => ({
-  ensureCanManageProgram,
+  ensureCanManageProgram: mocks.ensureCanManageProgram,
 }));
 
 vi.mock('../../../server/src/supabase.js', () => ({
-  getSupabaseAdmin,
+  getSupabaseAdmin: mocks.getSupabaseAdmin,
 }));
 
 vi.mock('../../../server/src/cache/redisCache.js', () => ({
@@ -38,9 +40,9 @@ import scheduleRoundsRouter from '../../../server/src/routes/scheduleRounds.ts';
 describe('scheduleRounds mutation authorization and validation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    ensureCanManageProgram.mockResolvedValue({ ok: true, program: { id: 'program-1', organization_id: 'org-1' } });
+    mocks.ensureCanManageProgram.mockResolvedValue({ ok: true, program: { id: 'program-1', organization_id: 'org-1' } });
 
-    getSupabaseAdmin.mockReturnValue({
+    mocks.getSupabaseAdmin.mockReturnValue({
       from: (table: string) => {
         if (table === 'rounds') {
           return {
@@ -93,7 +95,7 @@ describe('scheduleRounds mutation authorization and validation', () => {
   });
 
   it('returns 403 for unauthorized round creation', async () => {
-    ensureCanManageProgram.mockResolvedValue({ ok: false, status: 403, error: 'Insufficient permissions' });
+    mocks.ensureCanManageProgram.mockResolvedValue({ ok: false, status: 403, error: 'Insufficient permissions' });
 
     const app = express();
     app.use(express.json());

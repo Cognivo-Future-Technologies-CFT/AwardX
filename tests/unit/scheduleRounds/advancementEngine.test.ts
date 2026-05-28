@@ -1,23 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getSupabaseAdmin = vi.fn();
-const getRound = vi.fn();
-const getSuccessorRounds = vi.fn();
-const autoRandomAssign = vi.fn();
-const autoSegmentedAssign = vi.fn();
+const mocks = vi.hoisted(() => ({
+  getSupabaseAdmin: vi.fn(),
+  getRound: vi.fn(),
+  getSuccessorRounds: vi.fn(),
+  autoRandomAssign: vi.fn(),
+  autoSegmentedAssign: vi.fn(),
+}));
 
 vi.mock('../../../server/src/supabase.js', () => ({
-  getSupabaseAdmin,
+  getSupabaseAdmin: mocks.getSupabaseAdmin,
 }));
 
 vi.mock('../../../server/src/services/roundEngine.js', () => ({
-  getRound,
-  getSuccessorRounds,
+  getRound: mocks.getRound,
+  getSuccessorRounds: mocks.getSuccessorRounds,
 }));
 
 vi.mock('../../../server/src/services/judgeAssignment.js', () => ({
-  autoRandomAssign,
-  autoSegmentedAssign,
+  autoRandomAssign: mocks.autoRandomAssign,
+  autoSegmentedAssign: mocks.autoSegmentedAssign,
 }));
 
 import { executeAdvancement } from '../../../server/src/services/advancementEngine.ts';
@@ -35,7 +37,7 @@ describe('executeAdvancement transactional path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    getRound.mockResolvedValue({
+    mocks.getRound.mockResolvedValue({
       id: 'round-1',
       program_id: 'program-1',
       status: 'completed',
@@ -44,13 +46,13 @@ describe('executeAdvancement transactional path', () => {
       title: 'Public Round',
       advancement_criteria: { type: 'all_pass' },
     });
-    getSuccessorRounds.mockResolvedValue([]);
+    mocks.getSuccessorRounds.mockResolvedValue([]);
   });
 
   it('returns an error when transactional RPC fails', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: { message: 'rpc failed' } }));
 
-    getSupabaseAdmin.mockReturnValue({
+    mocks.getSupabaseAdmin.mockReturnValue({
       rpc,
       from: (table: string) => {
         if (table === 'round_submissions') {
@@ -82,8 +84,8 @@ describe('executeAdvancement transactional path', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain('rpc failed');
-    expect(autoRandomAssign).not.toHaveBeenCalled();
-    expect(autoSegmentedAssign).not.toHaveBeenCalled();
+    expect(mocks.autoRandomAssign).not.toHaveBeenCalled();
+    expect(mocks.autoSegmentedAssign).not.toHaveBeenCalled();
   });
 
   it('returns success with event id when transactional RPC succeeds', async () => {
@@ -92,7 +94,7 @@ describe('executeAdvancement transactional path', () => {
       error: null,
     }));
 
-    getSupabaseAdmin.mockReturnValue({
+    mocks.getSupabaseAdmin.mockReturnValue({
       rpc,
       from: (table: string) => {
         if (table === 'round_submissions') {
