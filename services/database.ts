@@ -19,6 +19,7 @@ import {
   resolveMediaPublicUrl,
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
+import { fetchBackendJson } from './backendApi';
 import { Program, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
 
@@ -1819,9 +1820,19 @@ class DatabaseService {
 
   // Forms
   async getForms(programId: string) {
-    const { data, error } = await forms.getByProgram(programId);
-    if (error || !data) return [];
-    return data;
+    try {
+      const response = await fetchBackendJson<{ data: any[] }>(
+        `/api/program-forms/${encodeURIComponent(programId)}`,
+        {
+          requireAuth: true,
+          errorPrefix: 'Program forms API',
+        },
+      );
+      return response.data || [];
+    } catch (error) {
+      console.error('Failed to load forms via backend API:', error);
+      return [];
+    }
   }
 
   async getFormFields(formId: string) {
@@ -1831,8 +1842,16 @@ class DatabaseService {
   }
 
   async createForm(payload: { program_id: string; title: string; description?: string; is_active?: boolean }) {
-    const { data, error } = await forms.create(payload);
-    if (error) throw new Error(error.message || 'Failed to create form');
+    const response = await fetchBackendJson<{ data: any }>(
+      `/api/program-forms/${encodeURIComponent(payload.program_id)}`,
+      {
+        method: 'POST',
+        requireAuth: true,
+        errorPrefix: 'Program forms API',
+        body: payload,
+      },
+    );
+    const data = response.data;
     await this.safeAuditLog({
       action: 'Created form',
       actionType: 'create',
@@ -1845,8 +1864,16 @@ class DatabaseService {
   }
 
   async updateForm(id: string, updates: any) {
-    const { data, error } = await forms.update(id, updates);
-    if (error) throw new Error(error.message || 'Failed to update form');
+    const response = await fetchBackendJson<{ data: any }>(
+      `/api/program-forms/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        requireAuth: true,
+        errorPrefix: 'Program forms API',
+        body: updates,
+      },
+    );
+    const data = response.data;
     await this.safeAuditLog({
       action: 'Updated form',
       actionType: 'update',
@@ -1857,8 +1884,14 @@ class DatabaseService {
   }
 
   async deleteForm(id: string) {
-    const { error } = await forms.delete(id);
-    if (error) throw new Error(error.message || 'Failed to delete form');
+    await fetchBackendJson(
+      `/api/program-forms/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+        requireAuth: true,
+        errorPrefix: 'Program forms API',
+      },
+    );
     await this.safeAuditLog({
       action: 'Deleted form',
       actionType: 'delete',
@@ -1868,8 +1901,15 @@ class DatabaseService {
   }
 
   async replaceFormFields(formId: string, fieldsPayload: any[]) {
-    const { error } = await forms.replaceFields(formId, fieldsPayload);
-    if (error) throw new Error(error.message || 'Failed to save form fields');
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/program-forms/${encodeURIComponent(formId)}/fields`,
+      {
+        method: 'PUT',
+        requireAuth: true,
+        errorPrefix: 'Program forms API',
+        body: { fields: fieldsPayload },
+      },
+    );
     await this.safeAuditLog({
       action: 'Updated form fields',
       actionType: 'update',

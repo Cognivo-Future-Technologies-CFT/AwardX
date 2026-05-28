@@ -1,4 +1,5 @@
-import { rounds as supabaseRounds, roundEdges as supabaseRoundEdges, supabase } from './supabase';
+import { fetchBackendJson } from './backendApi';
+import { supabase } from './supabase';
 import {
   AdvancementCriteria,
   AdvancementTrigger,
@@ -11,12 +12,12 @@ import { criteriaToShortlistConfig, shortlistConfigToCriteria } from '../lib/rou
 // Convert database round to scheduleRounds Round type
 export function dbRoundToScheduleRound(dbRound: any): Round {
   const settings = dbRound.settings || {};
-  
+
   // Extract dates from start/end conditions if they exist
-  const startDate = settings.startCondition?.type === 'fixed_datetime' 
-    ? settings.startCondition.datetime 
+  const startDate = settings.startCondition?.type === 'fixed_datetime'
+    ? settings.startCondition.datetime
     : dbRound.start_date;
-  
+
   const endDate = settings.endCondition?.type === 'fixed_datetime'
     ? settings.endCondition.datetime
     : dbRound.end_date;
@@ -42,12 +43,12 @@ export function dbRoundToScheduleRound(dbRound: any): Round {
     order: dbRound.sort_order ?? settings.order ?? 0,
     status: mapStatusToScheduleRound(dbRound.status),
     createdAt: dbRound.created_at || new Date().toISOString(),
-      updatedAt: settings.updatedAt || dbRound.created_at || new Date().toISOString(),
-      version: settings.version || 1,
-      metadata: settings.metadata,
-      inputPorts: settings.inputPorts || undefined,
-      outputPorts: settings.outputPorts || undefined,
-      position: settings.position || undefined,
+    updatedAt: settings.updatedAt || dbRound.created_at || new Date().toISOString(),
+    version: settings.version || 1,
+    metadata: settings.metadata,
+    inputPorts: settings.inputPorts || undefined,
+    outputPorts: settings.outputPorts || undefined,
+    position: settings.position || undefined,
   };
 }
 
@@ -68,9 +69,10 @@ export function scheduleRoundToDbRound(round: Round): {
   const advancementCriteria =
     round.advancementCriteria || shortlistConfigToCriteria(round.shortlistConfig, round.type);
   const advancementTrigger = round.advancementTrigger || 'manual';
+
   // Extract fixed dates if available
   let startDate = new Date().toISOString();
-  let endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // Default: 7 days from now
+  let endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   if (round.startCondition.type === 'fixed_datetime') {
     startDate = round.startCondition.datetime;
@@ -113,26 +115,25 @@ export function scheduleRoundToDbRound(round: Round): {
   };
 }
 
-// Status mapping functions
 function mapStatusToScheduleRound(dbStatus: string): Round['status'] {
   const statusMap: Record<string, Round['status']> = {
-    'upcoming': 'scheduled',
-    'active': 'active',
-    'completed': 'completed',
-    'draft': 'draft',
-    'cancelled': 'cancelled',
-    'scheduled': 'scheduled',
+    upcoming: 'scheduled',
+    active: 'active',
+    completed: 'completed',
+    draft: 'draft',
+    cancelled: 'cancelled',
+    scheduled: 'scheduled',
   };
   return statusMap[dbStatus?.toLowerCase()] || 'draft';
 }
 
 function mapStatusToDb(status: Round['status']): string {
   const statusMap: Record<Round['status'], string> = {
-    'draft': 'draft',
-    'scheduled': 'upcoming',
-    'active': 'active',
-    'completed': 'completed',
-    'cancelled': 'cancelled',
+    draft: 'draft',
+    scheduled: 'upcoming',
+    active: 'active',
+    completed: 'completed',
+    cancelled: 'cancelled',
   };
   return statusMap[status] || 'draft';
 }
@@ -145,10 +146,6 @@ type EdgeMetadata = {
 };
 
 const DEFAULT_EDGE_CONDITION: EdgeCondition = { type: 'always' };
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
 
 function extractCondition(raw: any): { condition: EdgeCondition; metadata: EdgeMetadata } {
   if (!raw || typeof raw !== 'object') {
@@ -196,101 +193,95 @@ function scheduleRoundEdgeToDb(edge: RoundEdge) {
   };
 }
 
-// Main service functions
 export const scheduleRoundsService = {
-  // Get all rounds for a program
   async getRounds(programId: string): Promise<Round[]> {
-    const { data, error } = await supabaseRounds.getByProgram(programId);
-    
-    if (error || !data) {
+    try {
+      const response = await fetchBackendJson<{ data: any[] }>(
+        `/api/schedule-rounds/${encodeURIComponent(programId)}/rounds`,
+        {
+          requireAuth: true,
+          errorPrefix: 'Schedule rounds API',
+        },
+      );
+
+      return (response.data || []).map(dbRoundToScheduleRound);
+    } catch (error) {
       console.error('Failed to load rounds:', error);
       return [];
     }
-
-    return data.map(dbRoundToScheduleRound);
   },
 
-  // Create a new round
   async createRound(round: Omit<Round, 'id' | 'createdAt' | 'updatedAt'>): Promise<Round> {
-    if (!supabase) {
-      throw new Error('Supabase not configured');
-    }
-
     const dbRound = scheduleRoundToDbRound({
       ...round,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     } as Round);
-    
-    console.log('Creating round in database:', { program_id: dbRound.program_id, title: dbRound.title, settings: dbRound.settings });
-    
-    const { data, error } = await supabase
-      .from('rounds')
-      .insert({
-        program_id: dbRound.program_id,
-        title: dbRound.title,
-        description: dbRound.description,
-        type: dbRound.type,
-        start_date: dbRound.start_date,
-        end_date: dbRound.end_date,
-        status: dbRound.status,
-        sort_order: dbRound.sort_order,
-        advancement_criteria: dbRound.advancement_criteria,
-        advancement_trigger: dbRound.advancement_trigger,
-        settings: dbRound.settings,
-      })
-      .select()
-      .single();
 
-    if (error || !data) {
-      console.error('Failed to create round:', error);
-      throw new Error(error?.message || 'Failed to create round');
-    }
+    const response = await fetchBackendJson<{ data: any }>(
+      `/api/schedule-rounds/${encodeURIComponent(round.programId)}/rounds`,
+      {
+        method: 'POST',
+        requireAuth: true,
+        errorPrefix: 'Schedule rounds API',
+        body: {
+          title: dbRound.title,
+          description: dbRound.description,
+          type: dbRound.type,
+          start_date: dbRound.start_date,
+          end_date: dbRound.end_date,
+          status: dbRound.status,
+          sort_order: dbRound.sort_order,
+          advancement_criteria: dbRound.advancement_criteria,
+          advancement_trigger: dbRound.advancement_trigger,
+          settings: dbRound.settings,
+        },
+      },
+    );
 
-    console.log('Round created successfully:', data.id);
-    return dbRoundToScheduleRound(data);
+    return dbRoundToScheduleRound(response.data);
   },
 
-  // Update an existing round
   async updateRound(round: Round): Promise<Round> {
-    if (!supabase) {
-      throw new Error('Supabase not configured');
-    }
-
     const dbRound = scheduleRoundToDbRound(round);
-    
-    console.log('Updating round in database:', { id: round.id, title: dbRound.title, settings: dbRound.settings });
-    
-    // Use direct supabase call to update all fields including settings
-    const { data, error } = await supabase
-      .from('rounds')
-      .update({
-        title: dbRound.title,
-        description: dbRound.description,
-        type: dbRound.type,
-        start_date: dbRound.start_date,
-        end_date: dbRound.end_date,
-        status: dbRound.status,
-        sort_order: dbRound.sort_order,
-        advancement_criteria: dbRound.advancement_criteria,
-        advancement_trigger: dbRound.advancement_trigger,
-        settings: dbRound.settings,
-      })
-      .eq('id', round.id)
-      .select()
-      .single();
 
-    if (error || !data) {
-      console.error('Failed to update round:', error);
-      throw new Error(error?.message || 'Failed to update round');
-    }
+    const response = await fetchBackendJson<{ data: any }>(
+      `/api/schedule-rounds/${encodeURIComponent(round.programId)}/rounds/${encodeURIComponent(round.id)}`,
+      {
+        method: 'PUT',
+        requireAuth: true,
+        errorPrefix: 'Schedule rounds API',
+        body: {
+          title: dbRound.title,
+          description: dbRound.description,
+          type: dbRound.type,
+          start_date: dbRound.start_date,
+          end_date: dbRound.end_date,
+          status: dbRound.status,
+          sort_order: dbRound.sort_order,
+          advancement_criteria: dbRound.advancement_criteria,
+          advancement_trigger: dbRound.advancement_trigger,
+          settings: dbRound.settings,
+        },
+      },
+    );
 
-    console.log('Round updated successfully:', data.id);
-    return dbRoundToScheduleRound(data);
+    return dbRoundToScheduleRound(response.data);
   },
 
-  // Delete a round
-  async deleteRound(roundId: string): Promise<void> {
+  async deleteRound(roundId: string, programId?: string): Promise<void> {
+    if (programId) {
+      await fetchBackendJson(
+        `/api/schedule-rounds/${encodeURIComponent(programId)}/rounds/${encodeURIComponent(roundId)}`,
+        {
+          method: 'DELETE',
+          requireAuth: true,
+          errorPrefix: 'Schedule rounds API',
+        },
+      );
+      return;
+    }
+
     if (!supabase) {
       throw new Error('Supabase not configured');
     }
@@ -304,66 +295,45 @@ export const scheduleRoundsService = {
       throw new Error(edgeDeleteError.message || 'Failed to delete round connections');
     }
 
-    const { error } = await supabaseRounds.delete(roundId);
-    
+    const { error } = await supabase.from('rounds').delete().eq('id', roundId);
     if (error) {
       throw new Error(error.message || 'Failed to delete round');
     }
   },
 
-  // Get edges for a program
   async getEdges(programId: string): Promise<RoundEdge[]> {
-    if (!supabase) {
-      console.warn('Supabase not configured; returning empty edge list');
-      return [];
-    }
-
-    const { data, error } = await supabaseRoundEdges.getByProgram(programId);
-    if (error || !data) {
-      console.error('Failed to load edges from database:', error);
-      throw new Error(error?.message || 'Failed to load round connections');
-    }
-
-    return data.map(dbEdgeToScheduleRoundEdge);
-  },
-
-  // Save edges for a program
-  async saveEdges(programId: string, edges: RoundEdge[]): Promise<RoundEdge[]> {
-    if (!supabase) {
-      console.warn('Supabase not configured; skipping edge persistence');
-      return edges;
-    }
-
-    const { data: existingData, error: existingError } = await supabaseRoundEdges.getByProgram(programId);
-    if (existingError || !existingData) {
-      throw new Error(existingError?.message || 'Failed to load existing round connections');
-    }
-
-    const incomingIds = new Set(edges.filter(e => isUuid(e.id)).map(e => e.id));
-    const deletions = existingData.filter(edge => !incomingIds.has(edge.id));
-
-    await Promise.all(
-      deletions.map(edge => supabaseRoundEdges.delete(edge.id))
+    const response = await fetchBackendJson<{ data: any[] }>(
+      `/api/schedule-rounds/${encodeURIComponent(programId)}/edges`,
+      {
+        requireAuth: true,
+        errorPrefix: 'Schedule rounds API',
+      },
     );
 
-    const persisted: RoundEdge[] = [];
+    return (response.data || []).map(dbEdgeToScheduleRoundEdge);
+  },
 
-    for (const edge of edges) {
-      const dbPayload = scheduleRoundEdgeToDb(edge);
-      if (isUuid(edge.id)) {
-        const { data, error } = await supabaseRoundEdges.update(edge.id, dbPayload);
-        if (!error && data) {
-          persisted.push(dbEdgeToScheduleRoundEdge(data));
-        }
-      } else {
-        const { data, error } = await supabaseRoundEdges.create(dbPayload);
-        if (!error && data) {
-          persisted.push(dbEdgeToScheduleRoundEdge(data));
-        }
-      }
-    }
+  async saveEdges(programId: string, edges: RoundEdge[]): Promise<RoundEdge[]> {
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/schedule-rounds/${encodeURIComponent(programId)}/edges`,
+      {
+        method: 'PUT',
+        requireAuth: true,
+        errorPrefix: 'Schedule rounds API',
+        body: {
+          edges: edges.map((edge) => {
+            const dbEdge = scheduleRoundEdgeToDb(edge);
+            return {
+              source_round_id: dbEdge.source_round_id,
+              target_round_id: dbEdge.target_round_id,
+              condition: dbEdge.condition,
+              sort_order: dbEdge.sort_order,
+            };
+          }),
+        },
+      },
+    );
 
-    return persisted.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return this.getEdges(programId);
   },
 };
-

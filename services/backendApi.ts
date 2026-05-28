@@ -67,7 +67,12 @@ export async function fetchBackendJson<T = unknown>(
         continue;
       }
 
-      return (await resp.json()) as T;
+      const responseText = await resp.text();
+      if (!responseText.trim()) {
+        return {} as T;
+      }
+
+      return JSON.parse(responseText) as T;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
     }

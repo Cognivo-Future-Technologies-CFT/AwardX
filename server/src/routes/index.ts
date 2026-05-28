@@ -12,6 +12,7 @@ import leaderboardRouter from './leaderboard.js';
 import massEmailRouter from './massEmail.js';
 import invitesRouter from './invites.js';
 import integrationsRouter from './integrations.js';
+import programFormsRouter from './programForms.js';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/leaderboard', leaderboardRouter);
 router.use('/mass-email', massEmailRouter);
 router.use('/invites', invitesRouter);
 router.use('/integrations', integrationsRouter);
+router.use('/program-forms', programFormsRouter);
 
 export default router;
