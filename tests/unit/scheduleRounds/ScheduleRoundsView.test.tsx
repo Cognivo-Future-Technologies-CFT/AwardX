@@ -40,11 +40,15 @@ vi.mock('../../../services/roundPipelineApi', () => ({
   })),
 }));
 
-vi.mock('../../../components/dashboard/scheduleRounds/RoundScheduler', () => ({
-  RoundScheduler: ({ rounds, onRoundReorder }: any) => (
+vi.mock('../../../components/dashboard/scheduleRounds/WorkflowView', () => ({
+  WorkflowView: () => <div data-testid="workflow-canvas" />,
+}));
+
+vi.mock('../../../components/dashboard/scheduleRounds/TileView', () => ({
+  TileView: ({ onRoundReorder, rounds }: any) => (
     <button
       type="button"
-      data-testid="reorder-rounds"
+      data-testid="tile-reorder-rounds"
       onClick={() =>
         onRoundReorder(
           rounds.map((round: any, index: number) => ({
@@ -84,14 +88,15 @@ function buildRound(id: string, order: number) {
   };
 }
 
-describe('ScheduleRoundsView edge persistence guards', () => {
+describe('ScheduleRoundsView representation conversion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     mocks.updateRound.mockResolvedValue(buildRound('db-round-1', 0));
     mocks.getRounds.mockResolvedValue([buildRound('db-round-1', 0), buildRound('db-round-2', 1)]);
   });
 
-  it('does not overwrite existing custom graph edges on passive reorder', async () => {
+  it('does not rewrite edges while in block diagram mode', async () => {
     mocks.getEdges.mockResolvedValue([
       {
         id: 'edge-custom',
@@ -106,15 +111,13 @@ describe('ScheduleRoundsView edge persistence guards', () => {
 
     render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
-    await waitFor(() => expect(mocks.getRounds).toHaveBeenCalled());
-    fireEvent.click(screen.getByTestId('reorder-rounds'));
-
-    await waitFor(() => {
-      expect(mocks.saveEdges).not.toHaveBeenCalled();
-    });
+    await waitFor(() => expect(screen.getByTestId('current-representation')).toHaveTextContent('Block diagram'));
+    expect(screen.queryByTestId('tile-reorder-rounds')).not.toBeInTheDocument();
+    expect(mocks.saveEdges).not.toHaveBeenCalled();
   });
 
-  it('persists linear edges when no custom workflow exists', async () => {
+  it('does not rewrite connections when reordering tiles', async () => {
+    window.localStorage.setItem('awardx:schedule-representation:program-1', 'tiles');
     mocks.getEdges.mockResolvedValue([
       {
         id: 'edge-1',
@@ -126,15 +129,26 @@ describe('ScheduleRoundsView edge persistence guards', () => {
         createdAt: new Date().toISOString(),
       },
     ]);
-    mocks.saveEdges.mockResolvedValue([]);
 
     render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
-    await waitFor(() => expect(mocks.getRounds).toHaveBeenCalled());
-    fireEvent.click(screen.getByTestId('reorder-rounds'));
+    await waitFor(() => expect(screen.getByTestId('current-representation')).toHaveTextContent('Tile sequence'));
+    fireEvent.click(screen.getByTestId('tile-reorder-rounds'));
 
     await waitFor(() => {
-      expect(mocks.saveEdges).toHaveBeenCalled();
+      expect(mocks.updateRound).toHaveBeenCalled();
     });
+    expect(mocks.saveEdges).not.toHaveBeenCalled();
+  });
+
+  it('opens conversion dialog instead of switching views instantly', async () => {
+    mocks.getEdges.mockResolvedValue([]);
+
+    render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
+
+    await waitFor(() => expect(screen.getByTestId('convert-to-workflow')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('convert-to-workflow'));
+
+    expect(screen.getByText('Convert tile sequence to block diagram')).toBeInTheDocument();
   });
 });

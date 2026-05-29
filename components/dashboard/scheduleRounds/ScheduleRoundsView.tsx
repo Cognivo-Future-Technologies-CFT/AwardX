@@ -1,13 +1,27 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { Program } from '../../../services/models';
-import { Plus } from 'lucide-react';
+import { ArrowRightLeft, LayoutGrid, Plus, Workflow } from 'lucide-react';
 import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
 import { roundSubmissions } from '../../../services/supabase';
-import { RoundScheduler } from './RoundScheduler';
+import { WorkflowView } from './WorkflowView';
+import { TileView } from './TileView';
+import { RepresentationConversionModal } from './RepresentationConversionModal';
 import { AdvancementPreviewModal } from '../AdvancementPreviewModal';
+import {
+  analyzeConversionToTiles,
+  analyzeConversionToWorkflow,
+  convertToTilesRepresentation,
+  convertToWorkflowRepresentation,
+  hasCustomWorkflowEdges,
+  inferRepresentation,
+  readStoredRepresentation,
+  writeStoredRepresentation,
+  type ConversionAnalysis,
+  type ScheduleRepresentation,
+} from '../../../lib/roundRepresentationConversion';
 import {
   activateRound,
   completeRound,
@@ -15,11 +29,7 @@ import {
   previewAdvancement,
   type AdvancementPreview,
 } from '../../../services/roundPipelineApi';
-import {
-  buildLinearEdges,
-  createDefaultRound,
-  shortlistConfigToCriteria,
-} from '../../../lib/roundScheduleUtils';
+import { createDefaultRound, shortlistConfigToCriteria } from '../../../lib/roundScheduleUtils';
 import type { AdvancementCriteria } from '../../../types/scheduleRounds';
 
 interface RoundCardInsight {
@@ -37,46 +47,18 @@ type AdvancementModalState = {
   criteriaOverride: AdvancementCriteria;
 };
 
-function hasCustomWorkflowEdges(orderedRounds: Round[], edges: RoundEdge[]): boolean {
-  if (edges.length === 0) return false;
-
-  const realRounds = orderedRounds.filter((round) => !round.id.startsWith('round-'));
-  if (realRounds.length <= 1) {
-    return edges.length > 0;
-  }
-
-  const expectedPairs = new Set<string>();
-  for (let idx = 0; idx < realRounds.length - 1; idx += 1) {
-    expectedPairs.add(`${realRounds[idx].id}->${realRounds[idx + 1].id}`);
-  }
-
-  const seenPairs = new Set<string>();
-  for (const edge of edges) {
-    const conditionType = String((edge.condition as any)?.type || 'always').toLowerCase();
-    if (conditionType !== 'always') {
-      return true;
-    }
-
-    const pair = `${edge.sourceRoundId}->${edge.targetRoundId}`;
-    if (!expectedPairs.has(pair) || seenPairs.has(pair)) {
-      return true;
-    }
-    seenPairs.add(pair);
-  }
-
-  return seenPairs.size !== expectedPairs.size;
-}
-
 export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEvent }) => {
+  const [representation, setRepresentation] = useState<ScheduleRepresentation>('tiles');
+  const [conversionTarget, setConversionTarget] = useState<ScheduleRepresentation | null>(null);
+  const [conversionAnalysis, setConversionAnalysis] = useState<ConversionAnalysis | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [roundEdges, setRoundEdges] = useState<RoundEdge[]>([]);
   const [hasCustomEdges, setHasCustomEdges] = useState(false);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
-  const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [roundInsights, setRoundInsights] = useState<Record<string, RoundCardInsight>>({});
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
-  const [pipelineBusyRoundId, setPipelineBusyRoundId] = useState<string | null>(null);
   const [advancementModal, setAdvancementModal] = useState<AdvancementModalState | null>(null);
   const customEdgeWarningShown = useRef(false);
 
@@ -99,28 +81,63 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     return normalized.map((round, index) => ({ ...round, order: index }));
   }, []);
 
-  const persistLinearEdges = useCallback(
-    async (orderedRounds: Round[], options?: { force?: boolean }) => {
-      if (!activeEvent) return false;
-      if (hasCustomEdges && !options?.force) {
-        if (!customEdgeWarningShown.current) {
-          toast.warning('Custom workflow edges detected — linear scheduler changes will not overwrite them.');
-          customEdgeWarningShown.current = true;
-        }
-        return false;
-      }
-
-      const linearEdges = buildLinearEdges(activeEvent.id, orderedRounds);
-      const savedEdges = await scheduleRoundsService.saveEdges(activeEvent.id, linearEdges);
+  const persistWorkflowEdges = useCallback(
+    async (updatedEdges: RoundEdge[], orderedRounds: Round[]) => {
+      if (!activeEvent) return [];
+      const savedEdges = await scheduleRoundsService.saveEdges(activeEvent.id, updatedEdges);
       const customAfterSave = hasCustomWorkflowEdges(orderedRounds, savedEdges);
       setRoundEdges(savedEdges);
       setHasCustomEdges(customAfterSave);
-      if (!customAfterSave) {
+      if (customAfterSave) {
+        customEdgeWarningShown.current = true;
+      } else {
         customEdgeWarningShown.current = false;
       }
-      return true;
+      return savedEdges;
     },
-    [activeEvent, hasCustomEdges],
+    [activeEvent],
+  );
+
+  const handleEdgeCreate = useCallback(
+    async (edge: RoundEdge) => {
+      const updated = [...roundEdges, edge];
+      setRoundEdges(updated);
+      try {
+        await persistWorkflowEdges(updated, rounds);
+      } catch (error) {
+        console.error('Failed to save workflow edge:', error);
+        toast.error('Could not save workflow connection');
+      }
+    },
+    [roundEdges, rounds, persistWorkflowEdges],
+  );
+
+  const handleEdgeUpdate = useCallback(
+    async (edge: RoundEdge) => {
+      const updated = roundEdges.map((item) => (item.id === edge.id ? edge : item));
+      setRoundEdges(updated);
+      try {
+        await persistWorkflowEdges(updated, rounds);
+      } catch (error) {
+        console.error('Failed to update workflow edge:', error);
+        toast.error('Could not update workflow connection');
+      }
+    },
+    [roundEdges, rounds, persistWorkflowEdges],
+  );
+
+  const handleEdgeDelete = useCallback(
+    async (edgeId: string) => {
+      const updated = roundEdges.filter((item) => item.id !== edgeId);
+      setRoundEdges(updated);
+      try {
+        await persistWorkflowEdges(updated, rounds);
+      } catch (error) {
+        console.error('Failed to delete workflow edge:', error);
+        toast.error('Could not delete workflow connection');
+      }
+    },
+    [roundEdges, rounds, persistWorkflowEdges],
   );
 
   const loadRoundInsights = useCallback(async (targetRounds: Round[]) => {
@@ -175,8 +192,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       setRoundEdges(loadedEdges);
       setHasCustomEdges(customDetected);
 
+      const storedRepresentation = readStoredRepresentation(activeEvent.id);
+      setRepresentation(storedRepresentation || inferRepresentation(normalizedRounds, loadedEdges));
+
       if (customDetected && !customEdgeWarningShown.current) {
-        toast.warning('Branching/conditional workflow edges detected. Linear edits will preserve them unless you convert.');
         customEdgeWarningShown.current = true;
       } else if (!customDetected) {
         customEdgeWarningShown.current = false;
@@ -224,19 +243,11 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         return nextRounds;
       });
 
-      try {
-        await persistLinearEdges(nextRounds);
-      } catch (error) {
-        console.error('Failed to persist linear edges after round save:', error);
-        toast.error('Round saved, but workflow connections were not updated.');
-      }
-
       if (round.id.startsWith('round-') && updatedRound.id !== round.id) {
         setSelectedRoundId(updatedRound.id);
-        setEditingRoundId(updatedRound.id);
       }
     },
-    [rounds, persistLinearEdges],
+    [rounds],
   );
 
   const handleRoundDelete = useCallback(
@@ -251,17 +262,21 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         return nextRounds;
       });
 
+      const nextEdges = roundEdges.filter(
+        (edge) => edge.sourceRoundId !== roundId && edge.targetRoundId !== roundId,
+      );
+      setRoundEdges(nextEdges);
+
       try {
-        await persistLinearEdges(nextRounds);
+        await persistWorkflowEdges(nextEdges, nextRounds);
       } catch (error) {
-        console.error('Failed to persist linear edges after round deletion:', error);
-        toast.error('Round deleted, but workflow connections were not updated.');
+        console.error('Failed to persist edges after round deletion:', error);
+        toast.error('Round deleted, but connections were not updated.');
       }
 
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
-      setEditingRoundId((prev) => (prev === roundId ? null : prev));
     },
-    [persistLinearEdges],
+    [persistWorkflowEdges, roundEdges],
   );
 
   const handleRoundReorder = useCallback(
@@ -276,13 +291,12 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             }),
           ),
         );
-        await persistLinearEdges(reorderedRounds);
       } catch (error) {
         console.error('Failed to persist round order:', error);
         toast.error('Could not save round order');
       }
     },
-    [persistLinearEdges],
+    [],
   );
 
   const createNewRound = useCallback(() => {
@@ -290,28 +304,66 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     const newRound = createDefaultRound(activeEvent.id, rounds.length);
     void handleRoundUpdate(newRound);
     setSelectedRoundId(newRound.id);
-    setEditingRoundId(newRound.id);
   }, [activeEvent, rounds.length, handleRoundUpdate]);
 
-  const handleConvertToLinear = useCallback(async () => {
-    if (!activeEvent) return;
+  const openConversionDialog = useCallback(
+    (target: ScheduleRepresentation) => {
+      const analysis =
+        target === 'tiles'
+          ? analyzeConversionToTiles(rounds, roundEdges)
+          : analyzeConversionToWorkflow(rounds, roundEdges);
+      setConversionAnalysis(analysis);
+      setConversionTarget(target);
+    },
+    [rounds, roundEdges],
+  );
 
-    if (hasCustomEdges) {
-      const confirmed = window.confirm(
-        'This will replace existing branching/conditional workflow edges with a simple linear sequence. Continue?',
-      );
-      if (!confirmed) return;
-    }
+  const applyRepresentationConversion = useCallback(async () => {
+    if (!activeEvent || !conversionTarget) return;
 
+    setIsConverting(true);
     try {
-      const orderedRounds = [...rounds].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      await persistLinearEdges(orderedRounds, { force: true });
-      toast.success('Workflow connections converted to linear sequence.');
+      const converted =
+        conversionTarget === 'tiles'
+          ? convertToTilesRepresentation(activeEvent.id, rounds, roundEdges)
+          : convertToWorkflowRepresentation(activeEvent.id, rounds, roundEdges);
+
+      await Promise.all(
+        converted.rounds
+          .filter((round) => !round.id.startsWith('round-'))
+          .map((round) =>
+            scheduleRoundsService.updateRound({
+              ...round,
+              updatedAt: new Date().toISOString(),
+              version: (rounds.find((item) => item.id === round.id)?.version || round.version || 0) + 1,
+            }),
+          ),
+      );
+
+      const savedEdges = await scheduleRoundsService.saveEdges(activeEvent.id, converted.edges);
+      const customAfterSave = hasCustomWorkflowEdges(converted.rounds, savedEdges);
+
+      setRounds(converted.rounds);
+      setRoundEdges(savedEdges);
+      setHasCustomEdges(customAfterSave);
+      setRepresentation(conversionTarget);
+      writeStoredRepresentation(activeEvent.id, conversionTarget);
+      setConversionTarget(null);
+      setConversionAnalysis(null);
+      customEdgeWarningShown.current = false;
+
+      toast.success(
+        conversionTarget === 'tiles'
+          ? 'Converted to tile sequence. Rounds now follow a single ordered path.'
+          : 'Converted to block diagram. Rounds are laid out on the canvas.',
+      );
     } catch (error) {
-      console.error('Failed to convert workflow to linear edges:', error);
-      toast.error('Could not convert workflow connections');
+      console.error('Representation conversion failed:', error);
+      toast.error('Could not convert schedule representation');
+    } finally {
+      setIsConverting(false);
     }
-  }, [activeEvent, hasCustomEdges, rounds, persistLinearEdges]);
+  }, [activeEvent, conversionTarget, roundEdges, rounds]);
 
   const openAdvancementPreview = useCallback(async (round: Round) => {
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);
@@ -330,7 +382,6 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       const round = rounds.find((r) => r.id === roundId);
       if (!round || round.id.startsWith('round-')) return;
 
-      setPipelineBusyRoundId(roundId);
       try {
         if (round.status === 'draft' || round.status === 'scheduled') {
           const activated = await activateRound(roundId);
@@ -360,8 +411,6 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Pipeline action failed';
         toast.error(message);
-      } finally {
-        setPipelineBusyRoundId(null);
       }
     },
     [rounds, loadWorkflow, openAdvancementPreview],
@@ -406,7 +455,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     [advancementModal, rounds, loadWorkflow],
   );
 
-  const editingRound = editingRoundId ? rounds.find((r) => r.id === editingRoundId) || null : null;
+  const conversionTargetLabel = conversionTarget === 'tiles' ? 'tile sequence' : 'block diagram';
 
   if (!activeEvent) {
     return (
@@ -441,13 +490,49 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         <div>
           <h2 className="text-xl font-bold text-slate-900">Schedule & Rounds</h2>
           <p className="text-sm text-slate-500 mt-1">
-            Linear round scheduler — start each round, then run shortlist to move top entries forward
+            {representation === 'workflow'
+              ? 'Block diagram — same connections, shown on a spatial canvas'
+              : 'Tile sequence — same connections, shown as ordered cards'}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleConvertToLinear}>
-            Convert to linear flow
-          </Button>
+          <span
+            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700"
+            data-testid="current-representation"
+          >
+            {representation === 'workflow' ? (
+              <>
+                <Workflow className="mr-1.5 h-3.5 w-3.5" />
+                Block diagram
+              </>
+            ) : (
+              <>
+                <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
+                Tile sequence
+              </>
+            )}
+          </span>
+          {representation === 'workflow' ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openConversionDialog('tiles')}
+              data-testid="convert-to-tiles"
+            >
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Convert to tiles
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openConversionDialog('workflow')}
+              data-testid="convert-to-workflow"
+            >
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Convert to block diagram
+            </Button>
+          )}
           <Button variant="primary" onClick={createNewRound} className="shadow-lg shadow-indigo-500/20">
             <Plus className="w-4 h-4 mr-2" />
             Add round
@@ -455,32 +540,61 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         </div>
       </div>
 
-      {hasCustomEdges && (
-        <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
-          Branching or conditional workflow edges are active. Scheduler edits will preserve those edges unless you
-          explicitly convert to linear flow.
+      {representation === 'workflow' && hasCustomEdges && (
+        <div className="border-b border-indigo-200 bg-indigo-50 px-6 py-3 text-sm text-indigo-900">
+          Branching or conditional connections are active. Converting to tiles keeps the same flow — only the
+          layout changes.
         </div>
       )}
 
       <div className="flex-1 min-w-0 overflow-hidden">
-        <RoundScheduler
-          rounds={rounds}
-          roundInsights={roundInsights}
-          insightsLoading={isInsightsLoading}
-          selectedRoundId={selectedRoundId}
-          editingRound={editingRound}
-          pipelineBusyRoundId={pipelineBusyRoundId}
-          onRoundSelect={(id) => {
-            setSelectedRoundId(id);
-            setEditingRoundId(id);
-          }}
-          onRoundReorder={handleRoundReorder}
-          onRoundSave={handleRoundUpdate}
-          onAddRound={createNewRound}
-          onRunPipelineAction={handleRunPipelineAction}
-          onCloseEditor={() => setEditingRoundId(null)}
-        />
+        {representation === 'workflow' ? (
+          <WorkflowView
+            rounds={rounds}
+            edges={roundEdges}
+            selectedRoundId={selectedRoundId}
+            onRoundSelect={setSelectedRoundId}
+            onRoundUpdate={handleRoundUpdate}
+            onRoundDelete={handleRoundDelete}
+            onEdgeCreate={handleEdgeCreate}
+            onEdgeUpdate={handleEdgeUpdate}
+            onEdgeDelete={handleEdgeDelete}
+            programId={activeEvent.id}
+          />
+        ) : (
+          <TileView
+            rounds={rounds}
+            selectedRoundId={selectedRoundId}
+            onRoundSelect={setSelectedRoundId}
+            onRoundUpdate={handleRoundUpdate}
+            onRoundDelete={handleRoundDelete}
+            onRoundReorder={handleRoundReorder}
+            programId={activeEvent.id}
+            roundInsights={roundInsights}
+            insightsLoading={isInsightsLoading}
+            onAdvanceRound={handleRunPipelineAction}
+            reorderUpdatesFlow
+          />
+        )}
       </div>
+
+      <RepresentationConversionModal
+        isOpen={conversionTarget !== null}
+        title={
+          conversionTarget === 'tiles'
+            ? 'Convert block diagram to tile sequence'
+            : 'Convert tile sequence to block diagram'
+        }
+        description={`This will transform how rounds are arranged and connected — similar to converting between a block diagram and an ordered list. You are switching to ${conversionTargetLabel}.`}
+        analysis={conversionAnalysis}
+        isSubmitting={isConverting}
+        onConfirm={() => void applyRepresentationConversion()}
+        onClose={() => {
+          if (isConverting) return;
+          setConversionTarget(null);
+          setConversionAnalysis(null);
+        }}
+      />
 
       {advancementModal && (
         <AdvancementPreviewModal

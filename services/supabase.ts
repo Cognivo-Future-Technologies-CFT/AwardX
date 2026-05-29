@@ -62,6 +62,24 @@ let cachedUserContext: CachedUserContext | null = null;
 let cachedUserContextPromise: Promise<CachedUserContext> | null = null;
 let cachedOrganizationDetails: CachedOrganizationDetails | null = null;
 
+/** Clear invalid/expired auth tokens so the client stops calling /auth/v1/user with a bad JWT. */
+const clearStaleAuthSession = async () => {
+  if (!supabase) return;
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch {
+    // ignore — storage may already be empty
+  }
+  clearUserCache();
+};
+
+const isAuthUnauthorizedError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const status = (error as { status?: number }).status;
+  const message = String((error as { message?: string }).message || '').toLowerCase();
+  return status === 401 || message.includes('invalid jwt') || message.includes('jwt expired');
+};
+
 const resolveUserContext = async (forceRefresh = false): Promise<CachedUserContext> => {
   if (!supabase) {
     return { userId: null, orgId: null, fetchedAt: Date.now() };
@@ -80,8 +98,15 @@ const resolveUserContext = async (forceRefresh = false): Promise<CachedUserConte
     const { data: { session } } = await supabase.auth.getSession();
     let userId = session?.user?.id || null;
 
-    if (!userId) {
-      const { data: { user } } = await supabase.auth.getUser();
+    // Only validate with the server when we have a token; otherwise getUser() spams 401s.
+    if (!userId && session?.access_token) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError && isAuthUnauthorizedError(userError)) {
+        await clearStaleAuthSession();
+        const next = { userId: null, orgId: null, fetchedAt: Date.now() };
+        cachedUserContext = next;
+        return next;
+      }
       userId = user?.id || null;
     }
 
@@ -365,8 +390,15 @@ export const auth = {
     if (session?.user) {
       return { user: session.user, error: null };
     }
+    if (!session?.access_token) {
+      return { user: null, error: null };
+    }
 
     const { data: { user }, error } = await supabase.auth.getUser();
+    if (error && isAuthUnauthorizedError(error)) {
+      await clearStaleAuthSession();
+      return { user: null, error: null };
+    }
     return { user, error };
   },
 

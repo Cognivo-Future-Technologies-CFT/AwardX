@@ -43,6 +43,8 @@ interface TileViewProps {
   roundInsights?: Record<string, RoundCardInsight>;
   insightsLoading?: boolean;
   onAdvanceRound?: (roundId: string) => void;
+  /** When true, drag-reorder updates the sequential flow (not visual-only). */
+  reorderUpdatesFlow?: boolean;
 }
 
 export const TileView: React.FC<TileViewProps> = ({
@@ -56,6 +58,7 @@ export const TileView: React.FC<TileViewProps> = ({
   roundInsights,
   insightsLoading,
   onAdvanceRound,
+  reorderUpdatesFlow = false,
 }) => {
   const [items, setItems] = useState(rounds);
   const [participantsListRoundId, setParticipantsListRoundId] = useState<string | null>(null);
@@ -200,7 +203,11 @@ export const TileView: React.FC<TileViewProps> = ({
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Rounds Overview</h3>
-              <p className="text-sm text-slate-500 mt-1">Drag to reorder (visual only)</p>
+              <p className="text-sm text-slate-500 mt-1">
+                {reorderUpdatesFlow
+                  ? 'Drag to reorder cards — connections and conditions stay the same'
+                  : 'Drag to reorder (visual only)'}
+              </p>
             </div>
             <Button
               variant="primary"

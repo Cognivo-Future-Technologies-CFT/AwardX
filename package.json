@@ -73,6 +73,7 @@
     "vitest": "^4.1.2"
   },
   "scripts": {
+    "postinstall": "npm install --prefix server",
     "start": "npm run dev:all",
     "dev": "npm run dev:all",
     "dev:all": "concurrently -n client,server -c blue,green \"npm run dev:client\" \"npm run dev:server\"",

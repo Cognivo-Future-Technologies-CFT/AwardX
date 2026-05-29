@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { auth, refreshUserCache } from '../services/supabase';
+import { auth, refreshUserCache, supabase } from '../services/supabase';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -10,50 +10,73 @@ export const AuthCallback: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      try {
-        // Get the session from the URL hash using auth helper
-        const { session, error } = await auth.getSession();
-        
-        if (error) {
-          throw error;
-        }
+    if (!supabase) {
+      setStatus('error');
+      setErrorMessage('Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+      return;
+    }
 
-        if (session) {
-          // Session exists, authentication successful
-          // Refresh user cache to get latest org info
-          await refreshUserCache();
-          
-          setStatus('success');
-          
-          // Wait a moment to show success state, then redirect
-          setTimeout(() => {
-            const postAuthRedirect = sessionStorage.getItem('postAuthRedirect');
-            if (postAuthRedirect) {
-              sessionStorage.removeItem('postAuthRedirect');
-              navigate(postAuthRedirect, { replace: true });
-              return;
-            }
-            navigate('/dashboard', { replace: true });
-          }, 1000);
-        } else {
-          // No session found, check URL for error
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const errorDescription = hashParams.get('error_description');
-          
-          if (errorDescription) {
-            throw new Error(errorDescription);
-          }
-          
-          throw new Error('No session found. Please try signing in again.');
+    let settled = false;
+    const finishSuccess = async () => {
+      if (settled) return;
+      settled = true;
+      await refreshUserCache();
+      setStatus('success');
+      setTimeout(() => {
+        const postAuthRedirect = sessionStorage.getItem('postAuthRedirect');
+        if (postAuthRedirect) {
+          sessionStorage.removeItem('postAuthRedirect');
+          navigate(postAuthRedirect, { replace: true });
+          return;
         }
-      } catch (error: any) {
-        setStatus('error');
-        setErrorMessage(error.message || 'Authentication failed');
-      }
+        navigate('/dashboard', { replace: true });
+      }, 1000);
     };
 
-    handleAuthCallback();
+    const finishError = (message: string) => {
+      if (settled) return;
+      settled = true;
+      setStatus('error');
+      setErrorMessage(message);
+    };
+
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const oauthError =
+      hashParams.get('error_description') ||
+      queryParams.get('error_description') ||
+      hashParams.get('error') ||
+      queryParams.get('error');
+    if (oauthError) {
+      finishError(oauthError);
+      return;
+    }
+
+    // Wait for Supabase to finish parsing the OAuth/magic-link URL (detectSessionInUrl).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+        await finishSuccess();
+      }
+    });
+
+    const timeout = window.setTimeout(async () => {
+      if (settled) return;
+      const { session, error } = await auth.getSession();
+      if (error) {
+        finishError(error.message || 'Authentication failed');
+        return;
+      }
+      if (session) {
+        await finishSuccess();
+        return;
+      }
+      finishError('No session found. Please try signing in again.');
+    }, 8000);
+
+    return () => {
+      subscription.unsubscribe();
+      window.clearTimeout(timeout);
+    };
   }, [navigate]);
 
   return (
