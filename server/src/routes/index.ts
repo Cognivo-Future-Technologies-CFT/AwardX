@@ -13,6 +13,7 @@ import massEmailRouter from './massEmail.js';
 import invitesRouter from './invites.js';
 import integrationsRouter from './integrations.js';
 import programFormsRouter from './programForms.js';
+import kycRouter from './kyc.js';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/mass-email', massEmailRouter);
 router.use('/invites', invitesRouter);
 router.use('/integrations', integrationsRouter);
 router.use('/program-forms', programFormsRouter);
+router.use('/kyc', kycRouter);
 
 export default router;

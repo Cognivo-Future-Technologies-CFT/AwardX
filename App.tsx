@@ -232,6 +232,7 @@ const App: React.FC = () => {
         <Route path="/team-invite/:token" element={<TeamInvitePage />} />
         <Route path="/program" element={<PublicProgramPage />} />
         <Route path="/program/:slug" element={<PublicProgramPage />} />
+        <Route path="/vote/:slug" element={<PublicVotingPage />} />
         <Route path="/voting/:roundId" element={<PublicVotingPage />} />
         <Route
           path="/my-submissions"

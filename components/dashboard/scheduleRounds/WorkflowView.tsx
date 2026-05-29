@@ -24,7 +24,7 @@ interface WorkflowViewProps {
   edges: RoundEdge[];
   selectedRoundId: string | null;
   onRoundSelect: (roundId: string | null) => void;
-  onRoundUpdate: (round: Round) => void;
+  onRoundUpdate: (round: Round) => Promise<Round>;
   onRoundDelete: (roundId: string) => void;
   onEdgeCreate: (edge: RoundEdge) => void;
   onEdgeUpdate: (edge: RoundEdge) => void;
@@ -493,6 +493,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
         return (
           <RoundConfigurationPanel
             round={selectedRound}
+            programId={programId}
             onUpdate={onRoundUpdate}
             onDelete={() => {
               onRoundDelete(selectedRound.id);

@@ -9,7 +9,7 @@ import { submissionDrafts, formAnalytics } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const defaultTheme: FormTheme = {
@@ -150,7 +150,12 @@ export const FormSubmissionPage: React.FC = () => {
   const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
   const [paymentState, setPaymentState] = useState<'idle' | 'success' | 'cancelled'>('idle');
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [applicationMode, setApplicationMode] = useState<'standard' | 'hackathon'>('standard');
+  const [requireGithubAuth, setRequireGithubAuth] = useState(false);
+  const [kycEnabled, setKycEnabled] = useState(false);
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
+
+  const needsGithubApplication = applicationMode === 'hackathon' || requireGithubAuth;
 
   const completeSubmissionSideEffects = async (currentFormId: string) => {
     const { user } = await auth.getUser();
@@ -233,6 +238,36 @@ export const FormSubmissionPage: React.FC = () => {
         setProgramId(form.program_id);
         setFormPages(form.pages || [{ id: 'page-1', title: 'Page 1', order: 0 }]);
         setTheme(form.theme || defaultTheme);
+
+        const { data: programRow } = await supabase
+          .from('programs')
+          .select('application_mode, require_github_auth, kyc_enabled')
+          .eq('id', form.program_id)
+          .maybeSingle();
+
+        const mode = (programRow?.application_mode as 'standard' | 'hackathon') || 'standard';
+        const githubRequired = programRow?.require_github_auth ?? mode === 'hackathon';
+        setApplicationMode(mode);
+        setRequireGithubAuth(githubRequired);
+        setKycEnabled(!!programRow?.kyc_enabled);
+
+        if (githubRequired || mode === 'hackathon') {
+          const { session, user } = await auth.getSession();
+          if (!session) {
+            const returnUrl = `${window.location.pathname}${window.location.search}`;
+            navigate(`/login?next=${encodeURIComponent(returnUrl)}`);
+            return;
+          }
+          const identities = user?.identities || [];
+          const hasGithub =
+            identities.some((i) => i.provider === 'github') ||
+            user?.app_metadata?.provider === 'github';
+          if (!hasGithub) {
+            setIsError('github_required');
+            setIsLoading(false);
+            return;
+          }
+        }
 
         const { data: categoryRows } = await supabase
           .from('categories')
@@ -742,6 +777,32 @@ export const FormSubmissionPage: React.FC = () => {
   }
 
   if (error) {
+    if (error === 'github_required') {
+      const returnUrl = `${window.location.pathname}${window.location.search}`;
+      return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+          <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-white shadow-xl">
+            <Github className="w-14 h-14 mx-auto mb-4 text-white" />
+            <h2 className="text-2xl font-bold mb-2">GitHub application required</h2>
+            <p className="text-slate-400 mb-6 text-sm leading-relaxed">
+              This hackathon uses application-based entry. Sign in with your GitHub account to
+              verify your developer identity and submit your project.
+            </p>
+            <Button
+              onClick={async () => {
+                sessionStorage.setItem('postAuthRedirect', returnUrl);
+                await auth.signInWithProvider('github');
+              }}
+              className="w-full bg-white text-slate-900 hover:bg-slate-100"
+            >
+              <Github className="w-4 h-4 mr-2 inline" />
+              Continue with GitHub
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-white">
         <div className="min-h-[60vh] flex items-center justify-center px-4">

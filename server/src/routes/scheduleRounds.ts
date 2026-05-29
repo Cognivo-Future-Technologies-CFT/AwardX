@@ -283,6 +283,19 @@ router.post('/:programId/rounds', requireAuth, async (req: AuthenticatedRequest,
     }
 
     const supabase = getSupabaseAdmin();
+    const title = String(payload.title || '').trim();
+
+    const { data: duplicate } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('program_id', programId)
+      .ilike('title', title)
+      .maybeSingle();
+
+    if (duplicate) {
+      return res.status(400).json(validationError({ title: 'A round with this name already exists in this program' }));
+    }
+
     const { data, error } = await supabase
       .from('rounds')
       .insert({
@@ -341,6 +354,21 @@ router.put('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedReque
     }
     if (!existingRound) {
       return res.status(404).json({ error: 'Round not found' });
+    }
+
+    if (payload.title !== undefined) {
+      const title = String(payload.title).trim();
+      const { data: duplicate } = await supabase
+        .from('rounds')
+        .select('id')
+        .eq('program_id', programId)
+        .ilike('title', title)
+        .neq('id', id)
+        .maybeSingle();
+
+      if (duplicate) {
+        return res.status(400).json(validationError({ title: 'A round with this name already exists in this program' }));
+      }
     }
 
     const updates = {

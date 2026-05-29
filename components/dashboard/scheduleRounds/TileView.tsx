@@ -36,9 +36,10 @@ interface TileViewProps {
   rounds: Round[];
   selectedRoundId: string | null;
   onRoundSelect: (roundId: string | null) => void;
-  onRoundUpdate: (round: Round) => void;
+  onRoundUpdate: (round: Round) => Promise<Round>;
   onRoundDelete: (roundId: string) => void;
   onRoundReorder: (rounds: Round[]) => void;
+  onAddRound?: () => void;
   programId: string;
   roundInsights?: Record<string, RoundCardInsight>;
   insightsLoading?: boolean;
@@ -54,6 +55,7 @@ export const TileView: React.FC<TileViewProps> = ({
   onRoundUpdate,
   onRoundDelete,
   onRoundReorder,
+  onAddRound,
   programId,
   roundInsights,
   insightsLoading,
@@ -165,35 +167,7 @@ export const TileView: React.FC<TileViewProps> = ({
           <p className="text-sm text-slate-500 mb-6 max-w-md">
             Create your first evaluation round to get started. Rounds can be configured with different evaluation types and conditions.
           </p>
-          <Button
-            variant="primary"
-            onClick={() => {
-              const newRound: Round = {
-                id: `round-${Date.now()}`,
-                programId,
-                name: 'New Round',
-                type: 'Nomination',
-                evaluationLogic: 'scoring',
-                evaluatorStrategy: 'all_judges',
-                blindEvaluation: false,
-                startCondition: { type: 'fixed_datetime', datetime: new Date().toISOString() },
-                endCondition: { type: 'fixed_datetime', datetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() },
-                shortlistConfig: {
-                  enabled: false,
-                  method: 'percentage',
-                  value: 50,
-                  visibility: ['admin'],
-                },
-                order: 0,
-                status: 'draft',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                version: 1,
-              };
-              onRoundUpdate(newRound);
-              onRoundSelect(newRound.id);
-            }}
-          >
+          <Button variant="primary" onClick={() => onAddRound?.()}>
             <Plus className="w-4 h-4 mr-2" />
             Create First Round
           </Button>
@@ -209,35 +183,7 @@ export const TileView: React.FC<TileViewProps> = ({
                   : 'Drag to reorder (visual only)'}
               </p>
             </div>
-            <Button
-              variant="primary"
-              onClick={() => {
-                const newRound: Round = {
-                  id: `round-${Date.now()}`,
-                  programId,
-                  name: 'New Round',
-                  type: 'Nomination',
-                  evaluationLogic: 'scoring',
-                  evaluatorStrategy: 'all_judges',
-                  blindEvaluation: false,
-                  startCondition: { type: 'fixed_datetime', datetime: new Date().toISOString() },
-                  endCondition: { type: 'fixed_datetime', datetime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() },
-                  shortlistConfig: {
-                    enabled: false,
-                    method: 'percentage',
-                    value: 50,
-                    visibility: ['admin'],
-                  },
-                  order: items.length,
-                  status: 'draft',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  version: 1,
-                };
-                onRoundUpdate(newRound);
-                onRoundSelect(newRound.id);
-              }}
-            >
+            <Button variant="primary" onClick={() => onAddRound?.()}>
               <Plus className="w-4 h-4 mr-2" />
               Add Round
             </Button>
@@ -404,6 +350,7 @@ export const TileView: React.FC<TileViewProps> = ({
       {selectedRound && (
         <RoundConfigurationPanel
           round={selectedRound}
+          programId={programId}
           onUpdate={onRoundUpdate}
           onDelete={() => {
             onRoundDelete(selectedRound.id);

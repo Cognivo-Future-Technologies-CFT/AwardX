@@ -675,7 +675,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'judging',           label: 'Judging',            icon: Gavel,           permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'templates',         label: 'Form Builder',       icon: LayoutTemplate,  permission: PERMISSIONS.MANAGE_FORMS },
-    { id: 'voting',            label: 'Public Voting',      icon: Globe,           permission: PERMISSIONS.MANAGE_PROGRAMS },
     ...(activeEvent?.type === 'Other' ? [{ id: 'custom-grid', label: 'Grid Builder', icon: Layout, permission: PERMISSIONS.MANAGE_PROGRAMS }] : []),
   ];
 

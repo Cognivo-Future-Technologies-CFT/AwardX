@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import RoundType, { Round, EvaluationLogic, EvaluatorStrategy, StartCondition, EndCondition, EdgeCondition, ShortlistConfig, OutputPort } from '../../../types/scheduleRounds';
 import { X, Save, Trash2, Calendar, Users, Eye, EyeOff, Settings, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '../../Button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OutputPortConfigModal } from './OutputPortConfigModal';
 import { AppDateTimePicker } from '../../ui/AppDateFields';
+import {
+  PublicVotingRoundSection,
+  saveRoundVotingConfig,
+  type RoundVotingConfig,
+} from './PublicVotingRoundSection';
+import { supabase } from '../../../services/supabase';
 
 interface RoundConfigurationPanelProps {
   round: Round;
-  onUpdate: (round: Round) => void;
+  programId: string;
+  onUpdate: (round: Round) => Promise<Round>;
   onDelete: () => void;
   onClose: () => void;
   incomingEdges?: Array<{
@@ -19,8 +27,11 @@ interface RoundConfigurationPanelProps {
   allRounds?: Round[]; // All rounds to resolve output port configurations
 }
 
+const PUBLIC_VOTING_TYPES = new Set(['Public Voting', 'Public Rating', 'public']);
+
 export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = ({
   round,
+  programId,
   onUpdate,
   onDelete,
   onClose,
@@ -28,6 +39,8 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   allRounds = [],
 }) => {
   const [formData, setFormData] = useState<Round>(round);
+  const votingConfigRef = React.useRef<RoundVotingConfig | null>(null);
+  const [kycEnabled, setKycEnabled] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,14 +76,45 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   }, [allRounds, formData.id]);
 
   // Sync formData when round prop changes
+  const isPublicVotingRound = PUBLIC_VOTING_TYPES.has(formData.type);
+
   useEffect(() => {
     setFormData(round);
     setHasChanges(false);
     setError(null);
   }, [round]);
 
+  useEffect(() => {
+    if (!programId || !supabase) return;
+    supabase
+      .from('programs')
+      .select('kyc_enabled')
+      .eq('id', programId)
+      .maybeSingle()
+      .then(({ data }) => setKycEnabled(!!data?.kyc_enabled));
+  }, [programId]);
+
+  const handleKycToggle = async (enabled: boolean) => {
+    if (!supabase || !programId) return;
+    const { error: updateError } = await supabase
+      .from('programs')
+      .update({ kyc_enabled: enabled })
+      .eq('id', programId);
+    if (updateError) {
+      toast.error(updateError.message);
+      return;
+    }
+    setKycEnabled(enabled);
+  };
+
   const handleChange = (field: keyof Round, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'type' && PUBLIC_VOTING_TYPES.has(value)) {
+        next.evaluationLogic = 'voting';
+      }
+      return next;
+    });
     setHasChanges(true);
   };
 
@@ -130,15 +174,39 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
         return;
       }
     }
+    const trimmedName = formData.name.trim();
+    if (!trimmedName) {
+      setError('Round name is required.');
+      return;
+    }
+    const duplicate = allRounds.some(
+      (r) => r.id !== formData.id && r.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (duplicate) {
+      setError('Another round already uses this name. Choose a unique name.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
     try {
       const roundToSave = {
         ...formData,
+        name: trimmedName,
         updatedAt: new Date().toISOString(),
         version: formData.version + 1,
       };
-      await onUpdate(roundToSave);
+      const persisted = await onUpdate(roundToSave);
+      setFormData(persisted);
+
+      if (
+        PUBLIC_VOTING_TYPES.has(persisted.type) &&
+        !persisted.id.startsWith('round-') &&
+        votingConfigRef.current
+      ) {
+        await saveRoundVotingConfig(persisted.id, votingConfigRef.current);
+      }
+
       setHasChanges(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save round');
@@ -224,7 +292,19 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
             </div>
           </section>
 
-          {/* Evaluation Settings */}
+          {isPublicVotingRound && (
+            <PublicVotingRoundSection
+              roundId={formData.id}
+              roundName={formData.name}
+              programId={programId}
+              kycEnabled={kycEnabled}
+              onKycEnabledChange={(enabled) => void handleKycToggle(enabled)}
+              configRef={votingConfigRef}
+            />
+          )}
+
+          {/* Evaluation Settings — hidden for public voting rounds */}
+          {!isPublicVotingRound && (
           <section className="space-y-4">
             <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Logic System</h4>
             <div className="space-y-4 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">
@@ -268,6 +348,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
               </button>
             </div>
           </section>
+          )}
 
           {/* Temporal Conditions */}
           <section className="space-y-4">

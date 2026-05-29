@@ -116,7 +116,10 @@ router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
 
     const organizationId = await getUserOrganizationId(userId);
     if (!organizationId) {
-      return res.json({ resend: { connected: false, source: null } });
+      return res.json({
+        resend: { connected: false, source: null },
+        didit: { connected: false, source: null },
+      });
     }
 
     const supabase = getSupabaseAdmin();
@@ -127,8 +130,17 @@ router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
       .eq('provider', 'resend')
       .maybeSingle();
 
+    const { data: diditRow } = await supabase
+      .from('organization_integrations')
+      .select('connected, config, connected_at, api_key_encrypted')
+      .eq('organization_id', organizationId)
+      .eq('provider', 'didit')
+      .maybeSingle();
+
     const orgConnected = !!resendRow?.connected && !!resendRow?.api_key_encrypted;
     const config = (resendRow?.config || {}) as Record<string, string>;
+    const diditConfig = (diditRow?.config || {}) as Record<string, string>;
+    const diditConnected = !!diditRow?.connected && !!diditRow?.api_key_encrypted;
 
     return res.json({
       resend: {
@@ -139,6 +151,13 @@ router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
         fromName: config.fromName || null,
         connectedAt: resendRow?.connected_at || null,
         projectName: config.domainName || null,
+      },
+      didit: {
+        connected: diditConnected,
+        source: diditConnected ? 'organization' : null,
+        apiBaseUrl: diditConfig.apiBaseUrl || process.env.DIDIT_API_BASE_URL || 'https://verification.didit.me',
+        connectedAt: diditRow?.connected_at || null,
+        hasWebhookSecret: !!diditConfig.webhookSecret,
       },
     });
   } catch (error: any) {
@@ -584,6 +603,133 @@ router.post('/resend/disconnect', requireAuth, async (req: AuthenticatedRequest,
     });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Failed to disconnect Resend' });
+  }
+});
+
+// ── DIDIT KYC ────────────────────────────────────────────────────────────────
+
+async function verifyDiditApiKey(apiKey: string, apiBaseUrl: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const base = apiBaseUrl.replace(/\/$/, '');
+  try {
+    const response = await fetch(`${base}/v2/session/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        vendor_data: 'awardx-connection-test',
+        callback: 'https://example.com/callback',
+      }),
+    });
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, error: 'Invalid DIDIT API key' };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: true };
+  }
+}
+
+router.post('/didit/connect', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
+    const apiBaseUrl =
+      typeof req.body?.apiBaseUrl === 'string' && req.body.apiBaseUrl.trim()
+        ? req.body.apiBaseUrl.trim()
+        : process.env.DIDIT_API_BASE_URL || 'https://verification.didit.me';
+    const webhookSecret =
+      typeof req.body?.webhookSecret === 'string' ? req.body.webhookSecret.trim() : '';
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'DIDIT API key is required' });
+    }
+
+    const verification = await verifyDiditApiKey(apiKey, apiBaseUrl);
+    if (!verification.ok) {
+      return res.status(400).json({ error: verification.error });
+    }
+
+    const organizationId = await getUserOrganizationId(userId);
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization not found for your account' });
+    }
+
+    const now = new Date().toISOString();
+    const supabase = getSupabaseAdmin();
+    const { error: upsertError } = await supabase.from('organization_integrations').upsert(
+      {
+        organization_id: organizationId,
+        provider: 'didit',
+        api_key_encrypted: apiKey,
+        config: {
+          apiBaseUrl: apiBaseUrl.replace(/\/$/, ''),
+          webhookSecret: webhookSecret || null,
+        },
+        connected: true,
+        connected_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'organization_id,provider' },
+    );
+
+    if (upsertError) {
+      return res.status(500).json({ error: upsertError.message || 'Failed to save DIDIT integration' });
+    }
+
+    return res.json({
+      ok: true,
+      didit: {
+        connected: true,
+        source: 'organization',
+        apiBaseUrl: apiBaseUrl.replace(/\/$/, ''),
+        hasWebhookSecret: !!webhookSecret,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Failed to connect DIDIT' });
+  }
+});
+
+router.post('/didit/disconnect', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const organizationId = await getUserOrganizationId(userId);
+    if (!organizationId) {
+      return res.status(400).json({ error: 'Organization not found for your account' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { error: deleteError } = await supabase
+      .from('organization_integrations')
+      .delete()
+      .eq('organization_id', organizationId)
+      .eq('provider', 'didit');
+
+    if (deleteError) {
+      return res.status(500).json({ error: deleteError.message || 'Failed to disconnect DIDIT' });
+    }
+
+    return res.json({
+      ok: true,
+      didit: {
+        connected: false,
+        source: null,
+        apiBaseUrl: null,
+        hasWebhookSecret: false,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Failed to disconnect DIDIT' });
   }
 });
 

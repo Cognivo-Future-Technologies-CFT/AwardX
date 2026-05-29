@@ -629,6 +629,10 @@ class DatabaseService {
       description: program.description,
       slug: program.slug,
       coverImageUrl: program.cover_image_url,
+      kycEnabled: program.kyc_enabled ?? false,
+      kycProvider: program.kyc_provider || 'didit',
+      applicationMode: program.application_mode || 'standard',
+      requireGithubAuth: program.require_github_auth ?? false,
       visibility: program.visibility ? (program.visibility.charAt(0).toUpperCase() + program.visibility.slice(1)) as 'Public' | 'Private' : 'Public',
       timezone: program.timezone || 'UTC',
     };
@@ -796,6 +800,10 @@ class DatabaseService {
       cover_image_url: program.coverImageUrl,
       industry_category: program.category,
       visibility: program.visibility?.toLowerCase(),
+      kyc_enabled: program.kycEnabled ?? false,
+      kyc_provider: program.kycProvider || 'didit',
+      application_mode: program.applicationMode || 'standard',
+      require_github_auth: program.requireGithubAuth ?? false,
     });
     if (error) {
       const errorMessage = error?.message || 'Failed to update program';

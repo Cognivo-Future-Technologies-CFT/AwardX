@@ -51,15 +51,20 @@ export function criteriaToShortlistConfig(criteria: AdvancementCriteria | null |
   return { enabled: true, method: 'percentage', value: 50, visibility: ['admin'] };
 }
 
-export function createDefaultRound(programId: string, order: number): Round {
+export function createDefaultRound(
+  programId: string,
+  order: number,
+  name: string,
+  type: SchedulerRoundType = order === 0 ? 'Nomination' : 'Shortlisting',
+): Round {
   const start = new Date();
   const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   return {
     id: `round-${Date.now()}`,
     programId,
-    name: order === 0 ? 'Nominations' : 'New Round',
-    type: order === 0 ? 'Nomination' : 'Shortlisting',
+    name,
+    type,
     evaluationLogic: order === 0 ? 'scoring' : 'scoring',
     evaluatorStrategy: 'all_judges',
     blindEvaluation: false,

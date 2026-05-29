@@ -31,6 +31,7 @@ import {
 } from '../../../services/roundPipelineApi';
 import { createDefaultRound, shortlistConfigToCriteria } from '../../../lib/roundScheduleUtils';
 import type { AdvancementCriteria } from '../../../types/scheduleRounds';
+import { AddRoundSheet } from './AddRoundSheet';
 
 interface RoundCardInsight {
   participantTotal: number;
@@ -60,6 +61,8 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   const [roundInsights, setRoundInsights] = useState<Record<string, RoundCardInsight>>({});
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [advancementModal, setAdvancementModal] = useState<AdvancementModalState | null>(null);
+  const [addRoundOpen, setAddRoundOpen] = useState(false);
+  const [isCreatingRound, setIsCreatingRound] = useState(false);
   const customEdgeWarningShown = useRef(false);
 
   const enforceNominationFirst = useCallback(async (inputRounds: Round[]): Promise<Round[]> => {
@@ -221,7 +224,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   }, [activeEvent, loadWorkflow]);
 
   const handleRoundUpdate = useCallback(
-    async (round: Round): Promise<void> => {
+    async (round: Round): Promise<Round> => {
       let updatedRound: Round;
 
       if (round.id.startsWith('round-')) {
@@ -235,17 +238,17 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
         });
       }
 
-      let nextRounds: Round[] = [];
       setRounds((prev) => {
-        nextRounds = prev.some((r) => r.id === updatedRound.id)
+        return prev.some((r) => r.id === updatedRound.id)
           ? prev.map((r) => (r.id === updatedRound.id ? updatedRound : r))
           : [...prev, updatedRound];
-        return nextRounds;
       });
 
       if (round.id.startsWith('round-') && updatedRound.id !== round.id) {
         setSelectedRoundId(updatedRound.id);
       }
+
+      return updatedRound;
     },
     [rounds],
   );
@@ -299,12 +302,29 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
     [],
   );
 
-  const createNewRound = useCallback(() => {
-    if (!activeEvent) return;
-    const newRound = createDefaultRound(activeEvent.id, rounds.length);
-    void handleRoundUpdate(newRound);
-    setSelectedRoundId(newRound.id);
-  }, [activeEvent, rounds.length, handleRoundUpdate]);
+  const openAddRoundSheet = useCallback(() => {
+    setAddRoundOpen(true);
+  }, []);
+
+  const confirmAddRound = useCallback(
+    async (name: string, type: Round['type']) => {
+      if (!activeEvent) return;
+      setIsCreatingRound(true);
+      try {
+        const newRound = createDefaultRound(activeEvent.id, rounds.length, name, type);
+        await handleRoundUpdate(newRound);
+        setSelectedRoundId(newRound.id);
+        setAddRoundOpen(false);
+        toast.success(`Round "${name}" created`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not create round';
+        toast.error(message);
+      } finally {
+        setIsCreatingRound(false);
+      }
+    },
+    [activeEvent, rounds.length, handleRoundUpdate],
+  );
 
   const openConversionDialog = useCallback(
     (target: ScheduleRepresentation) => {
@@ -533,7 +553,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
               Convert to block diagram
             </Button>
           )}
-          <Button variant="primary" onClick={createNewRound} className="shadow-lg shadow-indigo-500/20">
+          <Button variant="primary" onClick={openAddRoundSheet} className="shadow-lg shadow-indigo-500/20">
             <Plus className="w-4 h-4 mr-2" />
             Add round
           </Button>
@@ -569,6 +589,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
             onRoundUpdate={handleRoundUpdate}
             onRoundDelete={handleRoundDelete}
             onRoundReorder={handleRoundReorder}
+            onAddRound={openAddRoundSheet}
             programId={activeEvent.id}
             roundInsights={roundInsights}
             insightsLoading={isInsightsLoading}
@@ -594,6 +615,15 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
           setConversionTarget(null);
           setConversionAnalysis(null);
         }}
+      />
+
+      <AddRoundSheet
+        isOpen={addRoundOpen}
+        onClose={() => !isCreatingRound && setAddRoundOpen(false)}
+        onConfirm={(name, type) => void confirmAddRound(name, type)}
+        existingNames={rounds.map((r) => r.name)}
+        isFirstRound={rounds.length === 0}
+        isSubmitting={isCreatingRound}
       />
 
       {advancementModal && (

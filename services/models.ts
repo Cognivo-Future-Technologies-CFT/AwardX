@@ -38,6 +38,10 @@ export interface Program {
   visibility?: 'Public' | 'Private';
   timezone?: string;
   paymentConfig?: PaymentConfig;
+  kycEnabled?: boolean;
+  kycProvider?: string;
+  applicationMode?: 'standard' | 'hackathon';
+  requireGithubAuth?: boolean;
 }
 
 export interface Category {

@@ -24,7 +24,6 @@ import { auth } from '../../services/supabase';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { PublishedLockBanner } from './PublishedLockBanner';
 import { ProgramTileHub } from './ProgramTileHub';
-import { VotingConfigView } from './VotingConfigView';
 
 const ScheduleRoundsView = lazy(() =>
   import('./scheduleRounds/ScheduleRoundsView').then((m) => ({ default: m.ScheduleRoundsView })),
@@ -197,7 +196,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'judging':
         return <JudgingView activeEvent={activeEvent} />;
       case 'voting':
-        return <VotingConfigView activeEvent={activeEvent} />;
+        return <ScheduleRoundsView activeEvent={activeEvent} />;
       case 'reach':
         return <ReachView />;
       case 'analytics':

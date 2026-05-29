@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '../Button';
 import { Program } from '../../services/models';
 import {
+  connectDidit,
   connectResend,
+  disconnectDidit,
   disconnectResend,
   getIntegrationStatus,
   listResendDomains,
@@ -12,9 +14,9 @@ import {
   type IntegrationStatus,
   type ResendDomain,
 } from '../../services/integrations';
-import { CheckCircle2, ExternalLink, Loader2, Mail, X } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Loader2, Mail, ShieldCheck, X } from 'lucide-react';
 
-type ConnectTarget = 'razorpay' | 'resend' | null;
+type ConnectTarget = 'razorpay' | 'resend' | 'didit' | null;
 type ResendStep = 'login' | 'bootstrap' | 'project' | 'sender';
 
 interface IntegrationsPanelProps {
@@ -54,6 +56,10 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
   const [resendFromEmail, setResendFromEmail] = useState('');
   const [resendFromName, setResendFromName] = useState('AwardX');
   const [resendKeyAutofilled, setResendKeyAutofilled] = useState(false);
+
+  const [diditApiKey, setDiditApiKey] = useState('');
+  const [diditApiBaseUrl, setDiditApiBaseUrl] = useState('https://verification.didit.me');
+  const [diditWebhookSecret, setDiditWebhookSecret] = useState('');
 
   const selectedProgram = useMemo(
     () => programs.find((p) => p.id === selectedProgramId),
@@ -263,6 +269,62 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
   const resendConnected =
     integrationStatus?.resend?.connected && integrationStatus?.resend?.source === 'organization';
 
+  const diditConnected =
+    integrationStatus?.didit?.connected && integrationStatus?.didit?.source === 'organization';
+
+  const openDiditConnect = () => {
+    onError(null);
+    onSuccess(null);
+    setDiditApiKey('');
+    setDiditApiBaseUrl(integrationStatus?.didit?.apiBaseUrl || 'https://verification.didit.me');
+    setDiditWebhookSecret('');
+    setConnectTarget('didit');
+  };
+
+  const handleConnectDidit = async () => {
+    if (!diditApiKey.trim()) {
+      onError('DIDIT API key is required.');
+      return;
+    }
+    setSaving(true);
+    onError(null);
+    try {
+      const result = await connectDidit({
+        apiKey: diditApiKey.trim(),
+        apiBaseUrl: diditApiBaseUrl.trim(),
+        webhookSecret: diditWebhookSecret.trim() || undefined,
+      });
+      setIntegrationStatus((prev) => ({
+        resend: prev?.resend || { connected: false, source: null },
+        didit: result.didit,
+      }));
+      onSuccess('DIDIT connected. Enable KYC on public voting rounds in Schedule & Rounds.');
+      setConnectTarget(null);
+    } catch (e: any) {
+      onError(e?.message || 'Failed to connect DIDIT');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDisconnectDidit = async () => {
+    if (!diditConnected) return;
+    setSaving(true);
+    onError(null);
+    try {
+      const result = await disconnectDidit();
+      setIntegrationStatus((prev) => ({
+        resend: prev?.resend || { connected: false, source: null },
+        didit: result.didit,
+      }));
+      onSuccess('DIDIT disconnected.');
+    } catch (e: any) {
+      onError(e?.message || 'Failed to disconnect DIDIT');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDisconnectResend = async () => {
     if (!resendConnected) {
       return;
@@ -287,11 +349,12 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
       <div className="space-y-2 border-b border-slate-100 pb-4">
         <h2 className="text-lg font-bold text-slate-900">Integrations</h2>
         <p className="text-sm text-slate-500 max-w-2xl">
-          Each organization connects its own Razorpay and Resend accounts. Credentials are stored in your workspace and used for all email and payments—works with Google sign-in and every team member in your org.
+          Connect your organization&apos;s Razorpay, Resend, and DIDIT accounts. DIDIT powers optional identity
+          verification on public voting rounds (configured per round in Schedule &amp; Rounds).
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         <IntegrationCard
           title="Razorpay"
           description="Sign in on Razorpay and authorize AwardX to accept payments for a program."
@@ -322,6 +385,21 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
           onConnect={() => void openResendConnect()}
           onDisconnect={() => void handleDisconnectResend()}
         />
+
+        <IntegrationCard
+          title="DIDIT"
+          description="Identity verification (KYC) for public voters. Add your DIDIT API key from the DIDIT console."
+          accentClass="from-violet-700 to-indigo-600"
+          logoLabel={<ShieldCheck className="w-5 h-5" />}
+          connected={diditConnected}
+          connectedDetail={integrationStatus?.didit?.apiBaseUrl || undefined}
+          statusLoading={statusLoading}
+          actionLabel="Connect DIDIT"
+          disconnectLabel="Disconnect DIDIT"
+          saving={saving}
+          onConnect={openDiditConnect}
+          onDisconnect={() => void handleDisconnectDidit()}
+        />
       </div>
 
       {connectTarget && (
@@ -334,7 +412,11 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
           >
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 sticky top-0 bg-white z-10">
               <h3 id="integration-connect-title" className="text-lg font-bold text-slate-900">
-                {connectTarget === 'razorpay' ? 'Connect Razorpay' : 'Connect Resend'}
+                {connectTarget === 'razorpay'
+                  ? 'Connect Razorpay'
+                  : connectTarget === 'didit'
+                    ? 'Connect DIDIT'
+                    : 'Connect Resend'}
               </h3>
               <button
                 type="button"
@@ -368,6 +450,61 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
                     </select>
                   </div>
                 </>
+              )}
+
+              {connectTarget === 'didit' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600">
+                    Paste your DIDIT API key from the{' '}
+                    <a
+                      href="https://docs.didit.me"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-indigo-600 hover:text-indigo-700"
+                    >
+                      DIDIT console
+                    </a>
+                    . Use the webhook URL below in DIDIT for verification status updates.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">API key</label>
+                    <input
+                      type="password"
+                      value={diditApiKey}
+                      onChange={(e) => setDiditApiKey(e.target.value)}
+                      placeholder="Your DIDIT API key"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">API base URL</label>
+                    <input
+                      type="url"
+                      value={diditApiBaseUrl}
+                      onChange={(e) => setDiditApiBaseUrl(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">
+                      Webhook secret (optional)
+                    </label>
+                    <input
+                      type="password"
+                      value={diditWebhookSecret}
+                      onChange={(e) => setDiditWebhookSecret(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 rounded-lg bg-slate-50 p-3 font-mono break-all">
+                    Webhook:{' '}
+                    {typeof window !== 'undefined'
+                      ? `${window.location.origin}/api/kyc/didit/webhook`
+                      : '/api/kyc/didit/webhook'}
+                  </p>
+                </div>
               )}
 
               {connectTarget === 'resend' && (
@@ -513,6 +650,12 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
                   ) : (
                     'Sign in with Razorpay'
                   )}
+                </Button>
+              )}
+
+              {connectTarget === 'didit' && (
+                <Button onClick={() => void handleConnectDidit()} disabled={saving}>
+                  {saving ? 'Saving…' : 'Connect DIDIT'}
                 </Button>
               )}
 

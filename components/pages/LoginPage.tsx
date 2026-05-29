@@ -38,7 +38,7 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const nextPath = params.get('next');
+  const nextPath = params.get('next') || params.get('redirect');
 
   React.useEffect(() => {
     const teamInviteToken = params.get('teamInviteToken');
@@ -83,11 +83,10 @@ export const LoginPage: React.FC = () => {
         setIsLoading(false);
       } else {
         // Check if there's a return URL for form submission
-        const returnUrl = sessionStorage.getItem('formReturnUrl');
+        const returnUrl = sessionStorage.getItem('formReturnUrl') || sessionStorage.getItem('postAuthRedirect');
         if (returnUrl) {
-          // Clear the return URL
           sessionStorage.removeItem('formReturnUrl');
-          // Redirect back to the form
+          sessionStorage.removeItem('postAuthRedirect');
           window.location.href = returnUrl;
         } else if (nextPath) {
           navigate(nextPath);

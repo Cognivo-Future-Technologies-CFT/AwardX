@@ -10,6 +10,13 @@ export type IntegrationStatus = {
     connectedAt?: string | null;
     projectName?: string | null;
   };
+  didit: {
+    connected: boolean;
+    source: 'organization' | null;
+    apiBaseUrl?: string | null;
+    connectedAt?: string | null;
+    hasWebhookSecret?: boolean;
+  };
 };
 
 export type ResendDomain = {
@@ -93,5 +100,29 @@ export async function disconnectResend(): Promise<{
     method: 'POST',
     requireAuth: true,
     errorPrefix: 'Resend disconnect',
+  });
+}
+
+export async function connectDidit(payload: {
+  apiKey: string;
+  apiBaseUrl?: string;
+  webhookSecret?: string;
+}): Promise<{ ok: boolean; didit: IntegrationStatus['didit'] }> {
+  return fetchBackendJson('/api/integrations/didit/connect', {
+    method: 'POST',
+    body: payload,
+    requireAuth: true,
+    errorPrefix: 'DIDIT connect',
+  });
+}
+
+export async function disconnectDidit(): Promise<{
+  ok: boolean;
+  didit: IntegrationStatus['didit'];
+}> {
+  return fetchBackendJson('/api/integrations/didit/disconnect', {
+    method: 'POST',
+    requireAuth: true,
+    errorPrefix: 'DIDIT disconnect',
   });
 }

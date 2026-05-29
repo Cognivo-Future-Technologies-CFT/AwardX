@@ -50,6 +50,8 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                     ...defaultPaymentConfig,
                     ...(activeEvent.paymentConfig || {}),
                 },
+                applicationMode: activeEvent.applicationMode || 'standard',
+                requireGithubAuth: activeEvent.requireGithubAuth ?? false,
             });
         }
     }, [activeEvent]);
@@ -220,6 +222,48 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                 ))}
                             </div>
                         </div>
+                    </div>
+                </section>
+
+                <section className="space-y-4 pt-4">
+                    <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2">Application mode</h2>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">How applicants apply</label>
+                            <select
+                                value={formData.applicationMode || 'standard'}
+                                onChange={(e) => setFormData({
+                                    ...formData,
+                                    applicationMode: e.target.value as 'standard' | 'hackathon',
+                                    requireGithubAuth: e.target.value === 'hackathon' ? true : formData.requireGithubAuth,
+                                })}
+                                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                            >
+                                <option value="standard">Standard (open form)</option>
+                                <option value="hackathon">Hackathon (GitHub application)</option>
+                            </select>
+                        </div>
+                        <label className="flex items-center justify-between cursor-pointer">
+                            <div>
+                                <span className="text-sm font-semibold text-slate-900">Require GitHub sign-in</span>
+                                <p className="text-xs text-slate-500">Applicants must authenticate with GitHub to apply</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFormData({
+                                    ...formData,
+                                    requireGithubAuth: !formData.requireGithubAuth,
+                                })}
+                                className={`relative h-7 w-12 rounded-full transition-colors ${formData.requireGithubAuth ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                            >
+                                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${formData.requireGithubAuth ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                        </label>
+                        <p className="text-xs text-slate-500 border-t border-slate-200 pt-3">
+                            Public voting and DIDIT KYC are configured per round under{' '}
+                            <strong>Schedule &amp; Rounds</strong> when the round type is Public Voting.
+                            Connect DIDIT in <strong>Settings → Integrations</strong> first.
+                        </p>
                     </div>
                 </section>
 

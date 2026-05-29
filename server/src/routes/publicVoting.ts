@@ -5,71 +5,93 @@ import {
   castVote,
   getVotingResults,
   getLeaderboard,
+  getMyVotes,
+  upsertVotingConfig,
+  resolveRoundId,
 } from '../services/votingEngine.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
 const router = Router();
 
-// ---- Public Endpoints (no auth required) ----
-
-/**
- * GET /voting/:roundId — Get voting round info + submissions for public display.
- */
-router.get('/:roundId', async (req, res) => {
-  const { roundId } = req.params;
-  try {
-    const data = await getVotingRoundPublic(roundId);
-    if (!data) return res.status(404).json({ error: 'Voting round not found or not active.' });
-    return res.json({ data });
-  } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
-  }
-});
-
-/**
- * POST /voting/:roundId/vote — Cast a vote.
- */
-router.post('/:roundId/vote', async (req, res) => {
-  const { roundId } = req.params;
-  const { submission_id, email, name } = req.body || {};
-
-  if (!submission_id) {
-    return res.status(400).json({ error: 'submission_id is required' });
-  }
-
-  // Extract voter info
-  const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-    || req.socket.remoteAddress
-    || null;
-
-  // Try to get authenticated user (optional)
+async function extractVoterFromRequest(req: {
+  headers: Record<string, string | string[] | undefined>;
+  socket: { remoteAddress?: string };
+  body?: Record<string, unknown>;
+}) {
   let userId: string | undefined;
-  const authHeader = req.header('authorization') || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const authHeader = req.headers.authorization || '';
+  const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+    ? authHeader.slice(7).trim()
+    : '';
+
   if (token) {
     try {
       const supabase = getSupabaseAdmin();
       const { data } = await supabase.auth.getUser(token);
       if (data?.user) userId = data.user.id;
     } catch {
-      // Not authenticated — proceed as anonymous
+      // anonymous
     }
   }
 
+  const forwarded = req.headers['x-forwarded-for'];
+  const ipAddress =
+    (typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : undefined) ||
+    req.socket.remoteAddress ||
+    undefined;
+
+  const body = req.body || {};
+  return {
+    userId,
+    email: typeof body.email === 'string' ? body.email : undefined,
+    name: typeof body.name === 'string' ? body.name : undefined,
+    ipAddress,
+    userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+  };
+}
+
+router.get('/s/:slug', async (req, res) => {
+  const { slug } = req.params;
   try {
-    const result = await castVote(roundId, submission_id, {
-      userId,
-      email: email || undefined,
-      name: name || undefined,
-      ipAddress: ipAddress || undefined,
-      userAgent: req.headers['user-agent'] || undefined,
-    });
+    const data = await getVotingRoundPublic(slug);
+    if (!data) return res.status(404).json({ error: 'Voting round not found.' });
+    return res.json({ data });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.get('/:roundId/my-votes', async (req, res) => {
+  const { roundId } = req.params;
+  try {
+    const voter = await extractVoterFromRequest(req);
+    const data = await getMyVotes(roundId, voter);
+    if (!data) return res.status(404).json({ error: 'Voting round not found.' });
+    return res.json({ data });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.post('/:roundId/vote', async (req, res) => {
+  const { roundId } = req.params;
+  const { submission_id } = req.body || {};
+
+  if (!submission_id) {
+    return res.status(400).json({ error: 'submission_id is required' });
+  }
+
+  try {
+    const voter = await extractVoterFromRequest(req);
+    const result = await castVote(roundId, submission_id, voter);
 
     if (!result.ok) return res.status(400).json({ error: result.error });
 
-    // Invalidate cached results
-    await deleteCache(cacheKeys.votingResults(roundId));
+    const resolvedId = await resolveRoundId(roundId);
+    if (resolvedId) {
+      await deleteCache(cacheKeys.votingResults(resolvedId));
+    }
 
     return res.json({ ok: true });
   } catch (error: any) {
@@ -77,13 +99,13 @@ router.post('/:roundId/vote', async (req, res) => {
   }
 });
 
-/**
- * GET /voting/:roundId/leaderboard — Public leaderboard (if enabled).
- */
 router.get('/:roundId/leaderboard', async (req, res) => {
   const { roundId } = req.params;
   try {
-    const data = await getLeaderboard(roundId);
+    const resolvedId = await resolveRoundId(roundId);
+    if (!resolvedId) return res.status(404).json({ error: 'Voting round not found.' });
+
+    const data = await getLeaderboard(resolvedId);
     if (!data) return res.status(403).json({ error: 'Leaderboard is not enabled for this round.' });
     return res.json({ data });
   } catch (error: any) {
@@ -91,16 +113,14 @@ router.get('/:roundId/leaderboard', async (req, res) => {
   }
 });
 
-// ---- Admin Endpoints (auth required) ----
-
-/**
- * GET /voting/:roundId/results — Full voting results (admin only).
- */
 router.get('/:roundId/results', requireAuth, async (req, res) => {
   const { roundId } = req.params;
   try {
-    const data = await wrapWithCache(cacheKeys.votingResults(roundId), cacheTtls.short, async () => {
-      return getVotingResults(roundId);
+    const resolvedId = await resolveRoundId(roundId);
+    if (!resolvedId) return res.status(404).json({ error: 'Voting round not found.' });
+
+    const data = await wrapWithCache(cacheKeys.votingResults(resolvedId), cacheTtls.short, async () => {
+      return getVotingResults(resolvedId);
     });
     return res.json({ data });
   } catch (error: any) {
@@ -108,19 +128,20 @@ router.get('/:roundId/results', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * GET /voting/:roundId/config — Get voting config (admin only).
- */
 router.get('/:roundId/config', requireAuth, async (req, res) => {
   const { roundId } = req.params;
   try {
     const supabase = getSupabaseAdmin();
+    const resolvedId = await resolveRoundId(roundId);
+    if (!resolvedId) return res.status(404).json({ error: 'Voting round not found.' });
+
     const { data, error } = await supabase
       .from('voting_configs')
       .select('*')
-      .eq('round_id', roundId)
+      .eq('round_id', resolvedId)
       .single();
-    if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+
+    if (error && error.code !== 'PGRST116') {
       return res.status(500).json({ error: error.message });
     }
     return res.json({ data: data || null });
@@ -129,41 +150,21 @@ router.get('/:roundId/config', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * PUT /voting/:roundId/config — Update voting config (admin only).
- */
 router.put('/:roundId/config', requireAuth, async (req, res) => {
   const { roundId } = req.params;
   const config = req.body || {};
   try {
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from('voting_configs')
-      .upsert({
-        round_id: roundId,
-        votes_per_user: config.votes_per_user,
-        votes_per_submission: config.votes_per_submission,
-        require_auth: config.require_auth,
-        allow_anonymous: config.allow_anonymous,
-        show_results_publicly: config.show_results_publicly,
-        show_leaderboard: config.show_leaderboard,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'round_id' })
-      .select()
-      .single();
+    const resolvedId = await resolveRoundId(roundId);
+    if (!resolvedId) return res.status(404).json({ error: 'Voting round not found.' });
 
-    if (error) return res.status(500).json({ error: error.message });
-
-    await deleteCache(cacheKeys.votingConfig(roundId));
+    const data = await upsertVotingConfig(resolvedId, config);
+    await deleteCache(cacheKeys.votingConfig(resolvedId));
     return res.json({ data });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
 });
 
-/**
- * GET /voting/:roundId/voters — Voter log (admin only).
- */
 router.get('/:roundId/voters', requireAuth, async (req, res) => {
   const { roundId } = req.params;
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -171,16 +172,31 @@ router.get('/:roundId/voters', requireAuth, async (req, res) => {
   const offset = (page - 1) * pageSize;
 
   try {
+    const resolvedId = await resolveRoundId(roundId);
+    if (!resolvedId) return res.status(404).json({ error: 'Voting round not found.' });
+
     const supabase = getSupabaseAdmin();
     const { data, error, count } = await supabase
       .from('public_votes')
       .select('*, submissions(id, title, applicant_name)', { count: 'exact' })
-      .eq('round_id', roundId)
+      .eq('round_id', resolvedId)
       .order('created_at', { ascending: false })
       .range(offset, offset + pageSize - 1);
 
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ data, total: count || 0, page, pageSize });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+/** Catch-all round fetch — must be last among GET routes */
+router.get('/:roundId', async (req, res) => {
+  const { roundId } = req.params;
+  try {
+    const data = await getVotingRoundPublic(roundId);
+    if (!data) return res.status(404).json({ error: 'Voting round not found.' });
+    return res.json({ data });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
