@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { ArrowRight, Search, Command, CornerDownLeft, ArrowUp, ArrowDown, Hash, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export interface UniversalSearchResult {
   id: string;
@@ -85,133 +86,144 @@ export const UniversalSearchPalette: React.FC<UniversalSearchPaletteProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   let globalIndex = -1;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[9998] bg-slate-950/40 backdrop-blur-[8px]"
+            onClick={onClose}
+          />
 
-      {/* Palette */}
-      <div
-        className="fixed inset-x-0 top-[12vh] z-[9999] mx-auto w-full max-w-2xl px-4"
-        onKeyDown={handleKeyDown}
-      >
-        <div className="overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl shadow-black/20 ring-1 ring-black/5">
-          {/* Search Input */}
-          <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-            <Search className="h-5 w-5 shrink-0 text-slate-400" />
-            <input
-              ref={inputRef}
-              autoFocus
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Search everything... programs, submissions, judges, settings"
-              className="flex-1 bg-transparent text-base text-slate-900 placeholder:text-slate-400 outline-none font-medium"
-            />
-            <kbd className="hidden sm:inline-flex h-6 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-400 tracking-wider">
-              ESC
-            </kbd>
-          </div>
-
-          {/* Results */}
-          <div ref={listRef} className="max-h-[60vh] overflow-y-auto overscroll-contain py-2">
-            {!hasQuery && (
-              <div className="px-5 py-8 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50">
-                  <Sparkles className="h-6 w-6 text-indigo-500" />
-                </div>
-                <p className="text-sm font-semibold text-slate-700">Search across your workspace</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  Programs, submissions, judges, forms, settings, and more
-                </p>
-                <div className="mt-4 flex items-center justify-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  <span className="flex items-center gap-1"><ArrowUp className="h-3 w-3" /><ArrowDown className="h-3 w-3" /> Navigate</span>
-                  <span className="flex items-center gap-1"><CornerDownLeft className="h-3 w-3" /> Select</span>
-                  <span className="flex items-center gap-1">ESC Close</span>
-                </div>
-              </div>
-            )}
-
-            {hasQuery && flatResults.length === 0 && (
-              <div className="px-5 py-10 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">
-                  <Search className="h-6 w-6 text-slate-300" />
-                </div>
-                <p className="text-sm font-semibold text-slate-700">No results found</p>
-                <p className="mt-1 text-xs text-slate-400">Try a different search term</p>
-              </div>
-            )}
-
-            {Object.entries(grouped).map(([category, items]) => (
-              <div key={category}>
-                <div className="px-5 py-2">
-                  <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
-                    {category}
-                  </span>
-                </div>
-                {items.map((result) => {
-                  globalIndex++;
-                  const idx = globalIndex;
-                  const isActive = activeIndex === idx;
-                  return (
-                    <button
-                      key={result.id}
-                      data-index={idx}
-                      type="button"
-                      onClick={() => {
-                        result.onSelect();
-                        onClose();
-                      }}
-                      onMouseEnter={() => setActiveIndex(idx)}
-                      className={`group flex w-full items-center gap-3 px-5 py-3 text-left transition-colors ${
-                        isActive
-                          ? 'bg-indigo-50 text-indigo-900'
-                          : 'text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
-                          isActive
-                            ? 'bg-indigo-100 text-indigo-600'
-                            : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600'
-                        } [&>svg]:h-4 [&>svg]:w-4`}
-                      >
-                        {result.icon}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold">{result.title}</div>
-                        <div className="mt-0.5 truncate text-xs text-slate-400">{result.description}</div>
-                      </div>
-                      {isActive && (
-                        <CornerDownLeft className="h-4 w-4 shrink-0 text-indigo-400" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          {hasQuery && flatResults.length > 0 && (
-            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 px-5 py-2.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                {flatResults.length} result{flatResults.length !== 1 ? 's' : ''}
-              </span>
-              <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                <span className="flex items-center gap-1"><ArrowUp className="h-3 w-3" /><ArrowDown className="h-3 w-3" /> Navigate</span>
-                <span className="flex items-center gap-1"><CornerDownLeft className="h-3 w-3" /> Open</span>
-              </div>
+          {/* Palette Container */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: -16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: -16 }}
+            transition={{ type: "spring", stiffness: 350, damping: 28 }}
+            className="fixed inset-x-0 top-[12vh] z-[9999] mx-auto w-full max-w-2xl px-4"
+            onKeyDown={handleKeyDown}
+          >
+            {/* Detached Search Input Panel */}
+            <div className="flex items-center gap-4 rounded-full border border-white/40 bg-white/75 backdrop-blur-xl px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-white/10 transition-all duration-300 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/30">
+              <Search className="h-5.5 w-5.5 shrink-0 text-indigo-500" />
+              <input
+                ref={inputRef}
+                autoFocus
+                value={query}
+                onChange={(e) => onQueryChange(e.target.value)}
+                placeholder="Search programs, submissions, settings..."
+                className="flex-1 bg-transparent border-0 border-transparent shadow-none outline-none focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none text-[17px] text-slate-900 placeholder:text-slate-400 font-medium"
+                style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none' }}
+              />
+              <kbd className="hidden sm:inline-flex h-6 items-center rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 text-[9px] font-extrabold text-slate-400 tracking-widest">
+                ESC
+              </kbd>
             </div>
-          )}
-        </div>
-      </div>
-    </>
+
+            {/* Detached Results Panel */}
+            <div className="mt-4 overflow-hidden rounded-[28px] border border-white/30 bg-white/75 backdrop-blur-xl shadow-[0_32px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-white/10">
+              <div ref={listRef} className="max-h-[50vh] overflow-y-auto overscroll-contain py-3 px-3 space-y-1">
+                {!hasQuery && (
+                  <div className="px-5 py-10 text-center">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-50/60 to-purple-50/60 shadow-inner">
+                      <Sparkles className="h-6.5 w-6.5 text-indigo-500" />
+                    </div>
+                    <p className="text-base font-bold text-slate-800">Search across your workspace</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Instantly jump to programs, submissions, judges, forms, or settings.
+                    </p>
+                    <div className="mt-6 flex items-center justify-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-slate-100/50 pt-5 max-w-sm mx-auto">
+                      <span className="flex items-center gap-1.5"><ArrowUp className="h-3.5 w-3.5" /><ArrowDown className="h-3.5 w-3.5" /> Navigate</span>
+                      <span className="flex items-center gap-1.5"><CornerDownLeft className="h-3.5 w-3.5" /> Select</span>
+                      <span className="flex items-center gap-1.5">ESC Close</span>
+                    </div>
+                  </div>
+                )}
+
+                {hasQuery && flatResults.length === 0 && (
+                  <div className="px-5 py-12 text-center">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50/40">
+                      <Search className="h-7 w-7 text-slate-300" />
+                    </div>
+                    <p className="text-base font-bold text-slate-800">No results found</p>
+                    <p className="mt-1 text-sm text-slate-500">We couldn't find anything matching your query.</p>
+                  </div>
+                )}
+
+                {Object.entries(grouped).map(([category, items]) => (
+                  <div key={category} className="space-y-1">
+                    <div className="px-4 py-2 mt-3 first:mt-1">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                        {category}
+                      </span>
+                    </div>
+                    {items.map((result) => {
+                      globalIndex++;
+                      const idx = globalIndex;
+                      const isActive = activeIndex === idx;
+                      return (
+                        <button
+                          key={result.id}
+                          data-index={idx}
+                          type="button"
+                          onClick={() => {
+                            result.onSelect();
+                            onClose();
+                          }}
+                          onMouseEnter={() => setActiveIndex(idx)}
+                          className={`group flex w-full items-center gap-4 px-4 py-3 text-left rounded-2xl transition-all duration-200 ${
+                            isActive
+                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 scale-[1.01]'
+                              : 'text-slate-700 hover:bg-slate-50/50 hover:scale-[1.005]'
+                          }`}
+                        >
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                              isActive
+                                ? 'bg-white/20 text-white'
+                                : 'bg-indigo-50/50 text-indigo-500 group-hover:bg-indigo-100/50'
+                            } [&>svg]:h-5 [&>svg]:w-5`}
+                          >
+                            {result.icon}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className={`truncate text-[15px] font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>{result.title}</div>
+                            <div className={`mt-0.5 truncate text-[13px] ${isActive ? 'text-indigo-100' : 'text-slate-500'}`}>{result.description}</div>
+                          </div>
+                          {isActive && (
+                            <CornerDownLeft className="h-4.5 w-4.5 shrink-0 text-white opacity-90" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              {hasQuery && flatResults.length > 0 && (
+                <div className="flex items-center justify-between border-t border-slate-200/30 bg-slate-50/30 px-5 py-3">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {flatResults.length} result{flatResults.length !== 1 ? 's' : ''}
+                  </span>
+                  <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <span className="flex items-center gap-1.5"><ArrowUp className="h-3.5 w-3.5" /><ArrowDown className="h-3.5 w-3.5" /> Navigate</span>
+                    <span className="flex items-center gap-1.5"><CornerDownLeft className="h-3.5 w-3.5" /> Open</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 };

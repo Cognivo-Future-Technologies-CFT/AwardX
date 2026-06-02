@@ -211,7 +211,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const renderView = () => {
     switch (currentView) {
       case 'tile-hub':
-        return <ProgramTileHub activeEvent={activeEvent} onNavigate={setCurrentView} />;
+        return (
+          <ProgramTileHub
+            activeEvent={activeEvent}
+            onNavigate={setCurrentView}
+            onDeleteEvent={() => setActiveEvent(null)}
+          />
+        );
       case 'overview':
         return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
 
@@ -269,7 +275,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'logs':
         return <AuditLogsView />;
       case 'settings':
-        return <SettingsView activeEvent={activeEvent} />;
+        return (
+          <SettingsView
+            activeEvent={activeEvent}
+            onDeleteEvent={() => setActiveEvent(null)}
+          />
+        );
       case 'program-details':
         return <ProgramDetailsView activeEvent={activeEvent} />;
       default:

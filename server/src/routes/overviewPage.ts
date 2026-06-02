@@ -30,7 +30,7 @@ async function getOverviewPayload(programId: string) {
   const [programResult, configResult, sectionsResult] = await Promise.all([
     supabase
       .from('programs')
-      .select('id, title, slug, description, cover_image_url, status, visibility, deadline, timezone, industry_category')
+      .select('id, title, slug, description, cover_image_url, status, visibility, deadline, timezone, industry_category, active_form_id')
       .eq('id', programId)
       .maybeSingle(),
     supabase.from('program_page_configs').select('*').eq('program_id', programId).maybeSingle(),

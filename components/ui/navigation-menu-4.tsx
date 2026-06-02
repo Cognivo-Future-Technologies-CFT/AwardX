@@ -412,12 +412,17 @@ export default function NavigationMenuFour({
 
         <div className="flex shrink-0 items-center gap-2">
           <Toggle
-            pressed={!isLive}
+            pressed={isLive}
             onPressedChange={onToggleLive}
-            className="hidden rounded-full border px-4 sm:flex"
-            aria-label="Toggle environment"
+            className={cn(
+              "hidden rounded-full border px-4 text-xs font-semibold uppercase tracking-wide sm:flex",
+              isLive
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-slate-200 bg-slate-100 text-slate-600"
+            )}
+            aria-label="Toggle program status"
           >
-            {isLive ? "LIVE" : "SANDBOX"}
+            {isLive ? "LIVE" : "DRAFT"}
           </Toggle>
           <div className="relative hidden xl:block">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

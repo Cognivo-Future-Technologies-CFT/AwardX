@@ -3,9 +3,9 @@ import { motion } from 'framer-motion';
 import {
    Trophy, HandCoins, Building2, Sparkles, Calendar, ArrowRight,
    LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2,
-   Rocket, GraduationCap, BookOpen, UserCheck, Palette
+   Rocket, GraduationCap, BookOpen, UserCheck, Palette, Users, UserPlus, Shield
 } from 'lucide-react';
-import { Program, EventType, Organization } from '../../services/models';
+import { Program, EventType, Organization, Role, TeamMember } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService } from '../../services/database';
 import { Modal } from '../Modal';
@@ -156,6 +156,16 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    const [canManagePrograms, setCanManagePrograms] = useState(false);
    const [searchQuery, setSearchQuery] = useState('');
    const [statusFilter, setStatusFilter] = useState<'All' | Program['status']>('All');
+   const [orgMembers, setOrgMembers] = useState<TeamMember[]>([]);
+   const [orgRoles, setOrgRoles] = useState<Role[]>([]);
+   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+   const [newMemberEmail, setNewMemberEmail] = useState('');
+   const [newMemberRoleId, setNewMemberRoleId] = useState('');
+   const [isAddingMember, setIsAddingMember] = useState(false);
    const [userData, setUserData] = useState<UserData>({
       name: 'Loading...',
       avatar: '',
@@ -174,6 +184,18 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          return matchesStatus && matchesSearch;
       });
    }, [events, searchQuery, statusFilter]);
+
+   const filteredMembers = useMemo(() => {
+      const q = memberSearchQuery.trim().toLowerCase();
+      if (!q) return orgMembers;
+      return orgMembers.filter((m) => {
+         return (
+            (m.name || '').toLowerCase().includes(q) ||
+            (m.email || '').toLowerCase().includes(q) ||
+            (m.role || '').toLowerCase().includes(q)
+         );
+      });
+   }, [orgMembers, memberSearchQuery]);
 
    const stats = useMemo(() => {
       const active = events.filter((e) => e.status === 'Active').length;
@@ -234,8 +256,15 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          await databaseService.initialize();
          const canManage = await databaseService.canManagePrograms();
          setCanManagePrograms(canManage);
-         const programs = await databaseService.getPrograms();
+         
+         const [programs, members, roles] = await Promise.all([
+            databaseService.getPrograms(),
+            databaseService.getTeamMembers(),
+            databaseService.getRoles(),
+         ]);
          setEvents(programs);
+         setOrgMembers(members);
+         setOrgRoles(roles);
       } catch (error) {
          console.error('Failed to load programs:', error);
       } finally {
@@ -243,6 +272,12 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          setIsRefreshing(false);
       }
    }, []);
+
+   useEffect(() => {
+      if (!newMemberRoleId && orgRoles[0]?.id) {
+         setNewMemberRoleId(orgRoles[0].id);
+      }
+   }, [newMemberRoleId, orgRoles]);
 
    // Fetch real user data from Supabase
    useEffect(() => {
@@ -429,6 +464,29 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       }
    };
 
+   const openMemberDetails = (member: TeamMember) => {
+      setSelectedMember(member);
+      setIsMemberModalOpen(true);
+   };
+
+   const handleAddMember = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const email = newMemberEmail.trim().toLowerCase();
+      if (!email || !newMemberRoleId || isAddingMember) return;
+
+      setIsAddingMember(true);
+      try {
+         await databaseService.addTeamMemberByEmail(email, newMemberRoleId);
+         await loadPrograms(false);
+         setNewMemberEmail('');
+         setIsAddMemberModalOpen(false);
+      } catch (error: any) {
+         alert(error?.message || 'Failed to add member. Please try again.');
+      } finally {
+         setIsAddingMember(false);
+      }
+   };
+
    return (
       <div className="min-h-screen bg-[#f8faf9] font-sans text-slate-900">
          {/* Top Navigation Bar */}
@@ -498,8 +556,9 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          </header>
 
          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            {/* Active Events Section */}
-            <section className="mb-16">
+            <div className="space-y-16">
+               {/* Active Events Section */}
+               <section className="mb-16">
                <div className="mb-6">
                   <div>
                      <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Your Events</h2>
@@ -624,7 +683,279 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                   ))}
                </div>
             </section>
-         </main>
+         </div>
+      </main>
+
+      {/* Collapsible Right Sidebar Panel */}
+      <motion.aside
+         initial={{ x: '100%' }}
+         animate={{ x: isSidebarOpen ? 0 : '100%' }}
+         transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+         className="fixed right-0 top-20 bottom-0 w-[320px] bg-white border-l border-slate-200 shadow-2xl z-40 p-6 flex flex-col"
+      >
+         {/* Toggle Tab Button on Left Edge */}
+         <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="absolute left-[-40px] top-1/2 -translate-y-1/2 w-10 h-24 bg-white border border-r-0 border-slate-200 shadow-[-6px_0_15px_-3px_rgba(0,0,0,0.1)] rounded-l-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-slate-50 text-slate-500 hover:text-emerald-600 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+            aria-label={isSidebarOpen ? "Close members sidebar" : "Open members sidebar"}
+         >
+            {isSidebarOpen ? (
+               <ArrowRight className="w-5 h-5" />
+            ) : (
+               <>
+                  <Users className="w-5 h-5 animate-pulse" />
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5">
+                     {orgMembers.length}
+                  </span>
+               </>
+            )}
+         </button>
+
+         {/* Sidebar Content */}
+         <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
+            <div className="flex items-center gap-2">
+               <Users className="w-5 h-5 text-emerald-600" />
+               <h2 className="text-base font-bold text-slate-900">Members</h2>
+            </div>
+            <div className="flex items-center gap-2">
+               <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-semibold">
+                  {orgMembers.length}
+               </span>
+               <button
+                  type="button"
+                  onClick={() => setIsAddMemberModalOpen(true)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  aria-label="Add member"
+                  title="Add member"
+               >
+                  <UserPlus className="w-4 h-4" />
+               </button>
+            </div>
+         </div>
+
+         <div className="relative my-4 shrink-0">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+               type="text"
+               placeholder="Search members..."
+               value={memberSearchQuery}
+               onChange={(e) => setMemberSearchQuery(e.target.value)}
+               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
+            />
+         </div>
+
+         <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
+            {filteredMembers.map((member) => {
+               const roleLower = (member.role || 'member').toLowerCase();
+               const isOwner = roleLower === 'owner' || roleLower === 'superadmin';
+               const isAdmin = roleLower === 'admin';
+               const isJudge = roleLower === 'judge';
+               
+               const badgeStyle = isOwner 
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                  : isAdmin 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                  : isJudge 
+                  ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                  : 'bg-slate-50 text-slate-600 border-slate-200';
+
+               const initials = (member.name || member.email || 'U')
+                  .trim()
+                  .split(' ')
+                  .map((n: string) => n.charAt(0))
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2) || 'U';
+
+               return (
+                  <button
+                     key={member.memberId}
+                     type="button"
+                     onClick={() => openMemberDetails(member)}
+                     className="w-full flex items-center justify-between gap-3 rounded-xl border border-transparent p-2 text-left transition-colors hover:border-emerald-100 hover:bg-emerald-50/50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                     <div className="flex items-center gap-2.5 min-w-0">
+                        {member.avatar ? (
+                           <img 
+                              src={member.avatar} 
+                              alt={member.name} 
+                              className="w-8 h-8 rounded-full border border-slate-100 object-cover shrink-0" 
+                           />
+                        ) : (
+                           <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs shrink-0">
+                              {initials}
+                           </div>
+                        )}
+                        <div className="min-w-0">
+                           <div className="text-xs font-semibold text-slate-900 truncate">
+                              {member.name}
+                           </div>
+                           <div className="text-[10px] text-slate-500 truncate">
+                              {member.email}
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold border ${badgeStyle}`}>
+                           {member.role}
+                        </span>
+                        <span 
+                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              member.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'
+                           }`}
+                           title={member.status}
+                        />
+                     </div>
+                  </button>
+               );
+            })}
+
+            {filteredMembers.length === 0 && (
+               <div className="py-6 text-center text-slate-400 text-xs">
+                  No members found
+               </div>
+            )}
+         </div>
+      </motion.aside>
+
+         {/* Member Details Modal */}
+         <Modal
+            isOpen={isMemberModalOpen}
+            onClose={() => setIsMemberModalOpen(false)}
+            title="Member Details"
+         >
+            {selectedMember && (
+               <div className="space-y-5">
+                  <div className="flex items-start gap-4">
+                     {selectedMember.avatar ? (
+                        <img
+                           src={selectedMember.avatar}
+                           alt={selectedMember.name}
+                           className="w-14 h-14 rounded-xl border border-slate-200 object-cover"
+                        />
+                     ) : (
+                        <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
+                           {(selectedMember.name || selectedMember.email || 'U')
+                              .trim()
+                              .split(' ')
+                              .map((n) => n.charAt(0))
+                              .join('')
+                              .toUpperCase()
+                              .slice(0, 2) || 'U'}
+                        </div>
+                     )}
+                     <div className="min-w-0">
+                        <h3 className="text-lg font-bold text-slate-900 truncate">{selectedMember.name}</h3>
+                        <p className="text-sm text-slate-500 truncate">{selectedMember.email}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                           <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                              {selectedMember.role}
+                           </span>
+                           <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold ${
+                              selectedMember.status === 'Active'
+                                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                 : 'border-slate-200 bg-slate-50 text-slate-600'
+                           }`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${selectedMember.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              {selectedMember.status}
+                           </span>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Role</div>
+                        <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                           <Shield className="w-4 h-4 text-emerald-600" />
+                           {selectedMember.role}
+                        </div>
+                     </div>
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Access</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-900">
+                           {selectedMember.programScope === 'program' ? 'Program-specific' : 'All events'}
+                        </div>
+                     </div>
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Joined</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-900">{selectedMember.joinedDate}</div>
+                     </div>
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Last Active</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-900">{selectedMember.lastActive}</div>
+                     </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                     <Button type="button" variant="ghost" onClick={() => setIsMemberModalOpen(false)}>
+                        Close
+                     </Button>
+                  </div>
+               </div>
+            )}
+         </Modal>
+
+         {/* Add Member Modal */}
+         <Modal
+            isOpen={isAddMemberModalOpen}
+            onClose={() => setIsAddMemberModalOpen(false)}
+            title="Add Member"
+         >
+            <form onSubmit={handleAddMember} className="space-y-4">
+               <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  Add an existing AwardX user to <span className="font-semibold">{activeOrganization.name}</span> and choose their role.
+               </div>
+               <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
+                  <input
+                     required
+                     type="email"
+                     value={newMemberEmail}
+                     onChange={(e) => setNewMemberEmail(e.target.value)}
+                     placeholder="person@example.com"
+                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
+                  />
+               </div>
+               <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Role</label>
+                  <select
+                     required
+                     value={newMemberRoleId}
+                     onChange={(e) => setNewMemberRoleId(e.target.value)}
+                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
+                  >
+                     {orgRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                           {role.name}
+                        </option>
+                     ))}
+                  </select>
+                  {orgRoles.length === 0 && (
+                     <p className="mt-1 text-xs text-amber-700">Create a role before adding members.</p>
+                  )}
+               </div>
+               <div className="pt-4 flex justify-end gap-3">
+                  <Button type="button" variant="ghost" onClick={() => setIsAddMemberModalOpen(false)} disabled={isAddingMember}>
+                     Cancel
+                  </Button>
+                  <Button type="submit" disabled={isAddingMember || orgRoles.length === 0}>
+                     {isAddingMember ? (
+                        <>
+                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                           Adding...
+                        </>
+                     ) : (
+                        <>
+                           <UserPlus className="w-4 h-4 mr-2" />
+                           Add Member
+                        </>
+                     )}
+                  </Button>
+               </div>
+            </form>
+         </Modal>
 
          {/* Create Modal */}
          <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={selectedType === 'Other' ? 'Create Custom Event' : `Create New ${selectedType}`}>

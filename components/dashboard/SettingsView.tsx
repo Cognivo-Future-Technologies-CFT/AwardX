@@ -1,7 +1,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '../Button';
-import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard, Plug } from 'lucide-react';
+import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard, Plug, AlertTriangle } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { IntegrationsPanel } from './IntegrationsPanel';
 import { db } from '../../services/database';
 import { auth, storage } from '../../services/supabase';
@@ -9,9 +10,10 @@ import { Program } from '../../services/models';
 
 interface SettingsViewProps {
   activeEvent?: Program | null;
+  onDeleteEvent?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDeleteEvent }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState<any>(null);
   const [org, setOrg] = useState<any>(null);
@@ -32,6 +34,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canManagePrograms, setCanManagePrograms] = useState(false);
+  const [confirmEventName, setConfirmEventName] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const buildPresetAvatar = (seed: string, bg: string, fg: string) => {
     const initial = (seed || 'U').trim().charAt(0).toUpperCase() || 'U';
@@ -67,11 +72,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
       setLoading(true);
       setError(null);
       try {
-        const [{ data: prof, error: profErr }, { data: orgData, error: orgErr }, { data: us, error: usErr }, allPrograms] = await Promise.all([
+        const [{ data: prof, error: profErr }, { data: orgData, error: orgErr }, { data: us, error: usErr }, allPrograms, canManage] = await Promise.all([
           db.getProfile(),
           db.getOrganization(),
           db.getUserSettings(),
           db.getPrograms(),
+          db.canManagePrograms(),
         ]);
         if (profErr) throw profErr;
         if (orgErr) throw orgErr;
@@ -82,6 +88,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
         setOrg(orgData);
         setUserSettings(us || { notifications: {}, preferences: {} });
         setPrograms(allPrograms || []);
+        setCanManagePrograms(canManage);
 
         const queryProgramId = params.get('programId') || '';
         const defaultProgramId = queryProgramId || activeEvent?.id || allPrograms?.[0]?.id || '';
@@ -295,6 +302,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
   const refreshPrograms = async () => {
     const refreshed = await db.getPrograms();
     setPrograms(refreshed || []);
+  };
+
+  const handleDeleteProgram = async () => {
+    if (!activeEvent || !canManagePrograms || isDeleting) return;
+    if (confirmEventName !== activeEvent.title) {
+      setError('Confirmation name does not match event name.');
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await db.deleteProgram(activeEvent.id);
+      if (onDeleteEvent) {
+        onDeleteEvent();
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Failed to delete event');
+      setIsDeleting(false);
+    }
   };
 
   const tabs = [
@@ -794,6 +821,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
                      Sign out
                    </Button>
                  </div>
+
+                 {canManagePrograms && activeEvent && (
+                   <div className="mt-8 rounded-2xl border border-rose-200 bg-rose-50/50 p-6 space-y-4">
+                     <div className="flex items-start gap-3">
+                       <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                         <AlertTriangle className="w-5 h-5" />
+                       </div>
+                       <div>
+                         <h3 className="text-base font-bold text-rose-950">Danger Zone: Delete Event</h3>
+                         <p className="text-sm text-rose-700 mt-1 leading-relaxed">
+                           Permanently delete this event (<span className="font-semibold">{activeEvent.title}</span>), including all categories, forms, submissions, and judging configurations. This action is irreversible.
+                         </p>
+                       </div>
+                     </div>
+
+                     <div className="border-t border-rose-200/60 pt-4 space-y-3">
+                       <p className="text-xs text-rose-800 font-medium">
+                         To confirm deletion, please type the exact name of the event: <span className="font-bold select-all bg-rose-100/80 px-1.5 py-0.5 rounded border border-rose-200">{activeEvent.title}</span>
+                       </p>
+                       <div className="flex flex-col sm:flex-row gap-3">
+                         <input
+                           type="text"
+                           value={confirmEventName}
+                           onChange={(e) => setConfirmEventName(e.target.value)}
+                           placeholder="Type event name to confirm"
+                           disabled={isDeleting}
+                           className="flex-1 px-4 py-2 border border-rose-200 focus:border-rose-400 focus:ring-2 focus:ring-rose-200 outline-none rounded-lg text-sm bg-white"
+                         />
+                         <motion.button
+                           whileTap={{ scale: 0.98 }}
+                           onClick={handleDeleteProgram}
+                           disabled={isDeleting || confirmEventName !== activeEvent.title}
+                           className={`inline-flex items-center justify-center rounded-lg font-medium px-5 py-2 text-sm transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-sm ${
+                             confirmEventName === activeEvent.title && !isDeleting
+                               ? 'bg-rose-600 hover:bg-rose-700'
+                               : 'bg-slate-300 cursor-not-allowed'
+                           }`}
+                         >
+                           {isDeleting ? 'Deleting...' : 'Delete Event'}
+                         </motion.button>
+                       </div>
+                     </div>
+                   </div>
+                 )}
                </div>
              )}
 

@@ -180,7 +180,13 @@ export const PublicProgramPage: React.FC = () => {
     const coverImage: string =
         resolveMediaPublicUrl(heroSection?.content?.backgroundImage || data.program.cover_image_url) || '';
     const tagline: string = heroSection?.content?.subtitle || '';
-    const nominateUrl: string = heroSection?.content?.primaryCtaLink || '#';
+    const rawCtaLink = heroSection?.content?.primaryCtaLink || '';
+    const nominateUrl: string =
+        rawCtaLink && rawCtaLink !== '#'
+            ? rawCtaLink
+            : data.program.active_form_id
+                ? `/form/${data.program.active_form_id}`
+                : '#';
     const nominateButtonText: string = heroSection?.content?.primaryCtaText || 'Nominate Now';
 
     const aboutLead: string = aboutSection?.content?.lead || '';
@@ -272,11 +278,11 @@ export const PublicProgramPage: React.FC = () => {
             {/* ── Hero ─────────────────────────────────────────────────────── */}
             <section className="relative min-h-[580px] md:min-h-[660px] flex items-end overflow-hidden">
                 {/* Background */}
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900">
+                <div className="absolute inset-0 bg-slate-900">
                     {coverImage && (
-                        <img src={coverImage} alt="" className="w-full h-full object-cover opacity-35 mix-blend-overlay" />
+                        <img src={coverImage} alt="" className="w-full h-full object-cover opacity-65" />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/20" />
                 </div>
 
                 <div className="relative w-full max-w-6xl mx-auto px-4 sm:px-6 pb-16 pt-28">

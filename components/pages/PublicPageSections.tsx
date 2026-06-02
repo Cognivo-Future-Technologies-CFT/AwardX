@@ -67,6 +67,7 @@ export interface PublicPagePayload {
         timezone?: string;
         deadline?: string;
         cover_image_url?: string;
+        active_form_id?: string | null;
     };
     sections: any[];
     rounds: ProgramRound[];

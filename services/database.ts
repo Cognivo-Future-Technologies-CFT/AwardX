@@ -981,16 +981,149 @@ class DatabaseService {
 
     if (!supabase) throw new Error('Supabase not configured');
 
-    // Clear dependent round graph edges first to avoid FK violations on program delete.
-    const { error: edgeDeleteError } = await supabase
-      .from('round_edges')
-      .delete()
-      .eq('program_id', programId);
+    // 1. Null out circular/foreign key references on programs and workspace states
+    await supabase
+      .from('programs')
+      .update({ active_form_id: null })
+      .eq('id', programId);
 
-    if (edgeDeleteError) {
-      throw new Error(edgeDeleteError.message || 'Failed to delete round graph connections');
+    await supabase
+      .from('user_workspace_state')
+      .update({ active_program_id: null })
+      .eq('active_program_id', programId);
+
+    // 2. Fetch round and submission IDs to cleanly clean up sub-dependencies
+    const { data: rnds } = await supabase
+      .from('rounds')
+      .select('id')
+      .eq('program_id', programId);
+    const roundIds = (rnds || []).map(r => r.id);
+
+    const { data: subs } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('program_id', programId);
+    const subIds = (subs || []).map(s => s.id);
+
+    const { data: forms } = await supabase
+      .from('program_forms')
+      .select('id')
+      .eq('program_id', programId);
+    const formIds = (forms || []).map(f => f.id);
+
+    // 3. Delete Message participant / messages (linked to submissions)
+    if (subIds.length > 0) {
+      const { data: threads } = await supabase
+        .from('message_threads')
+        .select('id')
+        .in('related_submission_id', subIds);
+      const threadIds = (threads || []).map(t => t.id);
+
+      if (threadIds.length > 0) {
+        await supabase.from('messages').delete().in('thread_id', threadIds);
+        await supabase.from('thread_participants').delete().in('thread_id', threadIds);
+        await supabase.from('message_threads').delete().in('id', threadIds);
+      }
     }
 
+    // 4. Delete judging data (scores, comments, submission_judges)
+    let sjIds: string[] = [];
+    if (subIds.length > 0) {
+      const { data: sjs } = await supabase
+        .from('submission_judges')
+        .select('id')
+        .in('submission_id', subIds);
+      sjIds = sjIds.concat((sjs || []).map(sj => sj.id));
+    }
+    if (roundIds.length > 0) {
+      const { data: sjs2 } = await supabase
+        .from('submission_judges')
+        .select('id')
+        .in('round_id', roundIds);
+      const sjIds2 = (sjs2 || []).map(sj => sj.id);
+      sjIds = sjIds.concat(sjIds2.filter(id => !sjIds.includes(id)));
+    }
+
+    if (sjIds.length > 0) {
+      await supabase.from('scores').delete().in('submission_judge_id', sjIds);
+      await supabase.from('judge_comments').delete().in('submission_judge_id', sjIds);
+      await supabase.from('submission_judges').delete().in('id', sjIds);
+    }
+
+    // 5. Delete submission child tables and submissions
+    if (subIds.length > 0) {
+      await supabase.from('submission_files').delete().in('submission_id', subIds);
+      await supabase.from('razorpay_orders').delete().in('submission_id', subIds);
+      await supabase.from('public_votes').delete().in('submission_id', subIds);
+      await supabase.from('round_submissions').delete().in('submission_id', subIds);
+      await supabase.from('submissions').delete().in('id', subIds);
+    }
+
+    // 6. Delete round child tables and rounds
+    if (roundIds.length > 0) {
+      await supabase.from('round_edges').delete().in('source_round_id', roundIds);
+      await supabase.from('round_edges').delete().in('target_round_id', roundIds);
+      await supabase.from('round_submissions').delete().in('round_id', roundIds);
+      await supabase.from('round_transitions').delete().in('round_id', roundIds);
+      await supabase.from('public_votes').delete().in('round_id', roundIds);
+      await supabase.from('rounds').delete().in('id', roundIds);
+    }
+
+    // 7. Delete program form child tables and program forms
+    if (formIds.length > 0) {
+      await supabase.from('program_form_fields').delete().in('form_id', formIds);
+      await supabase.from('form_analytics').delete().in('form_id', formIds);
+      await supabase.from('form_payment_configs').delete().in('form_id', formIds);
+      await supabase.from('submission_drafts').delete().in('form_id', formIds);
+      await supabase.from('program_forms').delete().in('id', formIds);
+    }
+
+    // 8. Delete general program dependencies
+    await supabase.from('round_edges').delete().eq('program_id', programId);
+    await supabase.from('categories').delete().eq('program_id', programId);
+    await supabase.from('advancement_events').delete().eq('program_id', programId);
+    await supabase.from('invite_request_traces').delete().eq('program_id', programId);
+
+    const { data: grps } = await supabase
+      .from('judge_groups')
+      .select('id')
+      .eq('program_id', programId);
+    const grpIds = (grps || []).map(g => g.id);
+    if (grpIds.length > 0) {
+      await supabase.from('judge_group_members').delete().in('group_id', grpIds);
+    }
+    await supabase.from('judge_groups').delete().eq('program_id', programId);
+
+    await supabase.from('judges').delete().eq('program_id', programId);
+    await supabase.from('judging_config').delete().eq('program_id', programId);
+    await supabase.from('judging_criteria').delete().eq('program_id', programId);
+    await supabase.from('notifications').delete().eq('program_id', programId);
+    await supabase.from('organization_invites').delete().eq('program_id', programId);
+    await supabase.from('organization_members').delete().eq('program_id', programId);
+    await supabase.from('program_faqs').delete().eq('program_id', programId);
+    await supabase.from('program_page_configs').delete().eq('program_id', programId);
+    await supabase.from('program_page_sections').delete().eq('program_id', programId);
+    await supabase.from('program_payment_configs').delete().eq('program_id', programId);
+    await supabase.from('program_sponsors').delete().eq('program_id', programId);
+    await supabase.from('program_timeline_milestones').delete().eq('program_id', programId);
+    await supabase.from('program_workflow_extensions').delete().eq('program_id', programId);
+    await supabase.from('razorpay_orders').delete().eq('program_id', programId);
+
+    const { data: rls } = await supabase
+      .from('roles')
+      .select('id')
+      .eq('program_id', programId);
+    const roleIds = (rls || []).map(r => r.id);
+    if (roleIds.length > 0) {
+      await supabase.from('role_permissions').delete().in('role_id', roleIds);
+    }
+    await supabase.from('roles').delete().eq('program_id', programId);
+
+    await supabase.from('scheduled_posts').delete().eq('program_id', programId);
+    await supabase.from('slug_history').delete().eq('program_id', programId);
+    await supabase.from('winner_announcements').delete().eq('program_id', programId);
+
+    // 9. Delete the main program record
     const { error } = await supabasePrograms.delete(programId);
     if (error) {
       const errorMessage = (error as any)?.message || 'Failed to delete program';

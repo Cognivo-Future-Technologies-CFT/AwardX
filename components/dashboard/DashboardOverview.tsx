@@ -204,8 +204,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
           <div
             className="relative cursor-pointer group"
             onClick={() => {
-              // Trigger the universal search palette (Cmd+K)
-              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
+              window.dispatchEvent(new CustomEvent('open-universal-search'));
             }}
           >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
@@ -326,4 +325,3 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
     </div>
   );
 };
-

@@ -24,6 +24,7 @@ import { MassEmailView } from './MassEmailView';
 interface ProgramTileHubProps {
   activeEvent: Program | null;
   onNavigate: (view: string) => void;
+  onDeleteEvent?: () => void;
 }
 
 type TileId =
@@ -221,7 +222,7 @@ const useTileStats = (program: Program | null) => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onNavigate }) => {
+export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onNavigate, onDeleteEvent }) => {
   const [activeTile, setActiveTile] = useState<TileId | null>(null);
   const stats = useTileStats(activeEvent);
 
@@ -275,7 +276,7 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
       case 'team':        return <TeamsView activeEvent={activeEvent} />;
       case 'mass-email':  return <MassEmailView activeEvent={activeEvent} />;
       case 'publish':     return <PublishPanel program={activeEvent} checks={readinessChecks} onClose={() => setActiveTile(null)} />;
-      case 'settings':    return <SettingsView activeEvent={activeEvent} />;
+      case 'settings':    return <SettingsView activeEvent={activeEvent} onDeleteEvent={onDeleteEvent} />;
       default:            return null;
     }
   };

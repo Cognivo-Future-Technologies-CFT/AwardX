@@ -4,8 +4,8 @@ import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
-  ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
-  UserCog, Edit, Workflow, Layout, Command, Globe
+  ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2,
+  UserCog, Edit, Workflow, Layout, Command, Globe, CheckCircle2, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,7 +21,9 @@ interface DashboardUser {
   avatar: string;
   joinedDate: string;
 }
-import { db as databaseService } from '../../services/database';
+import { db as databaseService, programPages } from '../../services/database';
+import { queryKeys } from '../../services/queryKeys';
+import { getProgramFormSetupState } from '../../lib/programFormSetup';
 import { auth, realtime, supabase } from '../../services/supabase';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
@@ -62,6 +64,44 @@ interface SidebarItemProps {
   onClick: () => void;
   children?: React.ReactNode;
 }
+
+type PublishRequirementKey = 'schedule' | 'rounds' | 'judges' | 'formBuilder' | 'nominationButton';
+
+interface PublishRequirementState {
+  label: string;
+  isMet: boolean;
+  detail: string;
+}
+
+type PublishRequirements = Record<PublishRequirementKey, PublishRequirementState>;
+
+const buildDefaultPublishRequirements = (): PublishRequirements => ({
+  schedule: {
+    label: 'Schedule',
+    isMet: false,
+    detail: 'Set a submission deadline or add timeline milestones.',
+  },
+  rounds: {
+    label: 'Rounds',
+    isMet: false,
+    detail: 'Add at least one round.',
+  },
+  judges: {
+    label: 'Judges',
+    isMet: false,
+    detail: 'Invite at least one judge.',
+  },
+  formBuilder: {
+    label: 'Form Builder',
+    isMet: false,
+    detail: 'Create and publish a submission form with fields.',
+  },
+  nominationButton: {
+    label: 'Nomination Button',
+    isMet: false,
+    detail: 'Select which form opens from the public landing page.',
+  },
+});
 
 const SidebarItem: React.FC<SidebarItemProps> = ({ id, label, icon: Icon, currentView, collapsed, onClick, children }) => (
   <div className="mb-1">
@@ -175,7 +215,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
-  const [isTestMode, setIsTestMode] = useState(false);
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [isUnpublishModalOpen, setIsUnpublishModalOpen] = useState(false);
+  const [checkingRequirements, setCheckingRequirements] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [publishRequirements, setPublishRequirements] = useState<PublishRequirements>(() =>
+    buildDefaultPublishRequirements()
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
@@ -292,6 +338,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     window.addEventListener('navigate-to', handler);
     return () => window.removeEventListener('navigate-to', handler);
   }, [onChangeView]);
+
+  useEffect(() => {
+    const handler = () => setIsSearchOpen(true);
+    window.addEventListener('open-universal-search', handler);
+    return () => window.removeEventListener('open-universal-search', handler);
+  }, []);
 
   const searchResults = useMemo<UniversalSearchResult[]>(() => {
     const query = deferredSearchQuery.trim().toLowerCase();
@@ -703,6 +755,151 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     setIsCategoryModalOpen(true);
   };
 
+  const isProgramLive = activeEvent?.status === 'Active';
+
+  const refreshPublishRequirements = async () => {
+    if (!activeEvent?.id) {
+      const fallback = buildDefaultPublishRequirements();
+      setPublishRequirements(fallback);
+      return fallback;
+    }
+
+    setCheckingRequirements(true);
+    try {
+      const [rounds, judges, forms, activeFormId, timelineResult, sectionsResult] = await Promise.all([
+        databaseService.getRounds(activeEvent.id),
+        databaseService.getJudges(activeEvent.id),
+        databaseService.getForms(activeEvent.id),
+        databaseService.getActiveFormForProgram(activeEvent.id),
+        programPages.getTimeline(activeEvent.id),
+        programPages.getSections(activeEvent.id),
+      ]);
+
+      const timelineMilestones = timelineResult?.data ?? [];
+      const hasDeadline = !!(activeEvent.deadline && activeEvent.deadline.trim());
+      const scheduleMet = hasDeadline || timelineMilestones.length > 0;
+      const scheduleDetail = scheduleMet
+        ? hasDeadline
+          ? 'Submission deadline is set.'
+          : 'Timeline milestones configured.'
+        : 'Set a submission deadline or add timeline milestones.';
+
+      const roundsMet = rounds.length > 0;
+      const roundsDetail = roundsMet
+        ? `${rounds.length} round${rounds.length === 1 ? '' : 's'} configured.`
+        : 'Add at least one round.';
+
+      const judgesMet = judges.length > 0;
+      const judgesDetail = judgesMet
+        ? `${judges.length} judge${judges.length === 1 ? '' : 's'} assigned.`
+        : 'Invite at least one judge.';
+
+      const formSetup = getProgramFormSetupState(forms, activeFormId);
+      let formMet = formSetup.status === 'ready';
+      let formDetail = formSetup.message;
+
+      if (formSetup.status === 'ready' && formSetup.activeForm) {
+        const fields = await databaseService.getFormFields(formSetup.activeForm.id);
+        if (fields.length === 0) {
+          formMet = false;
+          formDetail = 'Add at least one field to the active submission form.';
+        } else {
+          formDetail = `${formSetup.activeForm.title || 'Active form'} has ${fields.length} field${
+            fields.length === 1 ? '' : 's'
+          } configured.`;
+        }
+      }
+
+      const sections = sectionsResult?.data ?? [];
+      const heroSection = sections.find((section: any) => (section.section_type || section.type) === 'hero');
+      const primaryCtaLink = String(heroSection?.content?.primaryCtaLink || '');
+      const nominationFormMatch = primaryCtaLink.match(/\/form\/([^/?#]+)/);
+      const nominationFormId = nominationFormMatch?.[1] || '';
+      const nominationForm = forms.find((form: any) => form.id === nominationFormId);
+      const nominationButtonMet = !!nominationFormId && !!nominationForm;
+      const nominationButtonDetail = nominationButtonMet
+        ? `"${nominationForm?.title || 'Selected form'}" is linked to the landing page nomination button.`
+        : nominationFormId
+          ? 'The selected nomination form could not be found. Choose a valid form in the landing page builder.'
+          : 'Select a nomination form for the landing page nomination button.';
+
+      const nextRequirements: PublishRequirements = {
+        schedule: { label: 'Schedule', isMet: scheduleMet, detail: scheduleDetail },
+        rounds: { label: 'Rounds', isMet: roundsMet, detail: roundsDetail },
+        judges: { label: 'Judges', isMet: judgesMet, detail: judgesDetail },
+        formBuilder: { label: 'Form Builder', isMet: formMet, detail: formDetail },
+        nominationButton: { label: 'Nomination Button', isMet: nominationButtonMet, detail: nominationButtonDetail },
+      };
+
+      setPublishRequirements(nextRequirements);
+      return nextRequirements;
+    } catch (error) {
+      console.error('Failed to check publish requirements:', error);
+      const fallback = buildDefaultPublishRequirements();
+      setPublishRequirements(fallback);
+      return fallback;
+    } finally {
+      setCheckingRequirements(false);
+    }
+  };
+
+  const handleToggleProgramStatus = () => {
+    if (!activeEvent || updatingStatus) return;
+
+    if (isProgramLive) {
+      setIsUnpublishModalOpen(true);
+      return;
+    }
+
+    setIsPublishModalOpen(true);
+    void refreshPublishRequirements();
+  };
+
+  const publishRequirementList = useMemo(
+    () => [
+      { id: 'schedule', ...publishRequirements.schedule },
+      { id: 'rounds', ...publishRequirements.rounds },
+      { id: 'judges', ...publishRequirements.judges },
+      { id: 'formBuilder', ...publishRequirements.formBuilder },
+      { id: 'nominationButton', ...publishRequirements.nominationButton },
+    ],
+    [publishRequirements]
+  );
+
+  const hasPublishBlockers = publishRequirementList.some((item) => !item.isMet);
+
+  const handlePublishProgram = async () => {
+    if (!activeEvent || hasPublishBlockers || updatingStatus) return;
+    setUpdatingStatus(true);
+    try {
+      const updatedProgram = await databaseService.updateProgram({ ...activeEvent, status: 'Active' });
+      onSelectProgram(updatedProgram);
+      queryClient.invalidateQueries({ queryKey: queryKeys.programs.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.programs.byId(activeEvent.id) });
+      setIsPublishModalOpen(false);
+    } catch (error) {
+      console.error('Failed to publish program:', error);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleUnpublishProgram = async () => {
+    if (!activeEvent || updatingStatus) return;
+    setUpdatingStatus(true);
+    try {
+      const updatedProgram = await databaseService.updateProgram({ ...activeEvent, status: 'Draft' });
+      onSelectProgram(updatedProgram);
+      queryClient.invalidateQueries({ queryKey: queryKeys.programs.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.programs.byId(activeEvent.id) });
+      setIsUnpublishModalOpen(false);
+    } catch (error) {
+      console.error('Failed to move program to draft:', error);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   // Define Nav items with Permissions
   const leftNavItems = [
     { id: 'overview',          label: 'Overview',           icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
@@ -756,11 +953,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       >
         Skip to content
       </a>
-      {/* Visual Indicator for Test Mode */}
-      {isTestMode && (
-        <div className="fixed top-0 left-0 w-full h-1 bg-amber-400 z-[60]" />
-      )}
-
       {/* LEFT SIDEBAR - Desktop (collapsed by default, expands on hover) */}
       <aside
         role="navigation"
@@ -947,14 +1139,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             eventTitle={activeEvent?.title || 'Event'}
             currentView={currentView}
             unreadCount={unreadCount}
-            isLive={!isTestMode}
+            isLive={isProgramLive}
             compact
             searchValue={searchQuery}
             onSearchChange={(value) => {
               setSearchQuery(value);
               setIsSearchOpen(true);
             }}
-            onToggleLive={() => setIsTestMode((prev) => !prev)}
+            onToggleLive={handleToggleProgramStatus}
             onBackToHub={onSwitchEvent}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
@@ -992,15 +1184,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Scrollable Content */}
         <main id="main-content" className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>
-          {isTestMode && (
-            <div className="mb-6 mx-4 lg:mx-8 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-              <Beaker className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-bold text-amber-800">You are in Sandbox Mode</h4>
-                <p className="text-xs text-amber-700 mt-1">Actions performed here will not affect live data. Use this environment to test your program configuration.</p>
-              </div>
-            </div>
-          )}
           <div className={noPadding || currentView === 'settings' ? 'h-full w-full' : 'max-w-7xl mx-auto'}>
             {children}
           </div>
@@ -1044,14 +1227,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </button>
 
                 <div>
-
-                <UniversalSearchPalette
-                  isOpen={isSearchOpen}
-                  query={searchQuery}
-                  results={searchResults}
-                  onQueryChange={setSearchQuery}
-                  onClose={() => setIsSearchOpen(false)}
-                />
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Operations</div>
                   <div className="space-y-1">
                     {visibleLeftNav.map((item) => (
@@ -1105,6 +1280,137 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </>
         )}
       </AnimatePresence>
+
+      <Modal
+        isOpen={isPublishModalOpen}
+        onClose={() => {
+          if (!updatingStatus) setIsPublishModalOpen(false);
+        }}
+        title="Publish Program"
+      >
+        <div className="space-y-5">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <h4 className="text-sm font-bold text-amber-900">Publishing makes this program live</h4>
+                <p className="mt-1 text-sm text-amber-800">
+                  Entrants and invited judges may be able to interact with live program workflows once these setup checks pass.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-slate-900">Launch requirements</h4>
+              {checkingRequirements && <span className="text-xs font-semibold text-slate-500">Checking...</span>}
+            </div>
+            <div className="space-y-2">
+              {publishRequirementList.map((item) => {
+                const Icon = item.isMet ? CheckCircle2 : AlertCircle;
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-start gap-3 rounded-xl border p-3 ${
+                      item.isMet
+                        ? 'border-emerald-200 bg-emerald-50'
+                        : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${item.isMet ? 'text-emerald-600' : 'text-amber-600'}`} />
+                    <div>
+                      <div className={`text-sm font-bold ${item.isMet ? 'text-emerald-900' : 'text-slate-900'}`}>
+                        {item.label}
+                      </div>
+                      <p className={`mt-0.5 text-sm ${item.isMet ? 'text-emerald-800' : 'text-slate-600'}`}>
+                        {item.detail}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {hasPublishBlockers && !checkingRequirements && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800">
+              Complete the missing requirements before publishing this program.
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsPublishModalOpen(false)}
+              disabled={updatingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handlePublishProgram}
+              disabled={checkingRequirements || hasPublishBlockers || updatingStatus}
+            >
+              {updatingStatus ? 'Publishing...' : 'Publish Program'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isUnpublishModalOpen}
+        onClose={() => {
+          if (!updatingStatus) setIsUnpublishModalOpen(false);
+        }}
+        title="Move Program to Draft"
+      >
+        <div className="space-y-5">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <h4 className="text-sm font-bold text-amber-900">This will take the program out of live status</h4>
+                <p className="mt-1 text-sm text-amber-800">
+                  Existing setup data will remain intact, but public and operational workflows should treat the program as draft.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-sm text-slate-600">
+            Move <span className="font-semibold text-slate-900">{activeEvent?.title || 'this program'}</span> back to draft?
+          </p>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsUnpublishModalOpen(false)}
+              disabled={updatingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleUnpublishProgram}
+              disabled={updatingStatus}
+            >
+              {updatingStatus ? 'Moving...' : 'Move to Draft'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <UniversalSearchPalette
+        isOpen={isSearchOpen}
+        query={searchQuery}
+        results={searchResults}
+        onQueryChange={setSearchQuery}
+        onClose={() => setIsSearchOpen(false)}
+      />
 
       <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title={parentForModal ? "Add Subcategory" : "Create New Award"}>
         <form onSubmit={handleAddCategory} className="space-y-4">

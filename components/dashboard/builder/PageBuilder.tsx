@@ -68,6 +68,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     const [shareCopied, setShareCopied] = useState(false);
     const [programSlug, setProgramSlug] = useState<string | null>(null);
     const [savedOk, setSavedOk] = useState(false);
+    const [publishAttempted, setPublishAttempted] = useState(false);
 
     // ── 4 fields ─────────────────────────────────────────────────────────────
     const [coverImage, setCoverImage] = useState('');
@@ -83,6 +84,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     const [aboutSection, setAboutSection] = useState<any>(null);
     const [availableForms, setAvailableForms] = useState<Array<{ id: string; title: string }>>([]);
     const [mediaAssets, setMediaAssets] = useState<Array<{ name: string; url: string | null }>>([]);
+    const hasNominationForm = nominationFormId.trim().length > 0;
 
     // ── Load ──────────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -213,6 +215,11 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
 
     const handlePublish = async () => {
         if (isSaving || isPublishing) return;
+        setPublishAttempted(true);
+        if (!hasNominationForm) {
+            alert('Select a nomination form before publishing the landing page.');
+            return;
+        }
         setIsPublishing(true);
         try {
             await saveAll(true);
@@ -404,10 +411,20 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                             </div>
                         ) : (
                             <select value={nominationFormId} onChange={e => setNominationFormId(e.target.value)}
-                                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+                                aria-invalid={publishAttempted && !hasNominationForm}
+                                className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:ring-2 outline-none bg-white ${
+                                    publishAttempted && !hasNominationForm
+                                        ? 'border-rose-300 focus:ring-rose-500'
+                                        : 'border-slate-200 focus:ring-indigo-500'
+                                }`}>
                                 <option value="">Select a nomination form…</option>
                                 {availableForms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
                             </select>
+                        )}
+                        {publishAttempted && !hasNominationForm && (
+                            <p className="text-xs font-medium text-rose-600">
+                                Select a nomination form before publishing.
+                            </p>
                         )}
 
                         <div className="flex items-center gap-3">
