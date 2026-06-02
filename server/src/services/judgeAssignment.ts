@@ -202,11 +202,41 @@ export async function manualAssign(
   if (assignments.length === 0) return { ok: false, assigned: 0, error: 'No assignments provided.' };
 
   const existing = await getExistingAssignments(roundId);
+
+  const submissionIds = Array.from(new Set(assignments.map(a => a.submission_id)));
+  const judgeIds = Array.from(new Set(assignments.map(a => a.judge_id)));
+
+  const supabase = getSupabaseAdmin();
+
+  // Fetch submissions and judges in bulk to map identities
+  const { data: submissions } = await supabase
+    .from('submissions')
+    .select('id, applicant_id')
+    .in('id', submissionIds);
+
+  const { data: judges } = await supabase
+    .from('judges')
+    .select('id, user_id')
+    .in('id', judgeIds);
+
+  const subApplicantMap = new Map((submissions || []).map((s: any) => [s.id, s.applicant_id]));
+  const judgeUserMap = new Map((judges || []).map((j: any) => [j.id, j.user_id]));
+
   const newAssignments = assignments
-    .filter(a => !existing.has(`${a.submission_id}:${a.judge_id}`))
+    .filter(a => {
+      const key = `${a.submission_id}:${a.judge_id}`;
+      if (existing.has(key)) return false;
+
+      const applicantId = subApplicantMap.get(a.submission_id);
+      const userId = judgeUserMap.get(a.judge_id);
+      const isSelfAssignment = Boolean(applicantId && userId && applicantId === userId);
+      return !isSelfAssignment;
+    })
     .map(a => ({ ...a, round_id: roundId }));
 
-  if (newAssignments.length === 0) return { ok: true, assigned: 0, error: 'All provided assignments already exist.' };
+  if (newAssignments.length === 0) {
+    return { ok: true, assigned: 0, error: 'No new valid assignments to create (all existing or filtered by self-assignment checks).' };
+  }
 
   const count = await createAssignments(newAssignments, assignedBy);
   return { ok: true, assigned: count };

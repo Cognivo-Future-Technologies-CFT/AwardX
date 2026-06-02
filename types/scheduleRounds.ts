@@ -6,7 +6,8 @@ export default RoundType;
 export type EvaluationLogic =
   | 'scoring'
   | 'voting'
-  | 'ranking';
+  | 'ranking'
+  | 'none';
 
 export type EvaluatorStrategy =
   | 'all_judges'

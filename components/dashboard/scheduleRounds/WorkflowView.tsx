@@ -107,10 +107,17 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
 
 
   const handleCreateChildRound = useCallback((parentRoundId: string) => {
+    let uniqueName = 'New Round';
+    let counter = 1;
+    while (rounds.some(r => r.name.toLowerCase() === uniqueName.toLowerCase())) {
+      uniqueName = `New Round ${counter}`;
+      counter++;
+    }
+
     const newRound: Round = {
       id: `round-${Date.now()}`,
       programId,
-      name: 'New Round',
+      name: uniqueName,
       type: 'jury',
       evaluationLogic: 'scoring',
       evaluatorStrategy: 'all_judges',

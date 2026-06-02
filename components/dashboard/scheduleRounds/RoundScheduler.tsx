@@ -232,7 +232,12 @@ export const RoundScheduler: React.FC<RoundSchedulerProps> = ({
       </div>
 
       {editingRound && (
-        <SimpleRoundEditor round={editingRound} onSave={onRoundSave} onClose={onCloseEditor} />
+        <SimpleRoundEditor
+          round={editingRound}
+          onSave={onRoundSave}
+          onClose={onCloseEditor}
+          allRounds={rounds}
+        />
       )}
     </div>
   );

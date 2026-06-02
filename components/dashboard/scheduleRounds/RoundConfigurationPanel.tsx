@@ -110,8 +110,14 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   const handleChange = (field: keyof Round, value: any) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
-      if (field === 'type' && PUBLIC_VOTING_TYPES.has(value)) {
-        next.evaluationLogic = 'voting';
+      if (field === 'type') {
+        if (PUBLIC_VOTING_TYPES.has(value)) {
+          next.evaluationLogic = 'voting';
+        } else if (value === 'Nomination' || value === 'Announce') {
+          next.evaluationLogic = 'none';
+        } else if (prev.evaluationLogic === 'none') {
+          next.evaluationLogic = 'scoring';
+        }
       }
       return next;
     });
@@ -280,13 +286,19 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                 <select
                   value={formData.type}
                   onChange={(e) => handleChange('type', e.target.value as RoundType)}
-                  className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all appearance-none cursor-pointer"
+                  disabled={formData.order === 0}
+                  className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500"
                 >
-                  <option value="Nomination">Nomination</option>
-                  <option value="Shortlisting">Shortlisting</option>
-                  <option value="Public Voting">Public Voting</option>
-                  <option value="Public Rating">Public Rating</option>
-                  <option value="Announce">Announce</option>
+                  {formData.order === 0 ? (
+                    <option value="Nomination">Nomination</option>
+                  ) : (
+                    <>
+                      <option value="Shortlisting">Shortlisting</option>
+                      <option value="Public Voting">Public Voting</option>
+                      <option value="Public Rating">Public Rating</option>
+                      <option value="Announce">Announce</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>
@@ -303,8 +315,8 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
             />
           )}
 
-          {/* Evaluation Settings — hidden for public voting rounds */}
-          {!isPublicVotingRound && (
+          {/* Evaluation Settings — hidden for public voting, nomination, and announce rounds */}
+          {formData.type !== 'Nomination' && formData.type !== 'Announce' && !isPublicVotingRound && (
           <section className="space-y-4">
             <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Logic System</h4>
             <div className="space-y-4 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">

@@ -214,7 +214,10 @@ export const TileView: React.FC<TileViewProps> = ({
                         </div>
                         <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-slate-900 text-lg mb-1">{round.name}</h4>
-                          <p className="text-sm text-slate-500 capitalize">{round.type} • {round.evaluationLogic}</p>
+                          <p className="text-sm text-slate-500 capitalize">
+                            {round.type}
+                            {round.evaluationLogic && round.evaluationLogic !== 'none' && ` • ${round.evaluationLogic}`}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-2 flex-wrap justify-end">

@@ -279,11 +279,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         await scheduleRoundsService.deleteRound(roundId, activeEvent.id);
       }
 
-      let nextRounds: Round[] = [];
-      setRounds((prev) => {
-        nextRounds = prev.filter((r) => r.id !== roundId).map((r, i) => ({ ...r, order: i }));
-        return nextRounds;
-      });
+      const filtered = rounds.filter((r) => r.id !== roundId);
+      const normalized = await enforceNominationFirst(filtered);
+      setRounds(normalized);
 
       const nextEdges = roundEdges.filter(
         (edge) => edge.sourceRoundId !== roundId && edge.targetRoundId !== roundId,
@@ -291,23 +289,34 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       setRoundEdges(nextEdges);
 
       try {
-        await persistWorkflowEdges(nextEdges, nextRounds);
+        await Promise.all([
+          persistWorkflowEdges(nextEdges, normalized),
+          ...normalized
+            .filter((round) => !round.id.startsWith('round-'))
+            .map((round) =>
+              scheduleRoundsService.updateRound({
+                ...round,
+                updatedAt: new Date().toISOString(),
+              }),
+            ),
+        ]);
       } catch (error) {
-        console.error('Failed to persist edges after round deletion:', error);
-        toast.error('Round deleted, but connections were not updated.');
+        console.error('Failed to persist rounds/edges after round deletion:', error);
+        toast.error('Round deleted, but some updates were not saved.');
       }
 
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
     },
-    [activeEvent, persistWorkflowEdges, roundEdges],
+    [activeEvent, persistWorkflowEdges, roundEdges, rounds, enforceNominationFirst],
   );
 
   const handleRoundReorder = useCallback(
     async (reorderedRounds: Round[]) => {
-      setRounds(reorderedRounds);
+      const normalized = await enforceNominationFirst(reorderedRounds);
+      setRounds(normalized);
       try {
         await Promise.all(
-          reorderedRounds.map((round) =>
+          normalized.map((round) =>
             scheduleRoundsService.updateRound({
               ...round,
               updatedAt: new Date().toISOString(),
@@ -319,7 +328,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         toast.error('Could not save round order');
       }
     },
-    [],
+    [enforceNominationFirst],
   );
 
   const openAddRoundSheet = useCallback(() => {
@@ -368,8 +377,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
           ? convertToTilesRepresentation(activeEvent.id, rounds, roundEdges)
           : convertToWorkflowRepresentation(activeEvent.id, rounds, roundEdges);
 
+      const normalizedRounds = await enforceNominationFirst(converted.rounds);
+
       await Promise.all(
-        converted.rounds
+        normalizedRounds
           .filter((round) => !round.id.startsWith('round-'))
           .map((round) =>
             scheduleRoundsService.updateRound({
@@ -381,9 +392,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       );
 
       const savedEdges = await scheduleRoundsService.saveEdges(activeEvent.id, converted.edges);
-      const customAfterSave = hasCustomWorkflowEdges(converted.rounds, savedEdges);
+      const customAfterSave = hasCustomWorkflowEdges(normalizedRounds, savedEdges);
 
-      setRounds(converted.rounds);
+      setRounds(normalizedRounds);
       setRoundEdges(savedEdges);
       setHasCustomEdges(customAfterSave);
       updateRepresentation(conversionTarget);
@@ -402,7 +413,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     } finally {
       setIsConverting(false);
     }
-  }, [activeEvent, conversionTarget, roundEdges, rounds, updateRepresentation]);
+  }, [activeEvent, conversionTarget, roundEdges, rounds, updateRepresentation, enforceNominationFirst]);
 
   const openAdvancementPreview = useCallback(async (round: Round) => {
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);

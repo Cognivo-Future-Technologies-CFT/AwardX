@@ -65,7 +65,7 @@ export function createDefaultRound(
     programId,
     name,
     type,
-    evaluationLogic: order === 0 ? 'scoring' : 'scoring',
+    evaluationLogic: type === 'Nomination' || type === 'Announce' ? 'none' : 'scoring',
     evaluatorStrategy: 'all_judges',
     blindEvaluation: false,
     startCondition: { type: 'fixed_datetime', datetime: start.toISOString() },

@@ -200,10 +200,12 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
           )}
 
           <div className="flex items-center gap-2 pt-2 border-t border-slate-50">
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium px-2 py-1 rounded bg-slate-50 border border-slate-100">
-              <Settings className="w-3 h-3" />
-              <span className="capitalize">{round.evaluationLogic}</span>
-            </div>
+            {round.evaluationLogic && round.evaluationLogic !== 'none' && (
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium px-2 py-1 rounded bg-slate-50 border border-slate-100">
+                <Settings className="w-3 h-3" />
+                <span className="capitalize">{round.evaluationLogic}</span>
+              </div>
+            )}
             {round.blindEvaluation && (
               <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium px-2 py-1 rounded bg-slate-50 border border-slate-100">
                 <Globe className="w-3 h-3" />

@@ -128,29 +128,53 @@ async function computeParticipantScores(roundId: string, roundType: string): Pro
     .eq('round_id', roundId)
     .in('submission_id', submissionIds);
 
-  // Calculate weighted average per submission
-  const scoreMap: Record<string, { totalWeighted: number; totalWeight: number; judgeCount: number }> = {};
+  // Fetch the round to get the program_id
+  const { data: roundData } = await supabase
+    .from('rounds')
+    .select('program_id')
+    .eq('id', roundId)
+    .single();
+
+  const programId = roundData?.program_id;
+
+  // Fetch all configured criteria for the program to calculate total possible weight
+  const { data: criteriaList } = programId
+    ? await supabase
+        .from('judging_criteria')
+        .select('id, weight')
+        .eq('program_id', programId)
+    : { data: [] };
+
+  const totalPossibleWeight = (criteriaList || []).reduce((sum, c) => sum + (c?.weight ?? 100), 0) || 100;
+
+  // Calculate average score per submission by averaging each completed judge scorecard normalized to 100%
+  const scoreMap: Record<string, { totalPercentageSum: number; judgeCount: number }> = {};
 
   for (const assignment of (assignments || [])) {
     if (assignment.status !== 'completed') continue;
     const subId = assignment.submission_id;
-    if (!scoreMap[subId]) scoreMap[subId] = { totalWeighted: 0, totalWeight: 0, judgeCount: 0 };
+    if (!scoreMap[subId]) scoreMap[subId] = { totalPercentageSum: 0, judgeCount: 0 };
 
     const scores = (assignment as any).scores || [];
+    let judgeWeightedSum = 0;
+
     for (const s of scores) {
-      const weight = s.judging_criteria?.weight || 100;
-      const maxScore = s.judging_criteria?.max_score || 10;
+      const weight = s.judging_criteria?.weight ?? 100;
+      const maxScore = s.judging_criteria?.max_score > 0 ? s.judging_criteria.max_score : 10;
       const normalized = (s.score / maxScore) * weight;
-      scoreMap[subId].totalWeighted += normalized;
-      scoreMap[subId].totalWeight += weight;
+      judgeWeightedSum += normalized;
     }
+
+    // Normalize this judge scorecard percentage against the total possible criteria weight
+    const judgePercentage = (judgeWeightedSum / totalPossibleWeight) * 100;
+    scoreMap[subId].totalPercentageSum += judgePercentage;
     scoreMap[subId].judgeCount++;
   }
 
   const results: ParticipantScore[] = submissionIds.map(id => {
     const entry = scoreMap[id];
-    const avgScore = entry && entry.totalWeight > 0
-      ? (entry.totalWeighted / entry.totalWeight) * 100
+    const avgScore = entry && entry.judgeCount > 0
+      ? entry.totalPercentageSum / entry.judgeCount
       : 0;
     return {
       submissionId: id,

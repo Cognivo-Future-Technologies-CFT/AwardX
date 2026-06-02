@@ -12,9 +12,15 @@ interface SimpleRoundEditorProps {
   round: Round;
   onSave: (round: Round) => Promise<void>;
   onClose: () => void;
+  allRounds?: Round[];
 }
 
-export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({ round, onSave, onClose }) => {
+export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
+  round,
+  onSave,
+  onClose,
+  allRounds = [],
+}) => {
   const [form, setForm] = useState(round);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +37,19 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({ round, onS
   const showShortlist = roundUsesShortlist(form) || form.type === 'Shortlisting';
 
   const handleSave = async () => {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) {
+      setError('Round name is required.');
+      return;
+    }
+    const duplicate = allRounds.some(
+      (r) => r.id !== form.id && r.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (duplicate) {
+      setError('Another round already uses this name. Choose a unique name.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -40,6 +59,7 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({ round, onS
 
       const payload: Round = {
         ...form,
+        name: trimmedName,
         shortlistConfig,
         advancementCriteria: shortlistConfigToCriteria(shortlistConfig, form.type),
         advancementTrigger: form.advancementTrigger || 'manual',
@@ -81,23 +101,37 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({ round, onS
         <div>
           <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Type</label>
           <select
-            className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"
+            className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white disabled:bg-slate-50 disabled:text-slate-500"
             value={form.type}
+            disabled={form.order === 0}
             onChange={(e) => {
               const type = e.target.value as Round['type'];
               const enabled = type === 'Shortlisting';
+              let evalLogic = form.evaluationLogic;
+              if (type === 'Nomination' || type === 'Announce') {
+                evalLogic = 'none';
+              } else if (type === 'Public Voting' || type === 'Public Rating' || type === 'public') {
+                evalLogic = 'voting';
+              } else if (evalLogic === 'none') {
+                evalLogic = 'scoring';
+              }
               setForm({
                 ...form,
                 type,
+                evaluationLogic: evalLogic,
                 shortlistConfig: { ...form.shortlistConfig, enabled: enabled || form.shortlistConfig.enabled },
               });
             }}
           >
-            {SCHEDULER_ROUND_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
+            {form.order === 0 ? (
+              <option value="Nomination">Nomination</option>
+            ) : (
+              SCHEDULER_ROUND_TYPES.filter((t) => t !== 'Nomination').map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))
+            )}
           </select>
         </div>
 
