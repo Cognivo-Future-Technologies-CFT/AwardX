@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Program, EventType, Organization, Role, TeamMember } from '../../services/models';
 import { auth } from '../../services/supabase';
-import { db as databaseService } from '../../services/database';
+import { db as databaseService, type DashboardNotification } from '../../services/database';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
@@ -171,6 +171,42 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       avatar: '',
       role: 'Admin Workspace'
    });
+   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+   const notificationsRef = React.useRef<HTMLDivElement>(null);
+
+   const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
+
+   const loadNotifications = useCallback(async () => {
+      try {
+         const data = await databaseService.getNotifications({ limit: 10 });
+         setNotifications(data);
+      } catch (err) {
+         console.error('Error loading notifications:', err);
+      }
+   }, []);
+
+   const handleMarkAllRead = useCallback(async () => {
+      const hadUnread = notifications.some((n) => !n.isRead);
+      if (!hadUnread) return;
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      try {
+         await databaseService.markAllNotificationsRead();
+      } catch (err) {
+         console.error('Error marking notifications read:', err);
+         loadNotifications();
+      }
+   }, [notifications, loadNotifications]);
+
+   const handleMarkRead = useCallback(async (id: string) => {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      try {
+         await databaseService.markNotificationRead(id);
+      } catch (err) {
+         console.error('Error marking notification read:', err);
+         loadNotifications();
+      }
+   }, [loadNotifications]);
 
    const filteredEvents = useMemo(() => {
       const q = searchQuery.trim().toLowerCase();
@@ -279,6 +315,17 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       }
    }, [newMemberRoleId, orgRoles]);
 
+   useEffect(() => {
+      if (!isNotificationsOpen) return;
+      const handleClickOutside = (e: MouseEvent) => {
+         if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
+            setIsNotificationsOpen(false);
+         }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+   }, [isNotificationsOpen]);
+
    // Fetch real user data from Supabase
    useEffect(() => {
       // Load programs immediately
@@ -300,6 +347,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       };
 
       fetchUserData();
+      loadNotifications();
 
       // Refresh programs when component becomes visible or window gains focus
       let visibilityTimeout: NodeJS.Timeout;
@@ -523,10 +571,59 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                      />
                   </div>
                   <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
-                  <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative">
-                     <Bell className="w-5 h-5" />
-                     <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                  </button>
+                  <div className="relative" ref={notificationsRef}>
+                     <button
+                        type="button"
+                        onClick={() => {
+                           setIsNotificationsOpen((prev) => !prev);
+                           if (!isNotificationsOpen) loadNotifications();
+                        }}
+                        aria-label="Notifications"
+                        className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
+                     >
+                        <Bell className="w-5 h-5" />
+                        {unreadCount > 0 && (
+                           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                        )}
+                     </button>
+
+                     {isNotificationsOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                              <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
+                              {unreadCount > 0 && (
+                                 <button
+                                    type="button"
+                                    onClick={handleMarkAllRead}
+                                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                                 >
+                                    Mark all read
+                                 </button>
+                              )}
+                           </div>
+                           <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                              {notifications.length === 0 ? (
+                                 <div className="p-8 text-center text-sm text-slate-400">No notifications yet</div>
+                              ) : notifications.map((n) => (
+                                 <div
+                                    key={n.id}
+                                    onClick={() => !n.isRead && handleMarkRead(n.id)}
+                                    className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${!n.isRead ? 'bg-emerald-50/40' : ''}`}
+                                 >
+                                    <div className="flex items-start gap-3">
+                                       {!n.isRead && <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />}
+                                       <div className="min-w-0 flex-1">
+                                          <p className="text-sm font-semibold text-slate-900 truncate">{n.title}</p>
+                                          {n.body && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>}
+                                          <p className="text-[10px] text-slate-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                                       </div>
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+                     )}
+                  </div>
                   <div className="flex items-center gap-3">
                      <div className="flex items-center gap-3 pl-2">
                         {userData.avatar ? (

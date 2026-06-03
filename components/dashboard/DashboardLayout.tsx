@@ -225,8 +225,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const notificationsRef = useRef<HTMLDivElement>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const shouldLoadSearchCorpus = isSearchOpen || deferredSearchQuery.trim().length > 0;
 
@@ -653,15 +651,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return () => realtime.unsubscribe(channel);
   }, [queryClient]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
-        setIsNotificationsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   useEffect(() => {
     // Fetch user + permissions once per mount instead of on every event/category refresh.
@@ -1150,8 +1139,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onBackToHub={onSwitchEvent}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
-            isNotificationsOpen={isNotificationsOpen}
-            onToggleNotifications={() => setIsNotificationsOpen(!isNotificationsOpen)}
             onMarkAllRead={async () => {
               if (!supabase) return;
               const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
@@ -1165,7 +1152,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               await supabase.from('notifications').update({ is_read: true }).eq('id', id);
               queryClient.invalidateQueries({ queryKey: ['notifications'] });
             }}
-            notificationsRef={notificationsRef}
           />
         )}
 

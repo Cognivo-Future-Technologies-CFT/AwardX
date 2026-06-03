@@ -64,11 +64,8 @@ interface NavigationMenuFourProps {
   onBackToHub?: () => void
   onOpenMobileMenu?: () => void
   notifications?: NotificationItem[]
-  isNotificationsOpen?: boolean
-  onToggleNotifications?: () => void
   onMarkAllRead?: () => void
   onMarkRead?: (id: string) => void
-  notificationsRef?: React.RefObject<HTMLDivElement | null>
 }
 
 const defaultNavigationLinks: HeaderNavigationLink[] = [
@@ -122,11 +119,8 @@ export default function NavigationMenuFour({
   onBackToHub,
   onOpenMobileMenu,
   notifications = [],
-  isNotificationsOpen = false,
-  onToggleNotifications,
   onMarkAllRead,
   onMarkRead,
-  notificationsRef,
 }: NavigationMenuFourProps) {
   return (
     <header className="border-b bg-white px-4 md:px-6">
@@ -434,61 +428,59 @@ export default function NavigationMenuFour({
               className="w-56 pl-9"
             />
           </div>
-          <div className="relative" ref={notificationsRef}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative"
-              aria-label="Notifications"
-              onClick={onToggleNotifications}
-            >
-              <BellIcon className="size-4" />
-              {unreadCount > 0 && (
-                <Badge variant="destructive" className="absolute -right-1 -top-1 h-5 min-w-5 justify-center px-1">
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </Badge>
-              )}
-            </Button>
-
-            {isNotificationsOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={onMarkAllRead}
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-                  {notifications.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-slate-400">No notifications yet</div>
-                  ) : notifications.map(n => (
-                    <div
-                      key={n.id}
-                      className={cn(
-                        "p-4 hover:bg-slate-50 transition-colors cursor-pointer",
-                        !n.isRead && "bg-indigo-50/30"
-                      )}
-                      onClick={() => !n.isRead && onMarkRead?.(n.id)}
-                    >
-                      <div className="flex items-start gap-3">
-                        {!n.isRead && <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0" />}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{n.title}</p>
-                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
-                          <p className="text-[10px] text-slate-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
-                        </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label="Notifications"
+              >
+                <BellIcon className="size-4" />
+                {unreadCount > 0 && (
+                  <Badge variant="destructive" className="absolute -right-1 -top-1 h-5 min-w-5 justify-center px-1">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-0 rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={onMarkAllRead}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-slate-400">No notifications yet</div>
+                ) : notifications.map(n => (
+                  <div
+                    key={n.id}
+                    className={cn(
+                      "p-4 hover:bg-slate-50 transition-colors cursor-pointer",
+                      !n.isRead && "bg-indigo-50/30"
+                    )}
+                    onClick={() => !n.isRead && onMarkRead?.(n.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {!n.isRead && <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{n.title}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </header>
