@@ -133,6 +133,17 @@ async function updateEmailLog(
 }
 
 async function canManage(supabase: any, userId: string, organizationId: string): Promise<boolean> {
+	// First, check if the user is the organization owner (defined by profiles table)
+	const { data: profile } = await supabase
+		.from('profiles')
+		.select('organization_id')
+		.eq('id', userId)
+		.maybeSingle();
+
+	if (profile && profile.organization_id === organizationId) {
+		return true;
+	}
+
 	const { data: memberships } = await supabase
 		.from('organization_members')
 		.select('status, roles(name, permissions)')
@@ -141,7 +152,7 @@ async function canManage(supabase: any, userId: string, organizationId: string):
 		.eq('status', 'active');
 
 	if (!memberships || memberships.length === 0) return false;
-	const ALLOWED_ROLES = new Set(['admin', 'program manager']);
+	const ALLOWED_ROLES = new Set(['admin', 'program manager', 'owner', 'superadmin']);
 	const ALLOWED_PERMS = new Set(['manage_teams', 'manage_programs']);
 	return memberships.some((m: any) => {
 		const name = String(m.roles?.name || '').toLowerCase().trim();

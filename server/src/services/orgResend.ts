@@ -53,6 +53,23 @@ export async function getOrgResendMailer(
 ): Promise<{ resend: Resend; from: string; config: OrgResendConfig } | null> {
   const config = await getOrgResendConfig(supabase, organizationId);
   if (!config) {
+    // Fallback to system-wide Resend configuration from environment variables
+    const systemApiKey = process.env.RESEND_API_KEY;
+    const systemFrom = process.env.RESEND_FROM;
+    if (systemApiKey && systemFrom) {
+      const fromEmail = systemFrom.includes('<') ? systemFrom.match(/<([^>]+)>/)?.[1] || '' : systemFrom;
+      const fromName = systemFrom.includes('<') ? systemFrom.split('<')[0].trim() : 'AwardX';
+      return {
+        resend: new Resend(systemApiKey),
+        from: systemFrom,
+        config: {
+          apiKey: systemApiKey,
+          from: systemFrom,
+          fromEmail,
+          fromName,
+        },
+      };
+    }
     return null;
   }
 
