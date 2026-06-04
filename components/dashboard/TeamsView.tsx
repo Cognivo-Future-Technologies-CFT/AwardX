@@ -47,7 +47,6 @@ const PERMISSION_GROUPS = [
         items: [
             { key: PERMISSIONS.MANAGE_TEAMS, label: "Manage Teams & Roles" },
             { key: PERMISSIONS.MANAGE_SETTINGS, label: "Access Global Settings" },
-            { key: PERMISSIONS.MANAGE_REACH, label: "Social Media Automation" },
             { key: PERMISSIONS.VIEW_LOGS, label: "View Audit Logs" },
         ]
     }

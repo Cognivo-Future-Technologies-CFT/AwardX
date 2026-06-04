@@ -3,7 +3,7 @@ import React, { useDeferredValue, useState, useEffect, useMemo, useRef } from 'r
 import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
-  Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
+  Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2,
   UserCog, Edit, Workflow, Layout, Command, Globe, CheckCircle2, AlertCircle, AlertTriangle
 } from 'lucide-react';
@@ -571,9 +571,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       case 'analytics':
         openView('analytics');
         break;
-      case 'reach':
-        openView('reach');
-        break;
+
       case 'logs':
         openView('logs');
         break;
@@ -625,7 +623,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           s: 'settings',
           t: 'teams',
           a: 'analytics',
-          r: 'reach',
           l: 'logs',
           j: 'judging',
         }[event.key.toLowerCase()] || '');
@@ -846,11 +843,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const publishRequirementList = useMemo(
     () => [
-      { id: 'schedule', ...publishRequirements.schedule },
-      { id: 'rounds', ...publishRequirements.rounds },
-      { id: 'judges', ...publishRequirements.judges },
-      { id: 'formBuilder', ...publishRequirements.formBuilder },
-      { id: 'nominationButton', ...publishRequirements.nominationButton },
+      { id: 'schedule', navigateTo: 'schedule-rounds', ...publishRequirements.schedule },
+      { id: 'rounds', navigateTo: 'schedule-rounds', ...publishRequirements.rounds },
+      { id: 'judges', navigateTo: 'judging', ...publishRequirements.judges },
+      { id: 'formBuilder', navigateTo: 'templates', ...publishRequirements.formBuilder },
+      { id: 'nominationButton', navigateTo: 'builder', ...publishRequirements.nominationButton },
     ],
     [publishRequirements]
   );
@@ -903,7 +900,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
 
   const rightNavItems = [
-    { id: 'reach', label: 'Reach', icon: Share2, permission: PERMISSIONS.MANAGE_REACH },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, permission: PERMISSIONS.VIEW_ANALYTICS },
     { id: 'teams', label: 'Teams & Roles', icon: Shield, permission: PERMISSIONS.MANAGE_TEAMS },
     { id: 'logs', label: 'Audit Logs', icon: Activity, permission: PERMISSIONS.VIEW_LOGS },
@@ -1295,17 +1291,22 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <div className="space-y-2">
               {publishRequirementList.map((item) => {
                 const Icon = item.isMet ? CheckCircle2 : AlertCircle;
+                const isClickable = !item.isMet;
                 return (
                   <div
                     key={item.id}
+                    onClick={isClickable ? () => { openView(item.navigateTo); setIsPublishModalOpen(false); } : undefined}
+                    role={isClickable ? 'button' : undefined}
+                    tabIndex={isClickable ? 0 : undefined}
+                    onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { openView(item.navigateTo); setIsPublishModalOpen(false); } } : undefined}
                     className={`flex items-start gap-3 rounded-xl border p-3 ${
                       item.isMet
                         ? 'border-emerald-200 bg-emerald-50'
-                        : 'border-slate-200 bg-slate-50'
+                        : 'border-slate-200 bg-slate-50 cursor-pointer hover:border-slate-300 hover:bg-slate-100 transition-colors'
                     }`}
                   >
                     <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${item.isMet ? 'text-emerald-600' : 'text-amber-600'}`} />
-                    <div>
+                    <div className="flex-1">
                       <div className={`text-sm font-bold ${item.isMet ? 'text-emerald-900' : 'text-slate-900'}`}>
                         {item.label}
                       </div>
@@ -1313,6 +1314,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         {item.detail}
                       </p>
                     </div>
+                    {isClickable && <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />}
                   </div>
                 );
               })}

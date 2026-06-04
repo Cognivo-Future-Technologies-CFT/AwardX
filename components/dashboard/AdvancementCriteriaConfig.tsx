@@ -18,8 +18,8 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
   isSaving = false,
 }) => {
   const [selectedType, setSelectedType] = useState<AdvancementCriteria['type']>(criteria?.type || 'all_pass');
-  const [value, setValue] = useState<number>(
-    (criteria && 'value' in criteria) ? criteria.value : 0
+  const [value, setValue] = useState<string>(
+    (criteria && 'value' in criteria) ? String(criteria.value) : ''
   );
   const [selectedTrigger, setSelectedTrigger] = useState<AdvancementTrigger>(trigger || 'manual');
 
@@ -36,7 +36,7 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
     if (selectedType === 'all_pass' || selectedType === 'manual') {
       newCriteria = { type: selectedType };
     } else {
-      newCriteria = { type: selectedType, value };
+      newCriteria = { type: selectedType, value: parseFloat(value) || 0 };
     }
     onSave(newCriteria, selectedTrigger);
     toast.success('Advancement criteria saved');
@@ -83,7 +83,7 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
                   type="number"
                   min="1"
                   value={value}
-                  onChange={(e) => setValue(parseInt(e.target.value) || 0)}
+                  onChange={(e) => setValue(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
                   placeholder="E.g., 10"
                 />
@@ -100,11 +100,11 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
                   type="range"
                   min="0"
                   max="100"
-                  value={value}
-                  onChange={(e) => setValue(parseInt(e.target.value) || 0)}
+                  value={parseFloat(value) || 0}
+                  onChange={(e) => setValue(e.target.value)}
                   className="w-full"
                 />
-                <div className="text-center text-sm font-bold text-indigo-600">{value}%</div>
+                <div className="text-center text-sm font-bold text-indigo-600">{parseFloat(value) || 0}%</div>
                 <p className="text-[10px] text-slate-500">{helpText[selectedType]}</p>
               </div>
             </motion.div>
@@ -120,7 +120,7 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
                   max="100"
                   step="0.5"
                   value={value}
-                  onChange={(e) => setValue(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setValue(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
                   placeholder="E.g., 70"
                 />

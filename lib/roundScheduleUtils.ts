@@ -83,6 +83,7 @@ export function createDefaultRound(
     version: 1,
     advancementTrigger: 'manual',
     advancementCriteria: order > 0 ? { type: 'top_percent', value: 50 } : { type: 'all_pass' },
+    ...(order === 0 && { inputPorts: [], outputPorts: [{ id: 'output-0', name: 'Submissions', dataStreams: ['all'] }] }),
   };
 }
 

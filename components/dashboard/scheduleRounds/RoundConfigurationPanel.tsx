@@ -519,7 +519,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                       <input
                         type="number"
                         value={formData.shortlistConfig.value}
-                        onChange={(e) => handleShortlistConfigChange({ value: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => handleShortlistConfigChange({ value: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                         className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-black transition-all"
                         min={0}
                         max={formData.shortlistConfig.method === 'percentage' ? 100 : undefined}

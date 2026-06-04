@@ -118,13 +118,6 @@ export const ProductShowcase: React.FC = () => {
                     <div className="space-y-2">
                        <div className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
                           <div className="flex items-center gap-3">
-                             <Layout className="w-4 h-4 text-slate-400" />
-                             <span className="text-sm font-semibold text-slate-700">Reach 360</span>
-                          </div>
-                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                       </div>
-                       <div className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                          <div className="flex items-center gap-3">
                              <FileText className="w-4 h-4 text-slate-400" />
                              <span className="text-sm font-semibold text-slate-700">LMS Export</span>
                           </div>

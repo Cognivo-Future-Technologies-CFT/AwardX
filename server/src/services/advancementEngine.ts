@@ -377,25 +377,21 @@ export async function executeAdvancement(
     // Get preview
     const preview = await previewAdvancement(roundId, criteriaOverride);
 
-    // Handle empty scores
-    if (preview.hasEmptyScores && !overrides?.length) {
+    // Handle empty scores — skip for Nomination rounds (they don't need scores)
+    if (preview.hasEmptyScores && !overrides?.length && round.type !== 'Nomination') {
       return { ok: false, paused: true, reason: 'no_scores', error: 'No scores submitted. Cannot auto-advance with empty data.' };
-    }
-
-    // Handle ties (if no resolutions provided)
-    if (preview.ties.length > 0 && !tieResolutions?.length && !overrides?.length) {
-      return {
-        ok: false,
-        paused: true,
-        reason: 'tie_at_boundary',
-        ties: preview.ties,
-        error: `${preview.ties.length} participant(s) tied at cutoff boundary. Resolve ties before advancing.`,
-      };
     }
 
     // Build final advancing/eliminated lists
     const advancingSet = new Set(preview.advancing.map(p => p.submissionId));
     const eliminatedSet = new Set(preview.eliminated.map(p => p.submissionId));
+
+    // Handle ties — auto-eliminate if no resolutions provided
+    if (preview.ties.length > 0 && !tieResolutions?.length && !overrides?.length) {
+      for (const tie of preview.ties) {
+        eliminatedSet.add(tie.submissionId);
+      }
+    }
 
     // Apply tie resolutions
     for (const tr of (tieResolutions || [])) {

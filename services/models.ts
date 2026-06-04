@@ -220,7 +220,6 @@ export const PERMISSIONS = {
   VIEW_JUDGING: 'view_judging',
   MANAGE_JUDGING: 'manage_judging', // Assign judges, config
   MANAGE_FORMS: 'manage_forms',
-  MANAGE_REACH: 'manage_reach',
   VIEW_ANALYTICS: 'view_analytics',
   MANAGE_TEAMS: 'manage_teams', // Roles & Invites
   VIEW_LOGS: 'view_logs',

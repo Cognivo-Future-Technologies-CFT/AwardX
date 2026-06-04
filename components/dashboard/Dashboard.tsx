@@ -9,7 +9,6 @@ import { FormBuilderView } from './FormBuilderView';
 import { SubmissionTable } from './SubmissionTable';
 import { JudgingView } from './JudgingView';
 import { SettingsView } from './SettingsView';
-import { ReachView } from './ReachView';
 import { TeamsView } from './TeamsView';
 import { AuditLogsView } from './AuditLogsView';
 import { CategoriesView } from './CategoriesView';
@@ -262,8 +261,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             onRepresentationChange={setScheduleRepresentation}
           />
         );
-      case 'reach':
-        return <ReachView />;
       case 'analytics':
         return (
           <Suspense fallback={<ViewLoader />}>

@@ -208,7 +208,15 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         }),
       ]);
 
-      const normalizedRounds = await enforceNominationFirst(loadedRounds);
+      let normalizedRounds: Round[];
+      if (loadedRounds.length === 0) {
+        const defaultNomination = createDefaultRound(activeEvent.id, 0, 'Nomination', 'Nomination');
+        const { id, createdAt, updatedAt, ...roundToCreate } = defaultNomination;
+        const created = await scheduleRoundsService.createRound(roundToCreate);
+        normalizedRounds = [created];
+      } else {
+        normalizedRounds = await enforceNominationFirst(loadedRounds);
+      }
       const customDetected = hasCustomWorkflowEdges(normalizedRounds, loadedEdges);
 
       setRounds(normalizedRounds);
@@ -275,6 +283,11 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
   const handleRoundDelete = useCallback(
     async (roundId: string) => {
+      if (rounds.length <= 1) {
+        toast.error('The default Nomination round cannot be deleted.');
+        return;
+      }
+
       if (!roundId.startsWith('round-') && activeEvent) {
         await scheduleRoundsService.deleteRound(roundId, activeEvent.id);
       }

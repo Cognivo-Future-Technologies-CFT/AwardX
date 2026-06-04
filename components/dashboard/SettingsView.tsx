@@ -353,7 +353,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
         { keys: 'g then s', action: 'Open Settings' },
         { keys: 'g then t', action: 'Open Teams & Roles' },
         { keys: 'g then a', action: 'Open Analytics' },
-        { keys: 'g then r', action: 'Open Reach' },
         { keys: 'g then l', action: 'Open Audit Logs' },
         { keys: 'g then j', action: 'Open Judging' },
       ],

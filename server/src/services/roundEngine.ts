@@ -122,8 +122,20 @@ export async function activateRound(roundId: string, triggeredBy: string = 'admi
     }
   }
 
-  // Guard: must have enrolled submissions
-  const enrolledCount = await getEnrolledCount(roundId);
+  // Guard: must have enrolled submissions (auto-enroll for Nomination/root rounds)
+  let enrolledCount = await getEnrolledCount(roundId);
+  if (enrolledCount === 0 && round.type === 'Nomination' && predecessors.length === 0) {
+    const supabase = getSupabaseAdmin();
+    const { data: subs } = await supabase
+      .from('submissions')
+      .select('id')
+      .eq('program_id', round.program_id);
+    if (subs && subs.length > 0) {
+      const rows = subs.map(s => ({ round_id: roundId, submission_id: s.id, status: 'active' }));
+      await supabase.from('round_submissions').upsert(rows, { onConflict: 'round_id,submission_id' });
+      enrolledCount = subs.length;
+    }
+  }
   if (enrolledCount === 0) {
     return { ok: false, error: 'Cannot activate round with 0 enrolled submissions.' };
   }
