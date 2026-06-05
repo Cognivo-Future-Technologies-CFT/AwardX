@@ -363,7 +363,7 @@ async function handleVerifyJudge(req: any, res: any) {
 		const criteria: any[] = criteriaResult.data || [];
 		const organizationName: string = (orgResult.data as any)?.name || '';
 
-		// If no explicit assignments, fetch all program submissions for this judge
+		// If no explicit assignments, auto-assign all program submissions to this judge
 		const effectiveProgramId = judge.program_id || program?.id;
 		if (effectiveProgramId && assignments.length === 0) {
 			const { data: programSubs } = await supabase
@@ -373,14 +373,25 @@ async function handleVerifyJudge(req: any, res: any) {
 				.order('submitted_at', { ascending: false });
 
 			if (programSubs && programSubs.length > 0) {
-				assignments = programSubs.map((sub: any) => ({
-					id: `auto-${sub.id}`,
-					status: 'pending',
-					completed_at: null,
-					assigned_at: null,
+				// Create real submission_judges entries
+				const inserts = programSubs.map((sub: any) => ({
 					submission_id: sub.id,
-					submissions: sub,
+					judge_id: judge.id,
+					status: 'pending',
 				}));
+				const { data: created } = await supabase
+					.from('submission_judges')
+					.upsert(inserts, { onConflict: 'submission_id,judge_id' })
+					.select('id, status, completed_at, assigned_at, submission_id');
+
+				if (created && created.length > 0) {
+					// Map submission data onto the created records
+					const subMap = new Map(programSubs.map((s: any) => [s.id, s]));
+					assignments = created.map((row: any) => ({
+						...row,
+						submissions: subMap.get(row.submission_id) || null,
+					}));
+				}
 			}
 		}
 
