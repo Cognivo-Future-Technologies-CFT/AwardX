@@ -2865,10 +2865,10 @@ class DatabaseService {
     if (!supabase) return [];
     const { data, error } = await supabase
       .from('organization_invites')
-      .select('id, email, token, status, created_at, role_id, program_id, roles ( name )')
+      .select('id, email, token, status, invited_at, role_id, program_id, roles ( name )')
       .eq('organization_id', organizationId)
       .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+      .order('invited_at', { ascending: false });
     if (error || !data) return [];
     return (data as any[]).map((row) => ({
       id: row.id,
@@ -2877,7 +2877,7 @@ class DatabaseService {
       roleId: row.role_id || null,
       roleName: row.roles?.name || null,
       programId: row.program_id || null,
-      createdAt: row.created_at,
+      createdAt: row.invited_at,
     }));
   }
 

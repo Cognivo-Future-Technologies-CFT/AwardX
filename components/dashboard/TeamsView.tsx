@@ -56,133 +56,6 @@ interface TeamsViewProps {
     activeEvent?: Program | null;
 }
 
-// ── Pending invitation row ────────────────────────────────────────────────────
-
-const PendingInviteRow: React.FC<{
-    invite: PendingInvite;
-    siteOrigin: string;
-    programTitle: string;
-    onResend: (invite: PendingInvite) => void;
-    onRevoke: (invite: PendingInvite) => void;
-    resending: boolean;
-    revoking: boolean;
-}> = ({ invite, siteOrigin, programTitle, onResend, onRevoke, resending, revoking }) => {
-    const [copied, setCopied] = useState(false);
-    const inviteLink = `${siteOrigin}/team-invite/${invite.token}`;
-
-    const copyLink = async () => {
-        try {
-            await navigator.clipboard.writeText(inviteLink);
-            setCopied(true);
-            toast.success('Invite link copied to clipboard');
-            setTimeout(() => setCopied(false), 2000);
-        } catch {
-            toast.error('Failed to copy — use the link below');
-        }
-    };
-
-    const sentAgo = (() => {
-        const diff = Date.now() - new Date(invite.createdAt).getTime();
-        const days = Math.floor(diff / 86400000);
-        const hours = Math.floor(diff / 3600000);
-        if (days > 0) return `${days}d ago`;
-        if (hours > 0) return `${hours}h ago`;
-        return 'just now';
-    })();
-
-    return (
-        <tr className="hover:bg-amber-50/30 transition-colors bg-amber-50/10">
-            {/* Member (email placeholder) */}
-            <td className="p-4 pl-6">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full border-2 border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
-                        <Mail className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div>
-                        <div className="font-semibold text-slate-800 text-sm">{invite.email}</div>
-                        <div className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                            <Clock className="w-3 h-3" /> Invited {sentAgo}
-                        </div>
-                    </div>
-                </div>
-            </td>
-
-            {/* Role */}
-            <td className="p-4">
-                {invite.roleName ? (
-                    <div className="flex flex-col gap-1">
-                        <span className="px-2 py-1 rounded-md text-xs font-bold border bg-slate-50 text-slate-600 border-slate-100">
-                            {invite.roleName}
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-500">
-                            {invite.programId ? programTitle : 'All events'}
-                        </span>
-                    </div>
-                ) : (
-                    <span className="text-xs text-slate-400">—</span>
-                )}
-            </td>
-
-            {/* Status */}
-            <td className="p-4">
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span className="text-sm text-amber-700 font-medium">Pending</span>
-                </div>
-            </td>
-
-            {/* Invite link + copy */}
-            <td className="p-4">
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={copyLink}
-                        title="Copy invite link"
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                            copied
-                                ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                                : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50'
-                        }`}
-                    >
-                        {copied ? (
-                            <><CheckCircle2 className="w-3.5 h-3.5" /> Copied</>
-                        ) : (
-                            <><Copy className="w-3.5 h-3.5" /> Copy link</>
-                        )}
-                    </button>
-                </div>
-            </td>
-
-            {/* Actions */}
-            <td className="p-4 text-right">
-                <div className="flex items-center justify-end gap-1">
-                    <button
-                        onClick={() => onResend(invite)}
-                        disabled={resending}
-                        title="Resend invite email"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50 transition-all disabled:opacity-50"
-                    >
-                        {resending ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                            <RefreshCw className="w-3.5 h-3.5" />
-                        )}
-                        Resend
-                    </button>
-                    <button
-                        onClick={() => onRevoke(invite)}
-                        disabled={revoking}
-                        title="Revoke invite"
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-red-500 hover:border-red-300 hover:bg-red-50 transition-all disabled:opacity-50"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                        Revoke
-                    </button>
-                </div>
-            </td>
-        </tr>
-    );
-};
-
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
@@ -551,6 +424,13 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // ── Pagination ─────────────────────────────────────────────────────────────
     const membersPerPage = 10;
+    const siteOrigin = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
+
+    // Filter pending invites for this program only.
+    const filteredPendingInvites = pendingInvites.filter(
+        inv => inv.programId === eventId || inv.programId == null
+    );
+
     const filteredMembers = members.filter((member) => {
         const q = memberSearch.trim().toLowerCase();
         if (!q) return true;
@@ -560,17 +440,63 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             member.role.toLowerCase().includes(q)
         );
     });
-    const memberTotalPages = Math.max(1, Math.ceil(filteredMembers.length / membersPerPage));
-    const paginatedMembers = filteredMembers.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
+
+    const filteredPending = filteredPendingInvites.filter((invite) => {
+        const q = memberSearch.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            invite.email.toLowerCase().includes(q) ||
+            (invite.roleName || 'Team member').toLowerCase().includes(q)
+        );
+    });
+
+    const mergedItems = [
+        ...filteredMembers.map(m => ({
+            id: m.memberId,
+            userId: m.userId,
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            roleId: m.roleId,
+            status: m.status,
+            lastActive: m.lastActive,
+            avatar: m.avatar,
+            joinedDate: m.joinedDate,
+            programScope: m.programScope,
+            programId: m.programId,
+            isInvite: false,
+            sortName: m.name.toLowerCase()
+        })),
+        ...filteredPending.map(inv => ({
+            id: inv.id,
+            userId: '',
+            name: inv.email.split('@')[0],
+            email: inv.email,
+            role: inv.roleName || 'Team member',
+            roleId: inv.roleId,
+            status: 'Pending Invite' as const,
+            lastActive: (() => {
+                const diff = Date.now() - new Date(inv.createdAt).getTime();
+                const days = Math.floor(diff / 86400000);
+                const hours = Math.floor(diff / 3600000);
+                if (days > 0) return `Invited ${days}d ago`;
+                if (hours > 0) return `Invited ${hours}h ago`;
+                return 'Invited just now';
+            })(),
+            avatar: '',
+            joinedDate: inv.createdAt,
+            programScope: inv.programId ? 'program' as const : 'organization' as const,
+            programId: inv.programId,
+            isInvite: true,
+            rawInvite: inv,
+            sortName: inv.email.toLowerCase()
+        }))
+    ].sort((a, b) => a.sortName.localeCompare(b.sortName));
+
+    const memberTotalPages = Math.max(1, Math.ceil(mergedItems.length / membersPerPage));
+    const paginatedItems = mergedItems.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
 
     useEffect(() => { setMemberPage(1); }, [memberSearch]);
-
-    const siteOrigin = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
-
-    // Filter pending invites for this program only.
-    const filteredPendingInvites = pendingInvites.filter(
-        inv => inv.programId === eventId || inv.programId == null
-    );
 
     if (!activeEvent) {
         return (
@@ -705,89 +631,191 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {paginatedMembers.map((member) => (
-                                            <tr key={member.memberId} className={`hover:bg-slate-50 transition-colors ${currentUserId && member.userId === currentUserId ? 'bg-indigo-50/30' : ''}`}>
-                                                <td className="p-4 pl-6">
-                                                    <UserHoverCard user={member}>
-                                                        <div className="flex items-center gap-3 cursor-pointer group">
-                                                            {member.avatar ? (
-                                                                <img src={member.avatar} alt="" className="w-10 h-10 rounded-full border-2 border-slate-100 object-cover group-hover:border-indigo-200 transition-colors" />
-                                                            ) : (
-                                                                <div className="w-10 h-10 rounded-full border-2 border-slate-100 group-hover:border-indigo-200 transition-colors bg-indigo-500 flex items-center justify-center text-white text-sm font-bold">
-                                                                    {member.name?.charAt(0).toUpperCase() || 'U'}
+                                        {paginatedItems.map((item) => {
+                                            if (item.isInvite) {
+                                                const invite = item.rawInvite!;
+                                                return (
+                                                    <tr key={item.id} className="hover:bg-amber-50/10 transition-colors bg-amber-50/5">
+                                                        {/* Member (email placeholder) */}
+                                                        <td className="p-4 pl-6">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-full border-2 border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
+                                                                    <Mail className="w-4 h-4 text-amber-500" />
                                                                 </div>
-                                                            )}
-                                                            <div>
-                                                                <div className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
-                                                                    {member.name}
-                                                                    {currentUserId && member.userId === currentUserId && (
-                                                                        <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">You</span>
-                                                                    )}
+                                                                <div>
+                                                                    <div className="font-semibold text-slate-800 text-sm">{item.email}</div>
+                                                                    <div className="text-xs text-slate-400 mt-0.5">
+                                                                        Awaiting {item.name}'s response
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-slate-500 text-xs">{member.email}</div>
                                                             </div>
-                                                        </div>
-                                                    </UserHoverCard>
-                                                </td>
-                                                <td className="p-4">
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${member.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                                            member.role === 'Judge' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                                                                'bg-slate-50 text-slate-600 border-slate-100'}`}>
-                                                            {member.role}
-                                                        </span>
-                                                        <span className="text-[10px] font-semibold text-slate-500">
-                                                            {member.programScope === 'organization' ? 'All events' : eventTitle}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={`w-2 h-2 rounded-full ${member.status === 'Active' ? 'bg-green-500' : member.status === 'Pending' ? 'bg-amber-400' : 'bg-slate-300'}`} />
-                                                        <span className="text-sm text-slate-600">{member.status}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-sm text-slate-500">{member.lastActive}</td>
-                                                <td className="p-4 text-right">
-                                                    <div className="relative flex justify-end" ref={openMenuId === member.memberId ? menuRef : undefined}>
-                                                        <button
-                                                            onClick={() => setOpenMenuId(prev => prev === member.memberId ? null : member.memberId)}
-                                                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                                        >
-                                                            <MoreVertical className="w-4 h-4" />
-                                                        </button>
-                                                        {openMenuId === member.memberId && (
-                                                            <div className="absolute right-0 top-9 z-10 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+                                                        </td>
+
+                                                        {/* Role */}
+                                                        <td className="p-4">
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="px-2 py-1 rounded-md text-xs font-bold border bg-slate-50 text-slate-600 border-slate-100 max-w-max">
+                                                                    {item.role}
+                                                                </span>
+                                                                <span className="text-[10px] font-semibold text-slate-500">
+                                                                    {item.programScope === 'organization' ? 'All events' : eventTitle}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Status */}
+                                                        <td className="p-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                                                                <span className="text-sm text-amber-700 font-medium">Pending Invite</span>
                                                                 <button
-                                                                    onClick={() => {
-                                                                        setChangingMember(member);
-                                                                        setNewRoleId(member.roleId ?? rawRoles[0]?.id ?? '');
-                                                                        setIsChangeRoleModalOpen(true);
-                                                                        setOpenMenuId(null);
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const inviteLink = `${siteOrigin}/team-invite/${invite.token}`;
+                                                                            await navigator.clipboard.writeText(inviteLink);
+                                                                            toast.success('Invite link copied to clipboard');
+                                                                        } catch {
+                                                                            toast.error('Failed to copy link');
+                                                                        }
                                                                     }}
-                                                                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                                    title="Copy invite link"
+                                                                    className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
                                                                 >
-                                                                    <UserCog className="w-4 h-4" /> Change Role
+                                                                    <Copy className="w-3.5 h-3.5" />
                                                                 </button>
-                                                                {(!currentUserId || member.userId !== currentUserId) && (
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            setOpenMenuId(null);
-                                                                            const ok = await confirm({ title: 'Remove member?', description: `Remove ${member.name} from this program?`, confirmLabel: 'Remove' });
-                                                                            if (ok) removeMutation.mutate(member.memberId);
-                                                                        }}
-                                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                                    >
-                                                                        <Trash2 className="w-4 h-4" /> Remove
-                                                                    </button>
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Last Active */}
+                                                        <td className="p-4 text-sm text-slate-500">
+                                                            {item.lastActive}
+                                                        </td>
+
+                                                        {/* Actions */}
+                                                        <td className="p-4 text-right">
+                                                            <div className="relative flex justify-end" ref={openMenuId === item.id ? menuRef : undefined}>
+                                                                <button
+                                                                    onClick={() => setOpenMenuId(prev => prev === item.id ? null : item.id)}
+                                                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                                                >
+                                                                    <MoreVertical className="w-4 h-4" />
+                                                                </button>
+                                                                {openMenuId === item.id && (
+                                                                    <div className="absolute right-0 top-9 z-10 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-left">
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                handleResend(invite);
+                                                                                setOpenMenuId(null);
+                                                                            }}
+                                                                            disabled={resendingId === invite.id}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50"
+                                                                        >
+                                                                            <RefreshCw className={`w-4 h-4 ${resendingId === invite.id ? 'animate-spin' : ''}`} /> Resend Invite
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                handleRevoke(invite);
+                                                                                setOpenMenuId(null);
+                                                                            }}
+                                                                            disabled={revokingId === invite.id}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                                                                        >
+                                                                            <Trash2 className="w-4 h-4" /> Revoke Invite
+                                                                        </button>
+                                                                    </div>
                                                                 )}
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {paginatedMembers.length === 0 && (
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+
+                                            // Render regular member row
+                                            const member = item;
+                                            return (
+                                                <tr key={member.id} className={`hover:bg-slate-50 transition-colors ${currentUserId && member.userId === currentUserId ? 'bg-indigo-50/30' : ''}`}>
+                                                    <td className="p-4 pl-6">
+                                                        <UserHoverCard user={member as any}>
+                                                            <div className="flex items-center gap-3 cursor-pointer group">
+                                                                {member.avatar ? (
+                                                                    <img src={member.avatar} alt="" className="w-10 h-10 rounded-full border-2 border-slate-100 object-cover group-hover:border-indigo-200 transition-colors" />
+                                                                ) : (
+                                                                    <div className="w-10 h-10 rounded-full border-2 border-slate-100 group-hover:border-indigo-200 transition-colors bg-indigo-500 flex items-center justify-center text-white text-sm font-bold">
+                                                                        {member.name?.charAt(0).toUpperCase() || 'U'}
+                                                                    </div>
+                                                                )}
+                                                                <div>
+                                                                    <div className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
+                                                                        {member.name}
+                                                                        {currentUserId && member.userId === currentUserId && (
+                                                                            <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">You</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-slate-500 text-xs">{member.email}</div>
+                                                                </div>
+                                                            </div>
+                                                        </UserHoverCard>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className={`px-2 py-1 rounded-md text-xs font-bold border ${member.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                                                member.role === 'Judge' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                                                    'bg-slate-50 text-slate-600 border-slate-100'} max-w-max`}>
+                                                                {member.role}
+                                                            </span>
+                                                            <span className="text-[10px] font-semibold text-slate-500">
+                                                                {member.programScope === 'organization' ? 'All events' : eventTitle}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-2 h-2 rounded-full ${member.status === 'Active' ? 'bg-green-500' : member.status === 'Pending' ? 'bg-amber-400' : 'bg-slate-300'}`} />
+                                                            <span className="text-sm text-slate-600">{member.status}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-sm text-slate-500">{member.lastActive}</td>
+                                                    <td className="p-4 text-right">
+                                                        <div className="relative flex justify-end" ref={openMenuId === member.id ? menuRef : undefined}>
+                                                            <button
+                                                                onClick={() => setOpenMenuId(prev => prev === member.id ? null : member.id)}
+                                                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                                            >
+                                                                <MoreVertical className="w-4 h-4" />
+                                                            </button>
+                                                            {openMenuId === member.id && (
+                                                                <div className="absolute right-0 top-9 z-10 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setChangingMember(member as any);
+                                                                            setNewRoleId(member.roleId ?? rawRoles[0]?.id ?? '');
+                                                                            setIsChangeRoleModalOpen(true);
+                                                                            setOpenMenuId(null);
+                                                                        }}
+                                                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                                    >
+                                                                        <UserCog className="w-4 h-4" /> Change Role
+                                                                    </button>
+                                                                    {(!currentUserId || member.userId !== currentUserId) && (
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                setOpenMenuId(null);
+                                                                                const ok = await confirm({ title: 'Remove member?', description: `Remove ${member.name} from this program?`, confirmLabel: 'Remove' });
+                                                                                if (ok) removeMutation.mutate(member.id);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                                        >
+                                                                            <Trash2 className="w-4 h-4" /> Remove
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {paginatedItems.length === 0 && (
                                             <tr>
                                                 <td colSpan={5} className="p-10 text-center">
                                                     <p className="text-sm text-slate-500">No team members match your search.</p>
@@ -812,70 +840,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
                                     >Next</button>
                                 </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Pending Invitations */}
-                    {(invitesLoading || filteredPendingInvites.length > 0) && (
-                        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden">
-                            <div className="px-6 py-4 bg-amber-50/60 border-b border-amber-100 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-amber-600" />
-                                    <h3 className="font-bold text-slate-800 text-sm">
-                                        Pending Invitations
-                                    </h3>
-                                    <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                                        {filteredPendingInvites.length}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-slate-500 hidden sm:block">
-                                    These people have been invited but haven't accepted yet.
-                                </p>
-                            </div>
-
-                            {invitesLoading ? (
-                                <div className="p-6">
-                                    <TableSkeleton rows={2} columns={5} />
-                                </div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[900px] text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-amber-50/40 border-b border-amber-100 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                                <th className="p-4 pl-6">Invitee</th>
-                                                <th className="p-4">Role</th>
-                                                <th className="p-4">Status</th>
-                                                <th className="p-4 flex items-center gap-1.5">
-                                                    <Link2 className="w-3.5 h-3.5" /> Invite Link
-                                                </th>
-                                                <th className="p-4 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-amber-50">
-                                            {filteredPendingInvites.map((invite) => (
-                                                <PendingInviteRow
-                                                    key={invite.id}
-                                                    invite={invite}
-                                                    siteOrigin={siteOrigin}
-                                                    programTitle={activeEvent.title}
-                                                    onResend={handleResend}
-                                                    onRevoke={handleRevoke}
-                                                    resending={resendingId === invite.id}
-                                                    revoking={revokingId === invite.id}
-                                                />
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-
-                            {/* Info banner */}
-                            <div className="px-6 py-3 border-t border-amber-100 bg-amber-50/30 flex items-start gap-2 text-xs text-amber-700">
-                                <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                                <span>
-                                    Invite links expire when revoked or re-sent. Each invitee must sign in with the exact email address the invite was sent to.
-                                </span>
                             </div>
                         </div>
                     )}
