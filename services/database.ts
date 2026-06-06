@@ -1909,7 +1909,13 @@ class DatabaseService {
 
   async createRole(role: { name: string; permissions: string[]; color?: string; programId?: string }) {
     const { data, error } = await roles.create(role);
-    if (error) throw new Error(error.message || 'Failed to create role');
+    if (error) {
+      const msg = error.message || '';
+      if (msg.includes('duplicate') || msg.includes('unique') || msg.includes('already exists')) {
+        throw new Error('A role with this name already exists.');
+      }
+      throw new Error('Failed to create role');
+    }
     await this.safeAuditLog({
       action: 'Created role',
       actionType: 'create',
