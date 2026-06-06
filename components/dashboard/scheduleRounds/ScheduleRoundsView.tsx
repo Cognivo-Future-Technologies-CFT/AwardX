@@ -5,7 +5,7 @@ import { ArrowRightLeft, LayoutGrid, Plus, Workflow } from 'lucide-react';
 import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
-import { roundSubmissions } from '../../../services/supabase';
+import { roundSubmissions, supabase } from '../../../services/supabase';
 import { WorkflowView } from './WorkflowView';
 import { TileView } from './TileView';
 import { RepresentationConversionModal } from './RepresentationConversionModal';
@@ -216,26 +216,36 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
           });
 
           // Collect unique judges from submission_judges
-          const judgeMap = new Map<string, { id: string; name: string; status: string }>();
+          const judgeStatusMap = new Map<string, string>();
           for (const row of data) {
             const sj = row.submissions?.submission_judges;
             if (Array.isArray(sj)) {
               for (const j of sj) {
-                if (j.judge_id && !judgeMap.has(j.judge_id)) {
-                  judgeMap.set(j.judge_id, {
-                    id: j.judge_id,
-                    name: j.judge_id,
-                    status: j.status || 'pending',
-                  });
+                if (j.judge_id && !judgeStatusMap.has(j.judge_id)) {
+                  judgeStatusMap.set(j.judge_id, j.status || 'pending');
                 }
               }
             }
           }
 
-          const judges = Array.from(judgeMap.values()).map(j => ({
-            id: j.id,
-            name: j.name,
-            scoreStatus: (j.status === 'completed' ? 'scored' : 'pending') as 'scored' | 'pending',
+          // Fetch judge names
+          let judgeNames = new Map<string, { name: string; email: string }>();
+          const judgeIds = Array.from(judgeStatusMap.keys());
+          if (judgeIds.length > 0 && supabase) {
+            const { data: judgeRows } = await supabase
+              .from('judges')
+              .select('id, name, email')
+              .in('id', judgeIds);
+            if (judgeRows) {
+              judgeNames = new Map(judgeRows.map((j: any) => [j.id, { name: j.name, email: j.email }]));
+            }
+          }
+
+          const judges = judgeIds.map(id => ({
+            id,
+            name: judgeNames.get(id)?.name || 'Unknown Judge',
+            email: judgeNames.get(id)?.email,
+            scoreStatus: (judgeStatusMap.get(id) === 'completed' ? 'scored' : 'pending') as 'scored' | 'pending',
           }));
 
           return [round.id, {
