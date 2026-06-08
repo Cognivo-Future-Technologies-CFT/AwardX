@@ -1703,7 +1703,30 @@ class DatabaseService {
       query = query.eq('program_id', options.programId);
     }
 
-    const { data, error, count } = await query.range(offset, offset + pageSize - 1);
+    let data, error, count;
+    try {
+      const res = await query.range(offset, offset + pageSize - 1);
+      data = res.data;
+      error = res.error;
+      count = res.count;
+      if (error) {
+        throw error;
+      }
+    } catch (err) {
+      let fallbackQuery = supabase
+        .from('judges')
+        .select('*, judge_group_members(group_id)', { count: 'exact' })
+        .eq('organization_id', orgId)
+        .order('name');
+      if (options?.programId) {
+        fallbackQuery = fallbackQuery.eq('program_id', options.programId);
+      }
+      const fallbackResult = await fallbackQuery.range(offset, offset + pageSize - 1);
+      data = fallbackResult.data;
+      error = fallbackResult.error as any;
+      count = fallbackResult.count;
+    }
+
     if (error || !data) {
       return { items: [], total: 0, page, pageSize, hasMore: false };
     }
@@ -1740,12 +1763,22 @@ class DatabaseService {
     if (error) throw new Error(error.message || 'Failed to add judge');
 
     if (groupId && data?.id) {
-      const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
-      if (groupError) throw new Error(groupError.message || 'Failed to assign judge to group');
+      try {
+        const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
+        if (groupError) {
+          console.warn('Failed to assign judge to group:', groupError.message);
+        }
+      } catch (groupErr: any) {
+        console.warn('Error assigning judge to group:', groupErr?.message || groupErr);
+      }
     }
 
     if (data?.id && payload.programId) {
-      await this.updateJudgeCategoryAssignments(data.id, payload.programId, categoryIds || []);
+      try {
+        await this.updateJudgeCategoryAssignments(data.id, payload.programId, categoryIds || []);
+      } catch (catErr: any) {
+        console.warn('Error updating judge category assignments:', catErr?.message || catErr);
+      }
     }
 
     await this.safeAuditLog({
@@ -1764,12 +1797,22 @@ class DatabaseService {
     if (error || !data) throw new Error(error?.message || 'Failed to invite judge');
 
     if (groupId && data.id) {
-      const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
-      if (groupError) throw new Error(groupError.message || 'Failed to assign judge to group');
+      try {
+        const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
+        if (groupError) {
+          console.warn('Failed to assign judge to group:', groupError.message);
+        }
+      } catch (groupErr: any) {
+        console.warn('Error assigning judge to group:', groupErr?.message || groupErr);
+      }
     }
 
     if (data.id && payload.programId) {
-      await this.updateJudgeCategoryAssignments(data.id, payload.programId, categoryIds || []);
+      try {
+        await this.updateJudgeCategoryAssignments(data.id, payload.programId, categoryIds || []);
+      } catch (catErr: any) {
+        console.warn('Error updating judge category assignments:', catErr?.message || catErr);
+      }
     }
 
     await this.safeAuditLog({

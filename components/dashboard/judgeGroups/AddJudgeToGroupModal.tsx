@@ -246,7 +246,11 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
       if (groupId && judge.groupId !== groupId) {
         await db.assignJudgeToGroup(judge.id, groupId);
       }
-      await db.updateJudgeCategoryAssignments(judge.id, programId, selectedCategoryIds);
+      try {
+        await db.updateJudgeCategoryAssignments(judge.id, programId, selectedCategoryIds);
+      } catch (catErr: any) {
+        console.warn('Error updating judge category assignments:', catErr?.message || catErr);
+      }
       toast.success(`${judge.name} updated`);
       onDone();
       handleClose();
@@ -266,7 +270,11 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
       } else if (!inviteGroupId && editJudge.groupId) {
         await db.removeJudgeFromGroup(editJudge.id);
       }
-      await db.updateJudgeCategoryAssignments(editJudge.id, programId, selectedCategoryIds);
+      try {
+        await db.updateJudgeCategoryAssignments(editJudge.id, programId, selectedCategoryIds);
+      } catch (catErr: any) {
+        console.warn('Error updating judge category assignments:', catErr?.message || catErr);
+      }
       toast.success(`${editJudge.name} updated`);
       onDone();
       handleClose();
@@ -319,7 +327,7 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
       });
       const inviteToken = judgeData?.invite_token;
       if (!inviteToken) throw new Error('Unable to generate invite link. Please try again.');
-      await sendJudgeInviteEmail({
+      const inviteResult = await sendJudgeInviteEmail({
         email,
         name,
         programTitle,
@@ -328,7 +336,11 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
         inviteId: judgeData?.id,
         inviteUrl: `${window.location.origin}/judge/${inviteToken}`,
       });
-      toast.success(`Invite sent to ${email}`);
+      if (inviteResult && inviteResult.emailSent === false) {
+        toast.warning(inviteResult.warning || 'Judge record created, but invitation email could not be sent.');
+      } else {
+        toast.success(`Invite sent to ${email}`);
+      }
       onDone();
       handleClose();
     } catch (err: any) {

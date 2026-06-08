@@ -1641,8 +1641,24 @@ export const judges = {
     if (programId) {
       query = query.eq('program_id', programId);
     }
-    const { data, error } = await query;
-    return { data, error };
+    try {
+      const { data, error } = await query;
+      if (error) {
+        throw error;
+      }
+      return { data, error };
+    } catch (err) {
+      let fallbackQuery = supabase
+        .from('judges')
+        .select('*, judge_group_members(group_id)')
+        .eq('organization_id', orgId)
+        .order('name');
+      if (programId) {
+        fallbackQuery = fallbackQuery.eq('program_id', programId);
+      }
+      const fallbackResult = await fallbackQuery;
+      return { data: fallbackResult.data, error: fallbackResult.error };
+    }
   },
 
   getById: async (id: string) => {

@@ -138,9 +138,10 @@ export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
       });
 
       const inviteToken = judgeData?.invite_token;
+      let emailWarning = '';
       if (inviteToken) {
         const magicLinkUrl = `${window.location.origin}/judge/${inviteToken}`;
-        await sendJudgeInviteEmail({
+        const inviteResult = await sendJudgeInviteEmail({
           email: inviteForm.email.trim(),
           name: inviteForm.name.trim(),
           programTitle: activeEvent.title || 'your workspace',
@@ -149,6 +150,9 @@ export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
           inviteId: (judgeData as any)?.id,
           inviteUrl: magicLinkUrl,
         });
+        if (inviteResult && inviteResult.emailSent === false) {
+          emailWarning = inviteResult.warning || 'Invitation email could not be delivered.';
+        }
       }
 
       if (judgeData?.id) {
@@ -159,7 +163,11 @@ export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
       setInviteForm({ name: '', email: '' });
       setAddMemberGroupId(null);
       setAddMode('existing');
-      toast.success('Judge invited and added to group');
+      if (emailWarning) {
+        toast.warning(`Judge invited and added to group, but email failed: ${emailWarning}`);
+      } else {
+        toast.success('Judge invited and added to group');
+      }
     } catch (e: any) {
       toast.error(e.message || 'Failed to invite judge');
     }
