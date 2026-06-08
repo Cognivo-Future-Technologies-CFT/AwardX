@@ -393,3 +393,19 @@ html {
     animation: none;
   }
 }
+
+@keyframes silver-shimmer {
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+.animate-silver-shimmer {
+  animation: silver-shimmer 2.4s linear infinite;
+  will-change: background-position;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-silver-shimmer {
+    animation: none;
+  }
+}
