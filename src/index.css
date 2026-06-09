@@ -409,3 +409,10 @@ html {
     animation: none;
   }
 }
+
+/* Offset left floating panel toggles when the desktop sidebar is expanded */
+@media (min-width: 1024px) {
+  aside.w-64 ~ div button[data-side="left"] {
+    left: calc(16rem - 5rem + 0.75rem); /* w-64 (256px) - pl-20 (80px) + left-3 (12px) = 188px */
+  }
+}

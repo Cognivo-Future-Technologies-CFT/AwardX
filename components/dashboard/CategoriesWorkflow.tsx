@@ -430,7 +430,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                 <button
                     type="button"
                     onClick={() => onAddSub('')}
-                    className="absolute top-4 left-4 z-50 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-50 transition-colors"
+                    className="absolute top-4 left-4 z-30 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-50 transition-colors"
                 >
                     <Plus className="w-3.5 h-3.5" />
                     Add root category

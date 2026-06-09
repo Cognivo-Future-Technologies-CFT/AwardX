@@ -326,15 +326,17 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     if (pages.length <= 1) return;
     const ok = await confirmDialog({
       title: 'Delete page?',
-      description: 'All fields on this page will be moved to the first page.',
-      confirmLabel: 'Delete page',
+      description: 'Are you sure? This page and all form elements on it will be permanently deleted. This cannot be undone.',
+      confirmLabel: 'Delete Page',
     });
     if (!ok) return;
     pushHistory();
-    const remaining = pages.filter(p => p.id !== pageId);
+    const remaining = pages
+      .filter(p => p.id !== pageId)
+      .map((p, idx) => ({ ...p, order: idx }));
     const firstId = remaining[0].id;
     setPages(remaining);
-    setFields(prev => prev.map(f => f.pageId === pageId ? { ...f, pageId: firstId } : f));
+    setFields(prev => prev.filter(f => f.pageId !== pageId));
     setSelectedPageId(firstId);
   };
 
@@ -533,7 +535,17 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         return (
       <div className="max-w-3xl mx-auto pb-20">
         {/* Page Header */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-6 relative overflow-hidden group">
+        <div 
+          onClick={() => {
+            setSelectedFieldId('page-description');
+            onPropertiesPanelOpenChange?.(true);
+          }}
+          className={`bg-white rounded-xl p-8 mb-6 relative overflow-hidden group transition-all border-2 cursor-pointer ${
+            selectedFieldId === 'page-description'
+              ? 'border-indigo-500 shadow-xl shadow-indigo-500/10 ring-1 ring-indigo-500/20 z-10'
+              : 'border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md'
+          }`}
+        >
           <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
           <input 
             value={pages.find(p => p.id === selectedPageId)?.title || ''}
@@ -541,7 +553,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               const newPages = pages.map(p => p.id === selectedPageId ? { ...p, title: e.target.value } : p);
               setPages(newPages);
             }}
-            className="text-3xl font-bold text-slate-800 w-full outline-none placeholder:text-slate-300 bg-transparent mb-2"
+            className="text-3xl font-bold text-slate-800 w-full outline-none placeholder:text-slate-300 bg-transparent mb-2 border-none focus:border-none focus:shadow-none"
             placeholder="Page Title"
           />
           <input
@@ -550,15 +562,24 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               const newPages = pages.map(p => p.id === selectedPageId ? { ...p, description: e.target.value } : p);
               setPages(newPages);
             }}
-            className="text-slate-500 w-full outline-none placeholder:text-slate-300 bg-transparent text-lg"
+            className="text-slate-500 w-full outline-none placeholder:text-slate-300 text-lg px-3 py-2 border border-slate-200 rounded-lg bg-slate-50/50 hover:border-slate-300 focus:border-slate-300 focus:bg-white transition-all focus:shadow-none"
             placeholder="Add a description for this page..."
           />
 
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-            <button onClick={() => deletePage(selectedPageId)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg" title="Delete Page">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
+          {pages.length > 1 && (
+            <div className="absolute top-4 right-4 flex gap-2" onClick={e => e.stopPropagation()}>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deletePage(selectedPageId);
+                }} 
+                className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors" 
+                title="Delete Page"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Fields List */}
@@ -599,6 +620,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                     // Prevent click selection during/right after drag
                     if (!draggedFieldId && !dragOverIndex) {
                       setSelectedFieldId(field.id);
+                      onPropertiesPanelOpenChange?.(true);
                     }
                   }}
                   draggable={!isTouchDevice}
@@ -952,10 +974,22 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   {page.order + 1}
                           </button>
               ))}
-              <button onClick={addPage} className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-indigo-600">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
+              <button
+                onClick={addPage}
+                className="w-8 h-8 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-50 hover:text-indigo-600"
+                title="Add Page"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => deletePage(selectedPageId)}
+                disabled={pages.length <= 1}
+                className="w-8 h-8 rounded-md flex items-center justify-center text-rose-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30 disabled:hover:bg-transparent disabled:text-slate-300 transition-colors"
+                title={pages.length <= 1 ? "Cannot delete the only page" : "Delete current page"}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
 
             <div className="hidden sm:block h-6 w-px bg-slate-200 mx-1" />
 
@@ -1038,7 +1072,49 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {selectedFieldId && fields.find(f => f.id === selectedFieldId) ? (() => {
+          {selectedFieldId === 'page-description' ? (
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 uppercase">Page Title</label>
+                <input
+                  type="text"
+                  value={pages.find(p => p.id === selectedPageId)?.title || ''}
+                  onChange={e => {
+                    const newPages = pages.map(p => p.id === selectedPageId ? { ...p, title: e.target.value } : p);
+                    setPages(newPages);
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none font-semibold text-slate-800"
+                  placeholder="e.g. Page 1"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 uppercase">Description Text</label>
+                <textarea
+                  value={pages.find(p => p.id === selectedPageId)?.description || ''}
+                  onChange={e => {
+                    const newPages = pages.map(p => p.id === selectedPageId ? { ...p, description: e.target.value } : p);
+                    setPages(newPages);
+                  }}
+                  rows={5}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none font-normal text-slate-800"
+                  placeholder="Add a description for this page..."
+                />
+              </div>
+              <div className="flex items-center justify-between p-3 border border-slate-200 rounded-lg bg-slate-50/50">
+                <div>
+                  <span className="text-sm font-semibold text-slate-700 block">Required</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Compulsory for every page</span>
+                </div>
+                <button
+                  type="button"
+                  disabled
+                  className="relative h-7 w-12 rounded-full transition-colors shrink-0 bg-indigo-600 opacity-60 cursor-not-allowed"
+                >
+                  <span className="absolute top-1 left-0 h-5 w-5 rounded-full bg-white shadow translate-x-6" />
+                </button>
+              </div>
+            </div>
+          ) : selectedFieldId && fields.find(f => f.id === selectedFieldId) ? (() => {
             const field = fields.find(f => f.id === selectedFieldId)!;
             return (
               <div className="space-y-5">
@@ -1076,9 +1152,9 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                   <button
                     type="button"
                     onClick={() => updateField(field.id, { required: !field.required })}
-                    className={`relative h-6 w-11 rounded-full transition-colors ${field.required ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                    className={`relative h-7 w-12 rounded-full transition-colors shrink-0 ${field.required ? 'bg-indigo-600' : 'bg-slate-300'}`}
                   >
-                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${field.required ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                    <span className={`absolute top-1 left-0 h-5 w-5 rounded-full bg-white shadow transition-transform ${field.required ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
                 {field.type === 'text' || field.type === 'textarea' || field.type === 'number' ? (
