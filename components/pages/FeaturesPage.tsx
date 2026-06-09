@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { Button } from '../Button';
 import { Logo } from '../Logo';
+import { GITHUB_REPO } from '@/lib/brand';
+import { isLandingOnly } from '@/lib/landingOnly';
 
 const FeatureBlock = ({ icon: Icon, title, items, color }: any) => (
   <motion.div 
@@ -78,10 +80,12 @@ export const FeaturesPage: React.FC = () => {
            <p className="text-xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed">
              Submissions, judging, CRM, social campaigns, and automation in one unified platform. Stop juggling spreadsheets.
            </p>
-           <div className="flex flex-col sm:flex-row justify-center gap-4">
-             <Button size="lg" className="shadow-xl shadow-indigo-500/30">Get started free</Button>
-             <Button variant="outline" size="lg" className="bg-white">Book a Demo</Button>
-           </div>
+           {!isLandingOnly && (
+             <div className="flex flex-col sm:flex-row justify-center gap-4">
+               <Button size="lg" className="shadow-xl shadow-indigo-500/30">Get started free</Button>
+               <Button variant="outline" size="lg" className="bg-white">Book a Demo</Button>
+             </div>
+           )}
          </motion.div>
 
          {/* Abstract Dashboard Mockup */}
@@ -271,8 +275,21 @@ export const FeaturesPage: React.FC = () => {
               Run your competition in half the time,<br/> with twice the results.
             </h2>
             <div className="flex justify-center gap-4 mt-8">
-               <Button variant="white" size="lg">Get started</Button>
-               <Button variant="outline" size="lg" className="border-slate-600 text-slate-300 hover:bg-slate-800" onClick={() => navigate('/demo?autoplay=1')}>Watch Demo</Button>
+              {isLandingOnly ? (
+                <a
+                  href={GITHUB_REPO}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center px-8 py-3 text-lg font-bold rounded-full bg-white text-slate-900 hover:bg-slate-100 transition-colors"
+                >
+                  View on GitHub
+                </a>
+              ) : (
+                <>
+                  <Button variant="white" size="lg">Get started</Button>
+                  <Button variant="outline" size="lg" className="border-slate-600 text-slate-300 hover:bg-slate-800" onClick={() => navigate('/demo?autoplay=1')}>Watch Demo</Button>
+                </>
+              )}
             </div>
           </div>
         </div>

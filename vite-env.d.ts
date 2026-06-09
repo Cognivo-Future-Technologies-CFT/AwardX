@@ -15,6 +15,7 @@ interface ImportMetaEnv {
   readonly VITE_MIXPANEL_TOKEN?: string;
   readonly VITE_APP_ENV?: string;
   readonly VITE_DEBUG?: string;
+  readonly VITE_LANDING_ONLY?: string;
   readonly GEMINI_API_KEY?: string;
 }
 

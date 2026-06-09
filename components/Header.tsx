@@ -3,6 +3,7 @@ import { Menu, X, LayoutDashboard, LogOut, Github } from 'lucide-react';
 import { Button } from './Button';
 import { Logo } from './Logo';
 import { GITHUB_REPO } from '@/lib/brand';
+import { isLandingOnly } from '@/lib/landingOnly';
 import { motion, useScroll } from 'framer-motion';
 import { db } from '../services/database';
 import { Contact } from '../services/models';
@@ -175,7 +176,18 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
 
           {/* Right cluster */}
           <div className="hidden md:flex items-center gap-1.5">
-            {isAuthenticated ? (
+            {isLandingOnly ? (
+              <a
+                href={GITHUB_REPO}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-white/50 rounded-full transition-colors border border-white/30"
+                title="View on GitHub"
+              >
+                <Github className="w-3.5 h-3.5" />
+                <span>GitHub</span>
+              </a>
+            ) : isAuthenticated ? (
               <>
                 <button
                   onClick={() => handleNavClick('dashboard')}
@@ -260,7 +272,16 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
             </button>
           ))}
           <div className="pt-4 flex flex-col space-y-3 px-4 border-t border-slate-100 mt-2">
-            {isAuthenticated ? (
+            {isLandingOnly ? (
+              <a
+                href={GITHUB_REPO}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-2 text-sm font-medium text-slate-700 px-4 py-2 rounded-lg border border-slate-200 bg-white"
+              >
+                <Github className="w-4 h-4" /> View on GitHub
+              </a>
+            ) : isAuthenticated ? (
               <>
                 <Button variant="secondary" className="w-full justify-center" onClick={() => handleNavClick('dashboard')}>
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Dashboard

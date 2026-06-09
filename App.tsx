@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { auth } from './services/supabase';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { isLandingOnly } from './lib/landingOnly';
 
 const HomePage = lazy(() => import('./components/pages/HomePage').then((m) => ({ default: m.HomePage })));
 const FeaturesPage = lazy(() => import('./components/pages/FeaturesPage').then((m) => ({ default: m.FeaturesPage })));
@@ -34,6 +35,7 @@ const RouteLoader: React.FC = () => (
 );
 
 const preloadLikelyNextRoutes = () => {
+  if (isLandingOnly) return;
   void Promise.all([
     import('./components/pages/LoginPage'),
     import('./components/pages/SignupPage'),
@@ -239,43 +241,54 @@ const App: React.FC = () => {
             </MarketingLayout>
           }
         />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/workflow" element={<WorkflowPage />} />
-        <Route path="/workflow/:programId" element={<WorkflowPage />} />
-        <Route path="/form" element={<FormSubmissionPage />} />
-        <Route path="/form/:formId" element={<FormSubmissionPage />} />
-        <Route path="/judge" element={<JudgePortalPage />} />
-        <Route path="/judge/:token" element={<JudgePortalPage />} />
-        <Route path="/team-invite" element={<TeamInvitePage />} />
-        <Route path="/team-invite/:token" element={<TeamInvitePage />} />
-        <Route path="/program" element={<PublicProgramPage />} />
-        <Route path="/program/:slug" element={<PublicProgramPage />} />
-        <Route path="/vote/:slug" element={<PublicVotingPage />} />
-        <Route path="/voting/:roundId" element={<PublicVotingPage />} />
-        <Route
-          path="/my-submissions"
-          element={
-            <ProtectedRoute>
-              <MySubmissionsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard
-                onLogout={async () => {
-                  await auth.signOut();
-                  navigate('/');
-                }}
-              />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/demo" element={<DemoDashboard />} />
+        {isLandingOnly ? (
+          <>
+            <Route path="/login" element={<Navigate to="/" replace />} />
+            <Route path="/signup" element={<Navigate to="/" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
+            <Route path="/demo" element={<Navigate to="/" replace />} />
+          </>
+        ) : (
+          <>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/workflow" element={<WorkflowPage />} />
+            <Route path="/workflow/:programId" element={<WorkflowPage />} />
+            <Route path="/form" element={<FormSubmissionPage />} />
+            <Route path="/form/:formId" element={<FormSubmissionPage />} />
+            <Route path="/judge" element={<JudgePortalPage />} />
+            <Route path="/judge/:token" element={<JudgePortalPage />} />
+            <Route path="/team-invite" element={<TeamInvitePage />} />
+            <Route path="/team-invite/:token" element={<TeamInvitePage />} />
+            <Route path="/program" element={<PublicProgramPage />} />
+            <Route path="/program/:slug" element={<PublicProgramPage />} />
+            <Route path="/vote/:slug" element={<PublicVotingPage />} />
+            <Route path="/voting/:roundId" element={<PublicVotingPage />} />
+            <Route
+              path="/my-submissions"
+              element={
+                <ProtectedRoute>
+                  <MySubmissionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard
+                    onLogout={async () => {
+                      await auth.signOut();
+                      navigate('/');
+                    }}
+                  />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/demo" element={<DemoDashboard />} />
+          </>
+        )}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

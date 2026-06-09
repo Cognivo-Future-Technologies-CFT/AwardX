@@ -11,6 +11,7 @@ import {
 } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { GITHUB_REPO } from '@/lib/brand';
+import { isLandingOnly } from '@/lib/landingOnly';
 import { Logo } from './Logo';
 
 // ── Brand marks ──────────────────────────────────────────────────────────────
@@ -335,31 +336,45 @@ export const Hero: React.FC = () => {
             transition={{ duration: 0.45, delay: 0.18 }}
             className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
           >
-            <button
-              type="button"
-              onClick={() => navigate('/signup')}
-              className="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-7 py-3.5 text-[15px] font-semibold text-white shadow-[0_6px_24px_-6px_rgba(15,23,42,0.45)] hover:bg-slate-800 transition-colors"
-            >
-              {/* Shine sweep */}
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent translate-x-0 group-hover:translate-x-[300%] transition-transform duration-700 ease-out"
-              />
-              <Sparkles className="w-4 h-4 relative" />
-              <span className="relative">Get Started</span>
-              <ArrowRight className="w-4 h-4 relative transition-transform group-hover:translate-x-0.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/demo?autoplay=1')}
-              className="group inline-flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-7 py-3.5 text-[15px] font-semibold text-slate-900 shadow-sm hover:border-slate-300 hover:bg-slate-50 transition-colors"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              See Live Demo
-            </button>
+            {isLandingOnly ? (
+              <a
+                href={GITHUB_REPO}
+                target="_blank"
+                rel="noreferrer"
+                className="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-7 py-3.5 text-[15px] font-semibold text-white shadow-[0_6px_24px_-6px_rgba(15,23,42,0.45)] hover:bg-slate-800 transition-colors"
+              >
+                <Github className="w-4 h-4 relative" />
+                <span className="relative">View on GitHub</span>
+                <ArrowRight className="w-4 h-4 relative transition-transform group-hover:translate-x-0.5" />
+              </a>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate('/signup')}
+                  className="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-slate-900 px-7 py-3.5 text-[15px] font-semibold text-white shadow-[0_6px_24px_-6px_rgba(15,23,42,0.45)] hover:bg-slate-800 transition-colors"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent translate-x-0 group-hover:translate-x-[300%] transition-transform duration-700 ease-out"
+                  />
+                  <Sparkles className="w-4 h-4 relative" />
+                  <span className="relative">Get Started</span>
+                  <ArrowRight className="w-4 h-4 relative transition-transform group-hover:translate-x-0.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/demo?autoplay=1')}
+                  className="group inline-flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-7 py-3.5 text-[15px] font-semibold text-slate-900 shadow-sm hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </span>
+                  See Live Demo
+                </button>
+              </>
+            )}
           </motion.div>
 
           {/* Capability strip — what's in the box, no fabricated metrics */}
