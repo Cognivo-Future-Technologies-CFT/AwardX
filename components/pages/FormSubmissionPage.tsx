@@ -641,7 +641,7 @@ export const FormSubmissionPage: React.FC = () => {
     const value = formData[field.id] || '';
     
     // Apple-style base input class
-    const inputBaseClass = "w-full p-5 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-indigo-400 rounded-[20px] outline-none transition-all duration-300 text-[18px] text-[#1C1C1E] placeholder:text-[#8E8E93] shadow-sm focus:shadow-md";
+    const inputBaseClass = "w-full p-5 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-indigo-400 rounded-[20px] outline-none transition-all duration-300 text-[18px] text-[#1C1C1E] placeholder:text-[#AEAEB2] shadow-sm focus:shadow-md";
 
     switch (field.type) {
       case 'textarea':
@@ -674,7 +674,7 @@ export const FormSubmissionPage: React.FC = () => {
               ))}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-              <ChevronDown className="w-5 h-5 text-[#8E8E93]" />
+              <ChevronDown className="w-5 h-5 text-[#AEAEB2]" />
             </div>
           </div>
         );

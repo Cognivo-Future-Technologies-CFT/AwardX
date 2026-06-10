@@ -209,7 +209,12 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--muted-foreground);
+  color: #a3a3a3;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #525252;
 }
 
 input:focus,

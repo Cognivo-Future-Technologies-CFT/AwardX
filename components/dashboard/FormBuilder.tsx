@@ -717,14 +717,16 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
                     {selectedFieldId === field.id ? (
                       <div className="space-y-3" onClick={e => e.stopPropagation()}>
-                        <div>
-                          <input
-                            value={field.placeholder || ''}
-                            onChange={e => updateField(field.id, { placeholder: e.target.value })}
-                            className="w-full p-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            placeholder="Placeholder text..."
-                          />
-                        </div>
+                        {field.type !== 'date' && (
+                          <div>
+                            <input
+                              value={field.placeholder || ''}
+                              onChange={e => updateField(field.id, { placeholder: e.target.value })}
+                              className="w-full p-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                              placeholder="Placeholder text..."
+                            />
+                          </div>
+                        )}
                         <div>
                           <input
                             value={field.helpText || ''}
@@ -1127,16 +1129,18 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 uppercase">Placeholder</label>
-                  <input
-                    type="text"
-                    value={field.placeholder || ''}
-                    onChange={e => updateField(field.id, { placeholder: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                    placeholder="Enter placeholder text..."
-                  />
-                </div>
+                {field.type !== 'date' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Placeholder</label>
+                    <input
+                      type="text"
+                      value={field.placeholder || ''}
+                      onChange={e => updateField(field.id, { placeholder: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                      placeholder="Enter placeholder text..."
+                    />
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-500 uppercase">Help Text</label>
                   <input
