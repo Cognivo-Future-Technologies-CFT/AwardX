@@ -314,7 +314,8 @@ export async function previewAdvancement(
   const ranked = await computeParticipantScores(roundId, round.type);
 
   // Check for empty scores
-  const isJudgingRound = !['Public Voting', 'Public Rating', 'public'].includes(round.type);
+  // Nomination rounds have no judges and use all_pass logic — they never need scores.
+  const isJudgingRound = !['Public Voting', 'Public Rating', 'public', 'Nomination'].includes(round.type);
   const hasEmptyScores = isJudgingRound && ranked.every(r => r.score === 0);
 
   if (hasEmptyScores && ranked.length > 0) {

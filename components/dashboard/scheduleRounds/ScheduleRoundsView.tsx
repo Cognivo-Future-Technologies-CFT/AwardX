@@ -527,7 +527,8 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);
     const preview = await previewAdvancement(round.id, criteriaOverride);
 
-    if (preview.hasEmptyScores) {
+    // Nomination rounds have no judges — skip the empty-scores guard for them.
+    if (preview.hasEmptyScores && round.type !== 'Nomination') {
       toast.error('No scores yet — judges must score submissions before shortlisting.');
       return;
     }
