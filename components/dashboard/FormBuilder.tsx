@@ -150,70 +150,100 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
   // --- Undo / Redo history ------------------------------------------------
   type Snapshot = { fields: FormField[]; pages: FormPage[]; theme: FormTheme };
-  const historyRef  = useRef<Snapshot[]>([]);
-  const futureRef   = useRef<Snapshot[]>([]);
-  const skipHistory = useRef(false); // prevent re-recording on undo/redo restore
+  const historyRef = useRef<Snapshot[]>([]);
+  const futureRef = useRef<Snapshot[]>([]);
+  const stateRef = useRef({ fields, pages, theme });
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRestoringRef = useRef(false);
 
-  /** Call after any user-driven mutation to record a snapshot */
+  // Keep stateRef in sync with current state
+  useEffect(() => {
+    stateRef.current = { fields, pages, theme };
+  }, [fields, pages, theme]);
+
+  /** Debounced history snapshot to avoid excessive entries */
   const pushHistory = useCallback(() => {
-    if (skipHistory.current) return;
-    // Capture *current* React state values by reading refs that we keep in sync
-    // We schedule via functional state updates to get the latest committed values
-    setFields(f => {
-      setPages(p => {
-        setTheme(t => {
-          historyRef.current.push({ fields: f, pages: p, theme: t });
-          if (historyRef.current.length > 60) historyRef.current.shift();
-          futureRef.current = [];       // new action clears redo stack
-          return t;
-        });
-        return p;
-      });
-      return f;
-    });
+    if (isRestoringRef.current) return;
+    
+    // Clear any pending debounce
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    
+    // Debounce: only record after 500ms of inactivity
+    debounceTimerRef.current = setTimeout(() => {
+      const { fields: f, pages: p, theme: t } = stateRef.current;
+      historyRef.current.push({ fields: f, pages: p, theme: t });
+      if (historyRef.current.length > 50) historyRef.current.shift(); // Limit memory
+      futureRef.current = []; // New action clears redo stack
+      debounceTimerRef.current = null;
+    }, 500);
   }, []);
 
   const undo = useCallback(() => {
+    // Cancel pending debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
     const prev = historyRef.current.pop();
     if (!prev) return;
-    setFields(f => { futureRef.current.push({ fields: f, pages: [], theme: defaultTheme }); return f; });
-    // Store current as redo entry, then restore
-    setFields(cur => { setPages(cp => { setTheme(ct => {
-      futureRef.current[futureRef.current.length - 1] = { fields: cur, pages: cp, theme: ct };
-      return ct;
-    }); return cp; }); return cur; });
-    skipHistory.current = true;
+
+    // Save current state to redo stack
+    futureRef.current.push(stateRef.current);
+
+    // Restore previous state
+    isRestoringRef.current = true;
     setFields(prev.fields);
     setPages(prev.pages);
     setTheme(prev.theme);
-    skipHistory.current = false;
+    isRestoringRef.current = false;
   }, []);
 
   const redo = useCallback(() => {
+    // Cancel pending debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
     const next = futureRef.current.pop();
     if (!next) return;
-    setFields(cur => { setPages(cp => { setTheme(ct => {
-      historyRef.current.push({ fields: cur, pages: cp, theme: ct });
-      return ct;
-    }); return cp; }); return cur; });
-    skipHistory.current = true;
+
+    // Save current state to undo stack
+    historyRef.current.push(stateRef.current);
+
+    // Restore next state
+    isRestoringRef.current = true;
     setFields(next.fields);
     setPages(next.pages);
     setTheme(next.theme);
-    skipHistory.current = false;
+    isRestoringRef.current = false;
   }, []);
 
-  // Keyboard shortcut listener — Cmd/Ctrl+Z = undo, Cmd/Ctrl+Y or Cmd/Ctrl+Shift+Z = redo
+  // Keyboard shortcut listener
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
-      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [undo, redo]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
   // -------------------------------------------------------------------------
 
   // --- Effects ---
@@ -341,6 +371,15 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   };
 
   const handleSave = () => {
+    // Flush any pending history debounce to ensure current state is captured
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      const { fields: f, pages: p, theme: t } = stateRef.current;
+      historyRef.current.push({ fields: f, pages: p, theme: t });
+      if (historyRef.current.length > 50) historyRef.current.shift();
+      futureRef.current = [];
+      debounceTimerRef.current = null;
+    }
     if (onSave) onSave(fields, pages, theme);
   };
 
@@ -1030,7 +1069,18 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             {onPublish && (
               <Button
                 variant={isPublished ? 'outline' : 'primary'}
-                onClick={() => onPublish(fields, pages, theme)}
+                onClick={() => {
+                  // Flush pending history before publishing
+                  if (debounceTimerRef.current) {
+                    clearTimeout(debounceTimerRef.current);
+                    const { fields: f, pages: p, theme: t } = stateRef.current;
+                    historyRef.current.push({ fields: f, pages: p, theme: t });
+                    if (historyRef.current.length > 50) historyRef.current.shift();
+                    futureRef.current = [];
+                    debounceTimerRef.current = null;
+                  }
+                  onPublish(fields, pages, theme);
+                }}
                 className={isPublished ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-500/20'}
               >
                 {isPublished ? (
