@@ -518,13 +518,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Timezone</label>
-                        <input
-                          type="text"
+                        <select
                           value={profile?.timezone || 'UTC'}
                           onChange={(e) => setProfile((p: any) => ({ ...(p || {}), timezone: e.target.value }))}
                           className="w-full px-4 py-2 border border-slate-200 rounded-lg"
                           disabled={loading}
-                        />
+                        >
+                          {Intl.supportedValuesOf('timeZone').map((tz) => (
+                            <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                          ))}
+                        </select>
                       </div>
                    </div>
 
