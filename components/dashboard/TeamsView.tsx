@@ -75,13 +75,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [resendingId, setResendingId] = useState<string | null>(null);
     const [revokingId, setRevokingId] = useState<string | null>(null);
-    const [requestTraces, setRequestTraces] = useState<EmailApiRequestTrace[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
     const eventId = activeEvent?.id ?? '';
     const eventTitle = activeEvent?.title || 'your workspace';
 
     const appendRequestTrace = (trace: EmailApiRequestTrace) => {
-        setRequestTraces((prev) => [trace, ...prev].slice(0, 40));
         if (!eventId) return;
         void db.addInviteRequestTrace(eventId, trace).catch((err) => {
             console.warn('Failed to persist invite request trace:', err);
@@ -133,12 +131,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         staleTime: 30_000,
     });
 
-    const { data: persistedRequestTraces = [] } = useQuery({
-        queryKey: queryKeys.invites.requestTraces(orgId ?? '', eventId),
-        queryFn: () => db.getInviteRequestTraces(eventId, { days: 7, limit: 40 }),
-        enabled: !!orgId && !!eventId,
-        staleTime: 15_000,
-    });
+
 
     const { data: rawRoles = [] } = useQuery({
         queryKey: queryKeys.teams.roles(eventId),
@@ -156,9 +149,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         if (!inviteRoleId && rawRoles[0]?.id) setInviteRoleId(rawRoles[0].id);
     }, [rawRoles]);
 
-    useEffect(() => {
-        setRequestTraces(persistedRequestTraces);
-    }, [persistedRequestTraces]);
+
 
     // ── Mutations ──────────────────────────────────────────────────────────────
     const inviteMutation = useMutation({
@@ -250,19 +241,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         }
     };
 
-    const handleClearRequestTraces = async () => {
-        if (!eventId) return;
-        try {
-            await db.clearInviteRequestTraces(eventId);
-            setRequestTraces([]);
-            if (orgId) {
-                queryClient.invalidateQueries({ queryKey: queryKeys.invites.requestTraces(orgId, eventId) });
-            }
-        } catch (err) {
-            console.warn('Failed to clear invite request traces:', err);
-            setRequestTraces([]);
-        }
-    };
+
 
     // ── Role editor ────────────────────────────────────────────────────────────
     const handleCreateRole = async (e: React.FormEvent) => {
@@ -549,55 +528,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-sm font-bold text-slate-800">Outgoing Invite Requests</h2>
-                    <button
-                        type="button"
-                        onClick={handleClearRequestTraces}
-                        className="text-xs font-semibold text-slate-600 hover:text-slate-800"
-                    >
-                        Clear
-                    </button>
-                </div>
-                {requestTraces.length === 0 ? (
-                    <p className="text-xs text-slate-500 mt-2">No invite requests captured yet.</p>
-                ) : (
-                    <div className="mt-3 space-y-2 max-h-56 overflow-auto pr-1">
-                        {requestTraces.map((trace, idx) => (
-                            <div key={`${trace.startedAt}-${trace.url}-${idx}`} className="rounded-lg border border-slate-200 p-2 bg-slate-50/50">
-                                {(() => {
-                                    const body = (trace.requestBody || {}) as Record<string, unknown>;
-                                    const recipient = typeof body.email === 'string' ? body.email : 'Unknown recipient';
-                                    const token = typeof body.token === 'string' ? body.token : null;
-                                    const inviteLink = token ? `${siteOrigin}/team-invite/${token}` : null;
 
-                                    return (
-                                        <>
-                                            <div className="flex items-center justify-between gap-2 text-[11px]">
-                                                <span className="font-semibold text-slate-700">{trace.method} {trace.path}</span>
-                                                <span className={`px-1.5 py-0.5 rounded font-semibold ${trace.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                    {trace.status ?? 'NETWORK'}
-                                                </span>
-                                            </div>
-                                            <p className="text-[11px] text-slate-700 mt-1">
-                                                Email: <span className="font-semibold">{recipient}</span>
-                                            </p>
-                                            {inviteLink && (
-                                                <p className="text-[11px] text-slate-600 mt-1 break-all">
-                                                    Link: {inviteLink}
-                                                </p>
-                                            )}
-                                            {trace.error && <p className="text-[11px] text-rose-700 mt-1">{trace.error}</p>}
-                                            <p className="text-[10px] text-slate-500 mt-1">Attempt {trace.attempt} at {new Date(trace.startedAt).toLocaleTimeString()}</p>
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
 
             {/* Members tab */}
             {activeTab === 'members' && (

@@ -138,10 +138,16 @@ router.post('/:programId/submissions', requireAuth, async (req: AuthenticatedReq
       : typeof req.body?.applicant === 'string'
         ? req.body.applicant.trim()
         : '';
+  const applicantEmail =
+    typeof req.body?.applicant_email === 'string' ? req.body.applicant_email.trim() : '';
   const description = typeof req.body?.description === 'string' ? req.body.description : '';
   const categoryId = req.body?.category_id ?? req.body?.categoryId ?? null;
   const categoryTitle = req.body?.category_title ?? req.body?.category ?? null;
   const statusRaw = req.body?.status;
+  const responses =
+    req.body?.responses && typeof req.body.responses === 'object' && !Array.isArray(req.body.responses)
+      ? (req.body.responses as Record<string, unknown>)
+      : {};
 
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -188,6 +194,7 @@ router.post('/:programId/submissions', requireAuth, async (req: AuthenticatedReq
         description: description || '',
         status: dbStatus,
         applicant_name: applicantName,
+        applicant_email: applicantEmail || null,
         applicant_id: req.userId || null,
         ...(activeFormId
           ? {
@@ -195,6 +202,15 @@ router.post('/:programId/submissions', requireAuth, async (req: AuthenticatedReq
                 form_id: activeFormId,
                 source: 'dashboard',
                 submitted_at: new Date().toISOString(),
+                responses,
+              },
+            }
+          : Object.keys(responses).length > 0
+          ? {
+              submission_data: {
+                source: 'dashboard',
+                submitted_at: new Date().toISOString(),
+                responses,
               },
             }
           : {}),

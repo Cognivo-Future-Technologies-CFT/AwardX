@@ -201,6 +201,197 @@ const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
    return <span className="text-[12px] text-slate-700">{String(value)}</span>;
 };
 
+// Renders an editable input for a single form field inside the manual-entry modal.
+// All state is controlled via the `value` / `onChange` parameters.
+const renderManualEntryField = (
+   field: { id: string; label: string; type: string; required?: boolean; config?: Record<string, unknown> },
+   value: unknown,
+   onChange: (val: unknown) => void,
+): React.ReactNode => {
+   const opts: string[] = (field.config?.options as string[] | undefined) || [];
+   const placeholder = (field.config?.placeholder as string | undefined) || '';
+   const cls =
+      'w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-medium text-sm transition-all';
+
+   switch (field.type) {
+      case 'textarea':
+         return (
+            <textarea
+               className={`${cls} h-auto py-3 min-h-[80px] resize-none`}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               placeholder={placeholder || `Enter ${field.label.toLowerCase()}…`}
+               required={field.required}
+            />
+         );
+
+      case 'select':
+      case 'award_selector':
+         return (
+            <select
+               className={`${cls} bg-white`}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               required={field.required}
+            >
+               <option value="">Select an option…</option>
+               {opts.map((opt) => (
+                  <option key={opt} value={opt}>
+                     {opt}
+                  </option>
+               ))}
+            </select>
+         );
+
+      case 'radio':
+         return (
+            <div className="space-y-2 pt-1">
+               {opts.map((opt) => (
+                  <label key={opt} className="flex items-center gap-3 cursor-pointer">
+                     <input
+                        type="radio"
+                        name={`field-${field.id}`}
+                        value={opt}
+                        checked={value === opt}
+                        onChange={() => onChange(opt)}
+                        className="w-4 h-4 accent-indigo-600"
+                     />
+                     <span className="text-sm font-medium text-slate-700">{opt}</span>
+                  </label>
+               ))}
+            </div>
+         );
+
+      case 'checkbox':
+      case 'multi_select':
+      case 'multiselect': {
+         const selected: string[] = Array.isArray(value) ? (value as string[]) : [];
+         const toggleOpt = (opt: string) => {
+            const next = selected.includes(opt)
+               ? selected.filter((v) => v !== opt)
+               : [...selected, opt];
+            onChange(next);
+         };
+         return (
+            <div className="space-y-2 pt-1">
+               {opts.map((opt) => (
+                  <label key={opt} className="flex items-center gap-3 cursor-pointer">
+                     <input
+                        type="checkbox"
+                        checked={selected.includes(opt)}
+                        onChange={() => toggleOpt(opt)}
+                        className="w-4 h-4 rounded accent-indigo-600"
+                     />
+                     <span className="text-sm font-medium text-slate-700">{opt}</span>
+                  </label>
+               ))}
+            </div>
+         );
+      }
+
+      case 'date':
+         return (
+            <input
+               type="date"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               required={field.required}
+            />
+         );
+
+      case 'time':
+         return (
+            <input
+               type="time"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               required={field.required}
+            />
+         );
+
+      case 'number':
+      case 'currency':
+         return (
+            <input
+               type="number"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value !== '' ? Number(e.target.value) : '')}
+               placeholder={placeholder || '0'}
+               required={field.required}
+            />
+         );
+
+      case 'rating':
+         return (
+            <input
+               type="number"
+               min="1"
+               max="5"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value !== '' ? Number(e.target.value) : '')}
+               placeholder="1 – 5"
+               required={field.required}
+            />
+         );
+
+      case 'url':
+      case 'link':
+      case 'file':
+      case 'image':
+      case 'video':
+         return (
+            <input
+               type="url"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               placeholder={placeholder || 'https://'}
+               required={field.required}
+            />
+         );
+
+      case 'email':
+         return (
+            <input
+               type="email"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               placeholder={placeholder || 'email@example.com'}
+               required={field.required}
+            />
+         );
+
+      case 'phone':
+         return (
+            <input
+               type="tel"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               placeholder={placeholder || '+1 234 567 8900'}
+               required={field.required}
+            />
+         );
+
+      default: // text, country, tags, etc.
+         return (
+            <input
+               type="text"
+               className={cls}
+               value={String(value ?? '')}
+               onChange={(e) => onChange(e.target.value)}
+               placeholder={placeholder || `Enter ${field.label.toLowerCase()}…`}
+               required={field.required}
+            />
+         );
+   }
+};
+
 export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, onNavigate }) => {
    const queryClient = useQueryClient();
    const { confirm, ConfirmDialogNode } = useConfirm();
@@ -208,7 +399,12 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-   const [newSub, setNewSub] = useState({ title: '', applicant: '', category: 'General', status: 'Pending' as const });
+   const [newSub, setNewSub] = useState<{
+      applicantName: string;
+      applicantEmail: string;
+      status: Submission['status'];
+      responses: Record<string, unknown>;
+   }>({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} });
    const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
@@ -403,20 +599,34 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
 
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!newSub.title || !newSub.applicant) return;
+      if (!newSub.applicantName.trim()) return;
       if (!activeEvent?.id) {
          toast.error('Select a program before creating a submission');
          return;
       }
 
+      // Derive a display title from form responses (look for a title-like field) or fall back to applicant name
+      const rawFields = (formFieldsQuery.data || []) as Array<{ id: string; label: string; type: string }>;
+      const titleField = rawFields.find(
+         (f) => /title|project|submission/i.test(f.label) && (f.type === 'text' || f.type === 'textarea'),
+      );
+      const title =
+         (titleField && String(newSub.responses[titleField.id] ?? '').trim()) ||
+         newSub.applicantName.trim();
+
       try {
          await db.addSubmission({
-            ...newSub,
+            title,
+            applicant: newSub.applicantName.trim(),
+            applicantEmail: newSub.applicantEmail.trim(),
+            category: 'General',
+            status: newSub.status,
             programId: activeEvent.id,
+            responses: newSub.responses,
          });
          await refreshSubmissions();
          setIsModalOpen(false);
-         setNewSub({ title: '', applicant: '', category: 'General', status: 'Pending' });
+         setNewSub({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} });
          toast.success('Submission created');
       } catch (error) {
          const message = error instanceof Error ? error.message : 'Failed to create submission';
@@ -1008,53 +1218,111 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
             )}
          </AnimatePresence>
 
-         {/* Create Modal - Kept same logic, updated styling slightly */}
-         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Manual Submission Entry">
-            <form onSubmit={handleCreate} className="space-y-5 p-2">
-               <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex gap-4 items-start mb-2">
+         {/* Add Submission Modal — dynamic form fields from the active program form */}
+         <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setNewSub({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} }); }} title="Add Submission" size="lg">
+            <form onSubmit={handleCreate} className="space-y-6">
+               {/* Direct Entry Banner */}
+               <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex gap-4 items-start">
                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-indigo-100 shrink-0">
                      <Sparkles className="w-5 h-5 text-indigo-600" />
                   </div>
                   <div className="space-y-1">
                      <div className="text-sm font-black text-indigo-900 leading-none">Direct Entry Mode</div>
-                     <p className="text-xs text-indigo-600/70 font-medium">Manually bypass the public entry form to record an existing submission.</p>
+                     <p className="text-xs text-indigo-600/70 font-medium">Manually record a submission using the program's active form fields.</p>
                   </div>
                </div>
 
-               <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Project Title</label>
-                  <input required className="w-full px-5 h-12 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-medium transition-all"
-                     value={newSub.title} onChange={e => setNewSub({ ...newSub, title: e.target.value })} placeholder="Enter project or submission name" />
-               </div>
-               <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Applicant Reference</label>
-                  <input required className="w-full px-5 h-12 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-medium transition-all"
-                     value={newSub.applicant} onChange={e => setNewSub({ ...newSub, applicant: e.target.value })} placeholder="Full name or company name" />
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <div>
-                     <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Category</label>
-                     <select className="w-full px-5 h-12 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-bold text-sm transition-all"
-                        value={newSub.category} onChange={e => setNewSub({ ...newSub, category: e.target.value })}>
-                        <option>General</option>
-                        <option>Design</option>
-                        <option>Technology</option>
-                        <option>Sustainability</option>
-                     </select>
-                  </div>
-                  <div>
-                     <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Initial Status</label>
-                     <select className="w-full px-5 h-12 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-bold text-sm transition-all text-slate-700"
-                        value={newSub.status} onChange={e => setNewSub({ ...newSub, status: e.target.value as any })}>
-                        <option value="Pending">Pending Review</option>
-                        <option value="Under Review">Active Review</option>
-                        <option value="Accepted">Pre-Accepted</option>
-                     </select>
+               {/* ── Basic Details ── */}
+               <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 border-b border-slate-100 pb-2">Basic Details</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                           Full Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                           required
+                           type="text"
+                           className="w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-medium text-sm transition-all"
+                           value={newSub.applicantName}
+                           onChange={(e) => setNewSub((p) => ({ ...p, applicantName: e.target.value }))}
+                           placeholder="Applicant's full name"
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+                        <input
+                           type="email"
+                           className="w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-medium text-sm transition-all"
+                           value={newSub.applicantEmail}
+                           onChange={(e) => setNewSub((p) => ({ ...p, applicantEmail: e.target.value }))}
+                           placeholder="applicant@email.com"
+                        />
+                     </div>
                   </div>
                </div>
-               <div className="pt-6 flex justify-end gap-3">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 h-12 font-bold text-sm text-slate-500 hover:bg-slate-50 rounded-xl transition-all">Cancel</button>
-                  <button type="submit" className="px-8 h-12 bg-slate-950 text-white font-black text-sm rounded-xl shadow-lg shadow-slate-200 hover:bg-indigo-600 transition-all">Initialize Entry</button>
+
+               {/* ── Form Fields ── */}
+               {formFieldsQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold py-2">
+                     <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                     </svg>
+                     Loading form fields…
+                  </div>
+               ) : (() => {
+                  const displayFields = ((formFieldsQuery.data || []) as any[]).filter((f) => DISPLAY_FIELD_TYPES.has(f.type));
+                  if (displayFields.length === 0) return null;
+                  return (
+                     <div className="space-y-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 border-b border-slate-100 pb-2">Form Fields</h4>
+                        <div className="space-y-5">
+                           {displayFields.map((field: any) => (
+                              <div key={field.id}>
+                                 <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                                    {field.label}
+                                    {field.required && <span className="text-rose-500 ml-1">*</span>}
+                                 </label>
+                                 {renderManualEntryField(
+                                    field,
+                                    newSub.responses[field.id],
+                                    (val) =>
+                                       setNewSub((p) => ({ ...p, responses: { ...p.responses, [field.id]: val } })),
+                                 )}
+                              </div>
+                           ))}
+                        </div>
+                     </div>
+                  );
+               })()}
+
+               {/* ── Status ── */}
+               <div>
+                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Initial Status</label>
+                  <select
+                     className="w-full px-4 h-11 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 font-bold text-sm transition-all"
+                     value={newSub.status}
+                     onChange={(e) => setNewSub((p) => ({ ...p, status: e.target.value as Submission['status'] }))}
+                  >
+                     <option value="Pending">Pending Review</option>
+                     <option value="Under Review">Active Review</option>
+                     <option value="Accepted">Pre-Accepted</option>
+                  </select>
+               </div>
+
+               {/* ── Actions ── */}
+               <div className="pt-2 flex justify-end gap-3 border-t border-slate-100">
+                  <button
+                     type="button"
+                     onClick={() => { setIsModalOpen(false); setNewSub({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} }); }}
+                     className="px-6 h-12 font-bold text-sm text-slate-500 hover:bg-slate-50 rounded-xl transition-all"
+                  >
+                     Cancel
+                  </button>
+                  <button type="submit" className="px-8 h-12 bg-slate-950 text-white font-black text-sm rounded-xl shadow-lg shadow-slate-200 hover:bg-indigo-600 transition-all">
+                     Add Submission
+                  </button>
                </div>
             </form>
          </Modal>

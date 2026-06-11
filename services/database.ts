@@ -1565,6 +1565,8 @@ class DatabaseService {
   async addSubmission(
     submission: Omit<Submission, 'id' | 'date' | 'score' | 'image' | 'assignedJudges'> & {
       programId?: string;
+      applicantEmail?: string;
+      responses?: Record<string, unknown>;
     },
   ): Promise<Submission> {
     const programId = submission.programId;
@@ -1581,8 +1583,10 @@ class DatabaseService {
         body: {
           title: submission.title,
           applicant: submission.applicant,
+          applicant_email: submission.applicantEmail || '',
           category: submission.category,
           status: submission.status,
+          responses: submission.responses || {},
         },
       },
     );
@@ -3473,22 +3477,74 @@ class DatabaseService {
     const orgId = await getCurrentOrgId();
     if (!orgId) return;
 
-    await supabase
-      .from('invite_request_traces')
-      .insert({
-        organization_id: orgId,
-        program_id: programId,
-        path: trace.path,
-        url: trace.url,
-        method: trace.method,
-        attempt: trace.attempt,
-        started_at: trace.startedAt,
-        finished_at: trace.finishedAt,
-        http_status: trace.status,
-        ok: trace.ok,
-        error_message: trace.error,
-        request_body: trace.requestBody || {},
+    try {
+      await supabase
+        .from('invite_request_traces')
+        .insert({
+          organization_id: orgId,
+          program_id: programId,
+          path: trace.path,
+          url: trace.url,
+          method: trace.method,
+          attempt: trace.attempt,
+          started_at: trace.startedAt,
+          finished_at: trace.finishedAt,
+          http_status: trace.status,
+          ok: trace.ok,
+          error_message: trace.error,
+          request_body: trace.requestBody || {},
+        });
+    } catch (err) {
+      console.warn('Failed to insert into invite_request_traces:', err);
+    }
+
+    try {
+      const body = trace.requestBody || {};
+      const recipient = body.email || body.recipientEmail || 'Unknown recipient';
+      const methodPath = `${trace.method} ${trace.path}`;
+      const statusText = trace.ok ? `${trace.status ?? 200}` : (trace.status ? `failed (${trace.status})` : 'failed (NETWORK)');
+
+      let action = 'Invite request trace';
+      if (trace.path.includes('/team')) {
+        action = 'Sent team invite';
+      } else if (trace.path.includes('/judge')) {
+        action = 'Sent judge invite';
+      } else if (trace.path.includes('/resend')) {
+        action = 'Resent invite';
+      }
+
+      let details = `${methodPath} for ${recipient}. Status: ${statusText}. Attempt ${trace.attempt}`;
+      if (trace.error) {
+        details += `. Error: ${trace.error}`;
+      }
+
+      const token = body.token || (body.inviteUrl ? new URL(body.inviteUrl).searchParams.get('teamInviteToken') : null);
+      const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+      const inviteLink = token ? `${siteOrigin}/team-invite/${token}` : null;
+      if (inviteLink) {
+        details += `. Link: ${inviteLink}`;
+      }
+
+      await this.safeAuditLog({
+        action,
+        actionType: trace.ok ? 'create' : 'warning',
+        resourceType: 'invite_request',
+        resourceId: programId || undefined,
+        details,
+        metadata: {
+          path: trace.path,
+          method: trace.method,
+          status: trace.status,
+          attempt: trace.attempt,
+          error: trace.error,
+          recipient,
+          token,
+          inviteLink
+        }
       });
+    } catch (err) {
+      console.warn('Failed to create audit log for invite request trace:', err);
+    }
   }
 
   async clearInviteRequestTraces(programId: string): Promise<void> {
