@@ -641,7 +641,7 @@ export const FormSubmissionPage: React.FC = () => {
     const value = formData[field.id] || '';
     
     // Apple-style base input class
-    const inputBaseClass = "w-full p-5 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-indigo-400 rounded-[20px] outline-none transition-all duration-300 text-[18px] text-[#1C1C1E] placeholder:text-[#AEAEB2] shadow-sm focus:shadow-md";
+    const inputBaseClass = "w-full p-5 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-indigo-400 rounded-[20px] outline-none transition-all duration-300 text-[18px] text-[#1C1C1E] placeholder:text-[#C7C7CC] shadow-sm focus:shadow-md";
 
     switch (field.type) {
       case 'textarea':
