@@ -1152,6 +1152,8 @@ class DatabaseService {
       .eq('program_id', programId);
     const roleIds = (rls || []).map(r => r.id);
     if (roleIds.length > 0) {
+      await supabase.from('organization_members').delete().in('role_id', roleIds);
+      await supabase.from('organization_invites').delete().in('role_id', roleIds);
       await supabase.from('role_permissions').delete().in('role_id', roleIds);
     }
     await supabase.from('roles').delete().eq('program_id', programId);
