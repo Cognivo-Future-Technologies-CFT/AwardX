@@ -1845,9 +1845,9 @@ class DatabaseService {
     return data;
   }
 
-  async inviteJudge(payload: { name: string; email: string; programId?: string; role?: string; groupId?: string; categoryIds?: string[] }): Promise<any> {
-    const { groupId, categoryIds, ...invitePayload } = payload;
-    const { data, error } = await judges.invite(invitePayload.email, invitePayload.name, invitePayload.programId, invitePayload.role);
+  async inviteJudge(payload: { name: string; email: string; programId?: string; role?: string; groupId?: string; categoryIds?: string[]; currentUserEmail?: string }): Promise<any> {
+    const { groupId, categoryIds, currentUserEmail, ...invitePayload } = payload;
+    const { data, error } = await judges.invite(invitePayload.email, invitePayload.name, invitePayload.programId, invitePayload.role, currentUserEmail);
     if (error || !data) throw new Error(error?.message || 'Failed to invite judge');
 
     if (groupId && data.id) {

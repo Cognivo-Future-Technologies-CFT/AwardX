@@ -1723,6 +1723,15 @@ export const judges = {
         if (!existingJudge.user_id && existingProfile?.id) {
           updatedPayload.user_id = existingProfile.id;
         }
+        if (status && existingJudge.status !== status) {
+          updatedPayload.status = status;
+          if (status === 'active') {
+            updatedPayload.accepted_at = new Date().toISOString();
+          } else if (status === 'invited') {
+            updatedPayload.invited_at = new Date().toISOString();
+            updatedPayload.accepted_at = null;
+          }
+        }
 
         if (Object.keys(updatedPayload).length > 0) {
           const { data: updatedJudge, error: updateError } = await supabase
@@ -1761,7 +1770,20 @@ export const judges = {
     return { data, error };
   },
 
-  invite: async (email: string, name: string, programId?: string, role?: string) => {
+  invite: async (email: string, name: string, programId?: string, role?: string, currentUserEmailOpt?: string) => {
+    let currentUserEmail = currentUserEmailOpt;
+    if (!currentUserEmail) {
+      const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      currentUserEmail = authData?.user?.email || sessionData?.session?.user?.email || undefined;
+    }
+
+    const isSelfInvite = currentUserEmail && email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase();
+
+    if (isSelfInvite) {
+      return judges.create({ name, email, programId, role, status: 'active' });
+    }
+
     // Create/reuse judge record first.
     const { data, error } = await judges.create({ name, email, programId, role });
     if (error || !data?.id) {

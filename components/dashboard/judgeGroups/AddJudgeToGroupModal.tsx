@@ -6,6 +6,7 @@ import { Category, Judge, JudgeGroup, TeamMember } from '../../../services/model
 import { db } from '../../../services/database';
 import { sendJudgeInviteEmail } from '../../../services/email';
 import { toast } from 'sonner';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface AddJudgeToGroupModalProps {
   isOpen: boolean;
@@ -67,6 +68,7 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
   onDone,
 }) => {
   const [search, setSearch] = useState('');
+  const { user } = useAuth();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteGroupId, setInviteGroupId] = useState('');
@@ -324,20 +326,40 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
         programId,
         groupId: inviteGroupId || targetGroup?.id || undefined,
         categoryIds: selectedCategoryIds,
+        currentUserEmail: user?.email,
       });
       const inviteToken = judgeData?.invite_token;
-      if (!inviteToken) throw new Error('Unable to generate invite link. Please try again.');
-      const inviteResult = await sendJudgeInviteEmail({
-        email,
-        name,
-        programTitle,
-        organizationId: judgeData?.organization_id,
-        programId: judgeData?.program_id || programId,
-        inviteId: judgeData?.id,
-        inviteUrl: `${window.location.origin}/judge/${inviteToken}`,
-      });
+      if (judgeData?.status !== 'active' && !inviteToken) {
+        throw new Error('Unable to generate invite link. Please try again.');
+      }
+      
+      let inviteResult = null;
+      if (judgeData?.status !== 'active') {
+        inviteResult = await sendJudgeInviteEmail({
+          email,
+          name,
+          programTitle,
+          organizationId: judgeData?.organization_id,
+          programId: judgeData?.program_id || programId,
+          inviteId: judgeData?.id,
+          inviteUrl: `${window.location.origin}/judge/${inviteToken}`,
+        });
+      }
+      
       if (inviteResult && inviteResult.emailSent === false) {
         toast.warning(inviteResult.warning || 'Judge record created, but invitation email could not be sent.');
+      } else if (judgeData?.status === 'active') {
+        const magicLinkUrl = inviteToken ? `${window.location.origin}/judge/${inviteToken}` : '';
+        if (magicLinkUrl) {
+          try {
+            await navigator.clipboard.writeText(magicLinkUrl);
+            toast.success('You have been added as a judge. Portal link copied to clipboard!');
+          } catch (clipErr) {
+            toast.success('You have been added as a judge');
+          }
+        } else {
+          toast.success('You have been added as a judge');
+        }
       } else {
         toast.success(`Invite sent to ${email}`);
       }

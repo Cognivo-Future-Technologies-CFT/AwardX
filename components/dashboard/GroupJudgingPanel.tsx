@@ -9,6 +9,7 @@ import { Plus, Trash2, Mail, UserPlus, Users } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Group {
   id: string;
@@ -24,6 +25,7 @@ interface Props {
 export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
   const { confirm, ConfirmDialogNode } = useConfirm();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [addMemberGroupId, setAddMemberGroupId] = useState<string | null>(null);
@@ -135,11 +137,12 @@ export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
         name: inviteForm.name.trim(),
         email: inviteForm.email.trim(),
         programId: activeEvent.id,
+        currentUserEmail: user?.email,
       });
 
       const inviteToken = judgeData?.invite_token;
       let emailWarning = '';
-      if (inviteToken) {
+      if (inviteToken && judgeData?.status !== 'active') {
         const magicLinkUrl = `${window.location.origin}/judge/${inviteToken}`;
         const inviteResult = await sendJudgeInviteEmail({
           email: inviteForm.email.trim(),
@@ -163,7 +166,19 @@ export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
       setInviteForm({ name: '', email: '' });
       setAddMemberGroupId(null);
       setAddMode('existing');
-      if (emailWarning) {
+      if (judgeData?.status === 'active') {
+        const magicLinkUrl = inviteToken ? `${window.location.origin}/judge/${inviteToken}` : '';
+        if (magicLinkUrl) {
+          try {
+            await navigator.clipboard.writeText(magicLinkUrl);
+            toast.success('You have been added to the group as a judge. Portal link copied to clipboard!');
+          } catch (clipErr) {
+            toast.success('You have been added to the group as a judge');
+          }
+        } else {
+          toast.success('You have been added to the group as a judge');
+        }
+      } else if (emailWarning) {
         toast.warning(`Judge invited and added to group, but email failed: ${emailWarning}`);
       } else {
         toast.success('Judge invited and added to group');
