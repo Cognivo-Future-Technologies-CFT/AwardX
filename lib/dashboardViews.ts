@@ -26,9 +26,10 @@ export function resolveAllowedDashboardView(
 ): string {
   if (!requestedView) return fallback;
 
-  const required = DASHBOARD_VIEW_PERMISSIONS[requestedView];
+  const normalizedView = requestedView === 'builder' ? 'program-details' : requestedView;
+  const required = DASHBOARD_VIEW_PERMISSIONS[normalizedView];
   if (!required) return fallback;
   if (!hasPermission(required)) return fallback;
 
-  return requestedView;
+  return normalizedView;
 }

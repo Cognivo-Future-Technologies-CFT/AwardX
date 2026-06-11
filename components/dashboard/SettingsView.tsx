@@ -347,7 +347,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
       title: 'Navigation',
       items: [
         { keys: 'g then o', action: 'Go to Overview' },
-        { keys: 'g then b', action: 'Open Overview Page' },
+        { keys: 'g then b', action: 'Open Program Details' },
         { keys: 'g then p', action: 'Open Program Details' },
         { keys: 'g then f', action: 'Open Form Builder' },
         { keys: 'g then s', action: 'Open Settings' },

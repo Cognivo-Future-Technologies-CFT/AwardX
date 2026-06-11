@@ -560,8 +560,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         openView('overview');
         break;
       case 'builder':
-        openView('builder');
-        break;
       case 'details':
         openView('program-details');
         break;
@@ -623,7 +621,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         event.preventDefault();
         runShortcutAction({
           o: 'overview',
-          b: 'builder',
+          b: 'details',
           p: 'details',
           f: 'forms',
           s: 'settings',
@@ -903,7 +901,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       { id: 'rounds', navigateTo: 'schedule-rounds', ...publishRequirements.rounds },
       { id: 'judges', navigateTo: 'judging', ...publishRequirements.judges },
       { id: 'formBuilder', navigateTo: 'templates', ...publishRequirements.formBuilder },
-      { id: 'nominationButton', navigateTo: 'builder', ...publishRequirements.nominationButton },
+      { id: 'nominationButton', navigateTo: 'program-details', ...publishRequirements.nominationButton },
     ],
     [publishRequirements]
   );
@@ -978,7 +976,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Define Nav items with Permissions
   const leftNavItems = [
     { id: 'overview',          label: 'Overview',           icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
-    { id: 'builder',           label: 'Overview Page',      icon: Sparkles,        permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'program-details',   label: 'Program Details',    icon: Edit,            permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule-rounds',   label: 'Schedule & Rounds',  icon: CalendarClock,   permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submissions',       label: 'Submissions',        icon: FileText,        permission: PERMISSIONS.VIEW_SUBMISSIONS },

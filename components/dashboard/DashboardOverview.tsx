@@ -251,8 +251,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
                   <button onClick={() => { setQuickActionOpen(false); onNavigate?.('judging'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
                     <Users className="w-4 h-4" /> Invite Judge
                   </button>
-                  <button onClick={() => { setQuickActionOpen(false); onNavigate?.('builder'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Edit Overview Page
+                  <button onClick={() => { setQuickActionOpen(false); onNavigate?.('program-details'); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Edit Program Details
                   </button>
                 </motion.div>
               )}

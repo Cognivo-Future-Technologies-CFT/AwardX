@@ -8,7 +8,6 @@ import { SubmissionTable } from '../dashboard/SubmissionTable';
 import { JudgingView } from '../dashboard/JudgingView';
 import { CategoriesView } from '../dashboard/CategoriesView';
 import { ProgramDetailsView } from '../dashboard/ProgramDetailsView';
-import { PageBuilder } from '../dashboard/builder/PageBuilder';
 import { PublishedLockBanner } from '../dashboard/PublishedLockBanner';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { DemoProvider } from '../../contexts/DemoContext';
@@ -96,7 +95,8 @@ export const DemoDashboard: React.FC = () => {
       case 'overview':
         return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
       case 'builder':
-        return <PageBuilder programId={activeEvent.id} />;
+      case 'program-details':
+        return <ProgramDetailsView activeEvent={activeEvent} />;
       case 'schedule-rounds':
         return (
           <Suspense fallback={<ViewLoader />}>
@@ -123,8 +123,6 @@ export const DemoDashboard: React.FC = () => {
         return <SubmissionTable activeEvent={activeEvent} onNavigate={setCurrentView} />;
       case 'judging':
         return <JudgingView activeEvent={activeEvent} />;
-      case 'program-details':
-        return <ProgramDetailsView activeEvent={activeEvent} />;
       default:
         return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
     }
@@ -134,7 +132,6 @@ export const DemoDashboard: React.FC = () => {
     currentView === 'awards' ||
     currentView === 'templates' ||
     currentView === 'schedule-rounds' ||
-    currentView === 'builder' ||
     currentView === 'submissions';
 
   return (
@@ -147,7 +144,6 @@ export const DemoDashboard: React.FC = () => {
         onLogout={() => navigate('/')}
         onSwitchEvent={() => navigate('/')}
         noPadding={noPadding}
-        hideHeader={currentView === 'builder'}
         awardsViewMode={awardsViewMode}
         onAwardsViewModeChange={setAwardsViewMode}
         scheduleRepresentation={scheduleRepresentation}

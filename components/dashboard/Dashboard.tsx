@@ -15,7 +15,6 @@ import { CategoriesView } from './CategoriesView';
 import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView';
 import { ProgramDetailsView } from './ProgramDetailsView';
-import { PageBuilder } from './builder/PageBuilder';
 
 import { motion } from 'framer-motion';
 import { Program, Organization } from '../../services/models';
@@ -221,7 +220,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
 
       case 'builder':
-        return activeEvent ? <PageBuilder programId={activeEvent.id} /> : null;
+      case 'program-details':
+        return <ProgramDetailsView activeEvent={activeEvent} />;
 
       case 'schedule':
         return <ScheduleView activeEvent={activeEvent} />;
@@ -278,8 +278,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             onDeleteEvent={() => setActiveEvent(null)}
           />
         );
-      case 'program-details':
-        return <ProgramDetailsView activeEvent={activeEvent} />;
       default:
         return activeEvent
           ? <ProgramTileHub activeEvent={activeEvent} onNavigate={setCurrentView} />
@@ -343,8 +341,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       onSelectProgram={setActiveEvent}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
-      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'builder' || currentView === 'submissions'}
-      hideHeader={currentView === 'builder'}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'submissions'}
       awardsViewMode={awardsViewMode}
       onAwardsViewModeChange={setAwardsViewMode}
       scheduleRepresentation={scheduleRepresentation}
