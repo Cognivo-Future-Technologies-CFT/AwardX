@@ -344,7 +344,7 @@ export const TileView: React.FC<TileViewProps> = ({
                           <Play className="w-3.5 h-3.5" />
                           {pipelineAction}
                         </button>
-                        {round.type === 'Nomination' && (roundInsights?.[round.id]?.participantTotal || 0) === 0 && onPromoteRound && (
+                        {round.type === 'Nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound && (
                           <button
                             type="button"
                             onClick={(event) => {
