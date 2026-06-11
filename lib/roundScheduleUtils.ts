@@ -131,14 +131,12 @@ export function formatRoundDates(round: Round): string {
 }
 
 export function primaryActionLabel(round: Round, hasNextRound: boolean): string | null {
-  if (round.isFinalized && round.type === 'Nomination') return 'Promote';
   if (round.isFinalized) return null;
   if (round.status === 'draft' || round.status === 'scheduled') return 'Start round';
   if (round.status === 'active') {
     return roundUsesShortlist(round) ? 'End & shortlist' : 'End round';
   }
   if (round.status === 'completed') {
-    if (round.type === 'Nomination') return 'Promote';
     return roundUsesShortlist(round) ? 'Run shortlist' : hasNextRound ? 'Advance participants' : 'Finalize round';
   }
   return null;

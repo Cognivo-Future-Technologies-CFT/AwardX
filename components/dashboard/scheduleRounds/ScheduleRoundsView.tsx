@@ -565,22 +565,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         }
 
         if (round.status === 'completed' && !round.isFinalized) {
-          if (round.type === 'Nomination') {
-            const result = await promoteRound(roundId);
-            if (!result.ok) throw new Error(result.error || 'Could not promote round');
-            toast.success(`Promoted "${round.name}" — ${result.enrolled || 0} submissions enrolled for new cycle`);
-            await loadWorkflow();
-            return;
-          }
           await openAdvancementPreview(round);
-          return;
-        }
-
-        if (round.isFinalized && round.type === 'Nomination') {
-          const result = await promoteRound(roundId);
-          if (!result.ok) throw new Error(result.error || 'Could not promote round');
-          toast.success(`Promoted "${round.name}" — ${result.enrolled || 0} submissions enrolled for new cycle`);
-          await loadWorkflow();
           return;
         }
       } catch (error) {
@@ -589,6 +574,20 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       }
     },
     [rounds, loadWorkflow, openAdvancementPreview],
+  );
+
+  const handlePromoteRound = useCallback(
+    async (roundId: string) => {
+      try {
+        const result = await promoteRound(roundId);
+        if (!result.ok) throw new Error(result.error || 'Could not promote round');
+        toast.success(`Promoted — ${result.enrolled || 0} submissions enrolled for new nomination cycle`);
+        await loadWorkflow();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Promote failed');
+      }
+    },
+    [loadWorkflow],
   );
 
   const handleExecuteAdvancement = useCallback(
@@ -754,6 +753,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
             roundInsights={roundInsights}
             insightsLoading={isInsightsLoading}
             onAdvanceRound={handleRunPipelineAction}
+            onPromoteRound={handlePromoteRound}
             reorderUpdatesFlow
           />
         )}

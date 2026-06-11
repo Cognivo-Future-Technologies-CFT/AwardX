@@ -45,6 +45,7 @@ interface TileViewProps {
   roundInsights?: Record<string, RoundCardInsight>;
   insightsLoading?: boolean;
   onAdvanceRound?: (roundId: string) => void;
+  onPromoteRound?: (roundId: string) => void;
   /** When true, drag-reorder updates the sequential flow (not visual-only). */
   reorderUpdatesFlow?: boolean;
 }
@@ -61,6 +62,7 @@ export const TileView: React.FC<TileViewProps> = ({
   roundInsights,
   insightsLoading,
   onAdvanceRound,
+  onPromoteRound,
   reorderUpdatesFlow = false,
 }) => {
   const [items, setItems] = useState(rounds);
@@ -329,7 +331,7 @@ export const TileView: React.FC<TileViewProps> = ({
                     )}
 
                     {pipelineAction && !round.isFinalized && onAdvanceRound && (
-                      <div className="mt-3 pt-3 border-t border-slate-100">
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -342,6 +344,20 @@ export const TileView: React.FC<TileViewProps> = ({
                           <Play className="w-3.5 h-3.5" />
                           {pipelineAction}
                         </button>
+                        {round.type === 'Nomination' && (roundInsights?.[round.id]?.participantTotal || 0) === 0 && onPromoteRound && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onPromoteRound(round.id);
+                            }}
+                            disabled={round.id.startsWith('round-')}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            Promote
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
