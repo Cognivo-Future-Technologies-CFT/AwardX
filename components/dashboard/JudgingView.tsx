@@ -63,10 +63,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
    const [scoresOverviewJudge, setScoresOverviewJudge] = useState<Judge | null>(null);
 
-   // Auto-assign state
-   const [isAutoAssignModalOpen, setIsAutoAssignModalOpen] = useState(false);
-   const [groupCount, setGroupCount] = useState(5);
-   const [autoAssignLoading, setAutoAssignLoading] = useState(false);
+
 
    useEffect(() => {
       const handler = (e: Event) => {
@@ -436,55 +433,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       }
    };
 
-   const handleAutoAssignJudges = async () => {
-      if (!activeEvent?.id || judges.length === 0 || submissions.length === 0) return;
-      setAutoAssignLoading(true);
-      try {
-         // Divide judges into groups
-         const groups: Judge[][] = Array.from({ length: Math.min(groupCount, judges.length) }, () => []);
-         judges.forEach((judge, idx) => {
-            groups[idx % groups.length].push(judge);
-         });
 
-         // Each category gets a group letter A, B, C, etc.
-         const categories = [...new Set(submissions.map(s => s.category))];
-         const categoryGroupMap = new Map<string, number>();
-         categories.forEach((cat, idx) => {
-            categoryGroupMap.set(cat, idx % groups.length);
-         });
-
-         // Round-robin assign within each group
-         const assignments: { submissionIds: string[]; judgeIds: string[] }[] = [];
-
-         for (const [category, groupIdx] of categoryGroupMap.entries()) {
-            const groupJudges = groups[groupIdx];
-            const categorySubmissions = submissions.filter(s => s.category === category);
-
-            categorySubmissions.forEach((sub, subIdx) => {
-               const judgeIdx = subIdx % groupJudges.length;
-               const assignedJudge = groupJudges[judgeIdx];
-               assignments.push({
-                  submissionIds: [sub.id],
-                  judgeIds: [assignedJudge.id],
-               });
-            });
-         }
-
-         // Execute assignments
-         for (const assignment of assignments) {
-            await db.assignJudgesToSubmissions(assignment.submissionIds, assignment.judgeIds);
-         }
-
-         refreshAll();
-         setIsAutoAssignModalOpen(false);
-         toast.success(`Auto-assigned ${assignments.length} judge assignments across ${groups.length} groups`);
-      } catch (error) {
-         console.error('Auto-assign failed:', error);
-         toast.error('Failed to auto-assign judges');
-      } finally {
-         setAutoAssignLoading(false);
-      }
-   };
 
    const totalWeight = criteriaDraft.reduce((sum, c) => sum + Number(c.weight || 0), 0);
    const judgeTotalPages = Math.max(1, Math.ceil(judges.length / judgesPerPage));
@@ -1105,14 +1054,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                      >
                         {unscoredOnly ? 'Showing Unscored Only' : 'Filter: Unscored Only'}
                      </button>
-                     <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={() => setIsAutoAssignModalOpen(true)}
-                        className="shadow-lg shadow-indigo-200"
-                     >
-                        <Sparkles className="w-4 h-4 mr-2" /> Auto-Assign Judges
-                     </Button>
+
                      <Button size="sm" className="flex items-center gap-2" onClick={() => setIsAssignModalOpen(true)} disabled={selectedIds.length === 0}>
                         <Users className="w-4 h-4" /> Assign Judges{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
                      </Button>
@@ -1255,49 +1197,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
             </div>
          </Modal>
 
-         <Modal
-            isOpen={isAutoAssignModalOpen}
-            onClose={() => setIsAutoAssignModalOpen(false)}
-            title="Auto-Assign Judges (Round Robin)"
-         >
-            <div className="space-y-6">
-               <p className="text-sm text-slate-600">
-                  Judges will be divided into groups. Each category of submissions will be assigned to a specific group.
-                  Within each group, assignments follow a round-robin pattern for even distribution.
-               </p>
-               <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-slate-700">Number of Groups</label>
-                  <input
-                     type="number"
-                     min={1}
-                     max={Math.max(judges.length, 1)}
-                     value={groupCount}
-                     onChange={(e) => setGroupCount(Math.max(1, parseInt(e.target.value) || 1))}
-                     className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                  />
-                  <p className="text-xs text-slate-500">
-                     {judges.length} judges will be split into {Math.min(groupCount, judges.length)} groups
-                     ({Math.ceil(judges.length / Math.min(groupCount, judges.length))} judges per group)
-                  </p>
-               </div>
-               <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-600 space-y-1">
-                  <p className="font-semibold text-slate-700">How it works:</p>
-                  <p>1. Judges are divided into {Math.min(groupCount, judges.length)} groups (A, B, C...)</p>
-                  <p>2. Each submission category maps to a group</p>
-                  <p>3. Within each group, submissions are assigned round-robin</p>
-               </div>
-               <div className="flex justify-end gap-3">
-                  <Button variant="ghost" onClick={() => setIsAutoAssignModalOpen(false)}>Cancel</Button>
-                  <Button
-                     variant="primary"
-                     onClick={handleAutoAssignJudges}
-                     disabled={autoAssignLoading || judges.length === 0}
-                  >
-                     {autoAssignLoading ? 'Assigning...' : `Auto-Assign ${judges.length} Judges`}
-                  </Button>
-               </div>
-            </div>
-         </Modal>
+
 
          <AddJudgeToGroupModal
             isOpen={isAddJudgeModalOpen}

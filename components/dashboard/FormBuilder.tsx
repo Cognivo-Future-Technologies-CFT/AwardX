@@ -72,7 +72,6 @@ const fieldTypes = [
       { type: 'text', label: 'Short Text', icon: Type, description: 'Names, titles, etc.' },
       { type: 'textarea', label: 'Long Text', icon: FileText, description: 'Essays, bios, etc.' },
       { type: 'email', label: 'Email', icon: Mail, description: 'Contact email' },
-      { type: 'date', label: 'Date', icon: Calendar, description: 'Event dates' },
     ]
   },
   {
