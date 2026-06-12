@@ -64,11 +64,16 @@ export const DataNode: React.FC<NodeProps<DataNodeData>> = ({ data }) => {
                 )}
             </div>
 
-            <Handle
-                type="source"
-                position={Position.Bottom}
-                className="!w-2 !h-2 !bg-indigo-400 !border-2 !border-white !rounded-full -mb-1"
-            />
+<Handle
+    type="source"
+    position={Position.Bottom}
+    style={{
+        width: 0,
+        height: 0,
+        opacity: 0,
+        pointerEvents: 'none',
+    }}
+/>
 
             {/* Tooltip on Hover */}
             <div className="absolute left-1/2 -translate-x-1/2 -top-12 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-slate-800 text-white text-[10px] py-1 px-2 rounded whitespace-nowrap z-50">

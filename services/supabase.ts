@@ -8,6 +8,10 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 // Check if Supabase is configured
 const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
 
+console.log("SUPABASE URL:", supabaseUrl);
+console.log("SUPABASE CONFIGURED:", isSupabaseConfigured);
+console.log("ANON KEY EXISTS:", !!supabaseAnonKey);
+
 const trackedSupabaseFetch: typeof fetch = (input, init) =>
   trackSupabaseRequest(() => fetch(input, init));
 

@@ -426,7 +426,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                 </div>
             </div>
 
-            {!isFullscreen && categories.length > 0 && (
+            {!isFullscreen && (
                 <button
                     type="button"
                     onClick={() => onAddSub('')}
