@@ -119,7 +119,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Connection Name (Optional) */}
         <div className="space-y-2">
-          <label className="block text-xs text-slate-600 mb-1">a
+          <label className="block text-xs text-slate-600 mb-1">
             Connection Name <span className="text-slate-400">(optional)</span>
           </label>
           <input
