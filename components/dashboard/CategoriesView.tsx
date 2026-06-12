@@ -281,7 +281,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
       try {
          await db.deleteCategory(categoryId, activeEvent.id);
          await loadCategories();
-         toast.success('Category deleted');
+         toast.success(`"${category?.title}" deleted`);
       } catch (error) {
          const message = error instanceof Error ? error.message : 'Failed to delete category';
          toast.error(message);

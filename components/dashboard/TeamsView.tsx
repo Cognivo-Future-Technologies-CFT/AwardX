@@ -967,17 +967,39 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                             </button>
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1">Assign Role</label>
-                        <select
-                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                            value={inviteRoleId || ''}
-                            onChange={(e) => setInviteRoleId(e.target.value)}
-                        >
-                            <option value="">Select a role...</option>
-                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
-                    </div>
+<div className="flex items-center justify-between mb-1">
+   <label className="text-sm font-semibold text-slate-700">
+      Assign Role
+   </label>
+
+   <button
+      type="button"
+      onClick={() => {
+         setEditingRole({
+            id: '',
+            name: '',
+            permissions: [],
+         });
+         setIsRoleModalOpen(true);
+      }}
+      className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+   >
+      + New Role
+   </button>
+</div>
+
+<select
+   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+   value={inviteRoleId || ''}
+   onChange={(e) => setInviteRoleId(e.target.value)}
+>
+   <option value="">Select a role...</option>
+   {roles.map(r => (
+      <option key={r.id} value={r.id}>
+         {r.name}
+      </option>
+   ))}
+</select>
                     <div className="bg-slate-50 p-4 rounded-lg text-xs text-slate-500">
                         An invite email will be sent. If email delivery fails, you can copy the invite link from the Pending Invitations section.
                     </div>
