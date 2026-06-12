@@ -967,17 +967,42 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                             </button>
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-1">Assign Role</label>
-                        <select
-                            className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                            value={inviteRoleId || ''}
-                            onChange={(e) => setInviteRoleId(e.target.value)}
-                        >
-                            <option value="">Select a role...</option>
-                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>
-                    </div>
+<div>
+    <label className="block text-sm font-semibold text-slate-700 mb-1">
+        Assign Role
+    </label>
+
+    <div className="flex gap-2">
+        <select
+            className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+            value={inviteRoleId || ''}
+            onChange={(e) => setInviteRoleId(e.target.value)}
+        >
+            <option value="">Select a role...</option>
+            {roles.map(r => (
+                <option key={r.id} value={r.id}>
+                    {r.name}
+                </option>
+            ))}
+        </select>
+
+        <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+                setEditingRole({
+                    id: '',
+                    name: '',
+                    permissions: [],
+                });
+                setIsRoleModalOpen(true);
+            }}
+        >
+            <Plus className="w-4 h-4 mr-1" />
+            Create
+        </Button>
+    </div>
+</div>
                     <div className="bg-slate-50 p-4 rounded-lg text-xs text-slate-500">
                         An invite email will be sent. If email delivery fails, you can copy the invite link from the Pending Invitations section.
                     </div>
