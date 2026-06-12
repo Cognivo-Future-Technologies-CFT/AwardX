@@ -52,6 +52,51 @@ const PERMISSION_GROUPS = [
     }
 ];
 
+const ROLE_PRESETS = [
+  {
+    key: 'judge',
+    name: 'Judge',
+    description: 'Review and score submissions',
+    permissions: [
+      PERMISSIONS.VIEW_SUBMISSIONS,
+      PERMISSIONS.VIEW_JUDGING,
+    ],
+    color: 'bg-blue-100 text-blue-700',
+    icon: '🏆',
+  },
+  {
+    key: 'lead-judge',
+    name: 'Lead Judge',
+    description: 'Manage and oversee judging',
+    permissions: [
+      PERMISSIONS.VIEW_SUBMISSIONS,
+      PERMISSIONS.VIEW_JUDGING,
+      PERMISSIONS.MANAGE_JUDGING,
+    ],
+    color: 'bg-purple-100 text-purple-700',
+    icon: '⭐',
+  },
+  {
+    key: 'manager',
+    name: 'Event Manager',
+    description: 'Manage programs and operations',
+    permissions: [
+      PERMISSIONS.VIEW_OVERVIEW,
+      PERMISSIONS.MANAGE_PROGRAMS,
+      PERMISSIONS.VIEW_ANALYTICS,
+    ],
+    color: 'bg-emerald-100 text-emerald-700',
+    icon: '📋',
+  },
+  {
+    key: 'admin',
+    name: 'Admin',
+    description: 'Full system access',
+    permissions: Object.values(PERMISSIONS),
+    color: 'bg-rose-100 text-rose-700',
+    icon: '🛡️',
+  },
+];
 interface TeamsViewProps {
     activeEvent?: Program | null;
 }
@@ -79,6 +124,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [revokingId, setRevokingId] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const eventId = activeEvent?.id ?? '';
+    const [openRoleMenuId, setOpenRoleMenuId] = useState<string | null>(null);
     const eventTitle = activeEvent?.title || 'your workspace';
 
     const appendRequestTrace = (trace: EmailApiRequestTrace) => {
@@ -94,7 +140,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [isChangeRoleModalOpen, setIsChangeRoleModalOpen] = useState(false);
     const [changingMember, setChangingMember] = useState<TeamMember | null>(null);
     const [newRoleId, setNewRoleId] = useState('');
-
+const roleMenuRef = useRef<HTMLDivElement>(null);
     const [editingRole, setEditingRole] = useState<Partial<Role>>({
         name: '',
         permissions: [],
@@ -111,6 +157,20 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    useEffect(() => {
+    const handler = (e: MouseEvent) => {
+        if (
+            roleMenuRef.current &&
+            !roleMenuRef.current.contains(e.target as Node)
+        ) {
+            setOpenRoleMenuId(null);
+        }
+    };
+
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+}, []);
 
     // Load current user + org
     useEffect(() => {
@@ -278,6 +338,17 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         setEditingRole(role ? { ...role } : { name: '', permissions: [], color: 'bg-slate-100 text-slate-700' });
         setIsRoleModalOpen(true);
     };
+
+    const duplicateRole = (role: Role) => {
+    const { id, usersCount, ...rest } = role;
+
+    setEditingRole({
+        ...rest,
+        name: `${role.name} Copy`,
+    });
+
+    setIsRoleModalOpen(true);
+};
 
     const togglePermission = (key: string) => {
         const current = editingRole.permissions || [];
@@ -837,9 +908,82 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${role.color.split(' ')[0]}`}>
                                     <Shield className={`w-6 h-6 ${role.color.split(' ')[1]}`} />
                                 </div>
-                                <button onClick={() => openRoleModal(role)} className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-slate-100 rounded-lg">
-                                    <Edit2 className="w-4 h-4" />
-                                </button>
+<div
+    className="relative"
+    ref={openRoleMenuId === role.id ? roleMenuRef : undefined}
+>
+    <button
+        onClick={() =>
+            setOpenRoleMenuId(
+                openRoleMenuId === role.id ? null : role.id
+            )
+        }
+        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+    >
+        <MoreVertical className="w-4 h-4" />
+    </button>
+
+    {openRoleMenuId === role.id && (
+        <div className="absolute right-0 top-10 z-20 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+            <button
+                onClick={() => {
+                    openRoleModal(role);
+                    setOpenRoleMenuId(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+            >
+                <Edit2 className="w-4 h-4" />
+                Edit Role
+            </button>
+
+            <button
+                onClick={() => {
+                    duplicateRole(role);
+                    setOpenRoleMenuId(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+            >
+                <Copy className="w-4 h-4" />
+                Duplicate Role
+            </button>
+<button
+    disabled={role.usersCount > 0}
+    onClick={async () => {
+        setOpenRoleMenuId(null);
+
+        const ok = await confirm({
+            title: `Delete "${role.name}"?`,
+            description: 'This action cannot be undone.',
+            confirmLabel: 'Delete Role',
+        });
+
+        if (!ok) return;
+
+        try {
+            await db.deleteRole(role.id);
+
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.teams.roles(eventId),
+            });
+
+            toast.success('Role deleted');
+        } catch {
+            toast.error('Failed to delete role');
+        }
+    }}
+    className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+        role.usersCount > 0
+            ? 'text-slate-400 cursor-not-allowed'
+            : 'text-red-600 hover:bg-red-50'
+    }`}
+>
+    <Trash2 className="w-4 h-4" />
+    Delete Role
+</button>
+
+        </div>
+    )}
+</div>
                             </div>
                             <h3 className="text-lg font-bold text-slate-900 mb-2">{role.name}</h3>
                             <div className="flex items-center gap-4 text-sm text-slate-500 mb-6">
@@ -1015,6 +1159,47 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             {/* Role Editor Modal */}
             <Modal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} title={editingRole.id ? "Edit Role" : "Create New Role"}>
                 <form onSubmit={handleCreateRole} className="space-y-6">
+                    <div>
+  <label className="block text-sm font-semibold text-slate-700 mb-3">
+    Start with a preset
+  </label>
+
+  <div className="grid grid-cols-2 gap-3">
+    {ROLE_PRESETS.map((preset) => (
+      <button
+        key={preset.key}
+        type="button"
+        onClick={() =>
+          setEditingRole({
+            ...editingRole,
+            name: preset.name,
+            permissions: preset.permissions,
+            color: preset.color,
+          })
+        }
+        className="group p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left"
+      >
+        <div className="flex items-start gap-3">
+          <div className="text-xl">{preset.icon}</div>
+
+          <div className="min-w-0">
+            <h4 className="font-semibold text-slate-900 group-hover:text-indigo-700">
+              {preset.name}
+            </h4>
+
+            <p className="text-xs text-slate-500 mt-1">
+              {preset.description}
+            </p>
+
+            <div className="mt-2 text-xs font-medium text-indigo-600">
+              {preset.permissions.length} permissions
+            </div>
+          </div>
+        </div>
+      </button>
+    ))}
+  </div>
+</div>
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Role Name</label>
                         <input
