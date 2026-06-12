@@ -351,8 +351,8 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                             }
                   `}>
                             {/* Handles */}
-                            <div className="absolute left-0 top-1/2 -translate-x-1/2 w-3 h-3 bg-slate-200 border-2 border-white rounded-full shadow-sm" />
-                            <div className="absolute right-0 top-1/2 translate-x-1/2 w-3 h-3 bg-indigo-500 border-2 border-white rounded-full shadow-sm" />
+                            {/* <div className="absolute left-0 top-1/2 -translate-x-1/2 w-3 h-3 bg-slate-200 border-2 border-white rounded-full shadow-sm" /> */}
+                            {/* <div className="absolute right-0 top-1/2 translate-x-1/2 w-3 h-3 bg-indigo-500 border-2 border-white rounded-full shadow-sm" /> */}
 
                             <div className="flex items-center justify-between gap-2">
                                 <input
