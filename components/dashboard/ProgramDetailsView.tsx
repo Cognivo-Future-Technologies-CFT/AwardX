@@ -365,8 +365,8 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
     return (
         <div className="w-full min-h-[calc(100vh-10rem)]">
             {/* Header */}
-            <div className="sticky top-0 z-20 -mt-4 lg:-mt-8 -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 py-4 mb-6 bg-slate-50/95 backdrop-blur border-b border-slate-200">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+                <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <div className="flex items-center gap-2.5 flex-wrap">
                             <h1 className="text-2xl font-bold text-slate-900">Program Details</h1>
@@ -416,7 +416,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                 </div>
             </div>
 
-            <div className="space-y-6 pb-12">
+            <div className="max-w-7xl mx-auto space-y-6 pb-12 px-4 md:px-6 lg:px-8 mt-6">
                 {/* Info banner */}
                 <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3.5 flex items-start gap-3">
                     <Info className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
