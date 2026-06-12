@@ -344,7 +344,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       onSelectProgram={setActiveEvent}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
-      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'submissions'}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'submissions' || currentView === 'voting' || currentView === 'program-details' || currentView === 'builder'}
       awardsViewMode={awardsViewMode}
       onAwardsViewModeChange={setAwardsViewMode}
       scheduleRepresentation={scheduleRepresentation}
