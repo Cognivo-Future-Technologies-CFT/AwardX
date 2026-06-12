@@ -141,6 +141,10 @@ export const FormSubmissionPage: React.FC = () => {
   const [applicationMode, setApplicationMode] = useState<'standard' | 'hackathon'>('standard');
   const [requireGithubAuth, setRequireGithubAuth] = useState(false);
   const [kycEnabled, setKycEnabled] = useState(false);
+  // Whether the current visitor is signed in (any provider).
+  // Forms load for everyone; sign-in is only required at submit time.
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
   const needsGithubApplication = applicationMode === 'hackathon' || requireGithubAuth;
 
@@ -213,14 +217,10 @@ export const FormSubmissionPage: React.FC = () => {
       try {
         setIsLoading(true);
 
-        if (getRequireSignInFromUrl()) {
-          const { session } = await auth.getSession();
-          if (!session) {
-            const returnUrl = `${window.location.pathname}${window.location.search}`;
-            navigate(`/login?redirect=${encodeURIComponent(returnUrl)}`);
-            return;
-          }
-        }
+        // Check current session — form loads regardless, but we track auth state
+        // so we can gate submission (not form viewing) for unauthenticated users.
+        const { session } = await auth.getSession();
+        setIsAuthenticated(!!session);
 
         // Load form data directly from supabase (public access)
         if (!supabase) {
@@ -277,16 +277,17 @@ export const FormSubmissionPage: React.FC = () => {
         setKycEnabled(!!programRow?.kyc_enabled);
 
         if (githubRequired || mode === 'hackathon') {
-          const { session, user } = await auth.getSession();
+          const { session } = await auth.getSession();
           if (!session) {
             const returnUrl = `${window.location.pathname}${window.location.search}`;
             navigate(`/login?next=${encodeURIComponent(returnUrl)}`);
             return;
           }
-          const identities = user?.identities || [];
+          const { user: ghUser } = await auth.getUser();
+          const identities = ghUser?.identities || [];
           const hasGithub =
-            identities.some((i) => i.provider === 'github') ||
-            user?.app_metadata?.provider === 'github';
+            identities.some((i: any) => i.provider === 'github') ||
+            ghUser?.app_metadata?.provider === 'github';
           if (!hasGithub) {
             setIsError('github_required');
             setIsLoading(false);
@@ -530,6 +531,15 @@ export const FormSubmissionPage: React.FC = () => {
       toast.error('Please complete all required questions before submitting.');
       return;
     }
+
+    // Re-check auth at submit time (session may have changed since load).
+    const { session } = await auth.getSession();
+    if (!session) {
+      setIsAuthenticated(false);
+      setShowSignInPrompt(true);
+      return;
+    }
+    setIsAuthenticated(true);
 
     const currentFormId = formId || getFormIdFromUrl();
     if (!currentFormId) {
@@ -1075,12 +1085,54 @@ export const FormSubmissionPage: React.FC = () => {
               </motion.div>
             </AnimatePresence>
 
-            <div className="mt-16 pt-8 flex justify-center items-center w-full max-w-4xl border-t border-slate-100">
-              <div className="text-[14px] text-[#86868B] font-medium text-center">
-                {saveState === 'saving' && 'Saving draft...'}
-                {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}`}
-                {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
+            <div className="mt-16 pt-8 w-full max-w-4xl border-t border-slate-100 space-y-4">
+              {/* Draft-save indicator */}
+              <div className="flex justify-center items-center">
+                <div className="text-[14px] text-[#86868B] font-medium text-center">
+                  {saveState === 'saving' && 'Saving draft...'}
+                  {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}`}
+                  {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
+                </div>
               </div>
+
+              {/* Sign-in prompt — shown inline when user tries to submit without a session */}
+              {showSignInPrompt && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-[20px] border border-indigo-200 bg-indigo-50 px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4"
+                >
+                  <div className="flex-1">
+                    <p className="text-[16px] font-bold text-indigo-900">Sign in to submit your response</p>
+                    <p className="text-[14px] text-indigo-700 mt-1">
+                      Your answers are saved. Sign in with any account and you'll be brought straight back here.
+                    </p>
+                  </div>
+                  <a
+                    href={`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                    className="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[15px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm hover:shadow-md"
+                  >
+                    Sign in
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </motion.div>
+              )}
+
+              {/* Persistent soft nudge for visitors who haven't signed in yet */}
+              {!isAuthenticated && !showSignInPrompt && (
+                <p className="text-center text-[13px] text-[#AEAEB2]">
+                  You'll need to{' '}
+                  <a
+                    href={`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+                    className="text-indigo-500 hover:text-indigo-700 font-semibold underline underline-offset-2 transition-colors"
+                  >
+                    sign in
+                  </a>
+                  {' '}to submit your response.
+                </p>
+              )}
             </div>
           </div>
         </motion.div>
