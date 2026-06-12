@@ -8,6 +8,80 @@ import { db } from '../../services/database';
 import { auth, storage } from '../../services/supabase';
 import { Program } from '../../services/models';
 
+const GMT_OFFSETS = [
+  { value: 'GMT-12:00', label: 'GMT-12:00 (Baker Island)' },
+  { value: 'GMT-11:00', label: 'GMT-11:00 (Samoa, Niue)' },
+  { value: 'GMT-10:00', label: 'GMT-10:00 (Hawaii, Tahiti)' },
+  { value: 'GMT-09:30', label: 'GMT-09:30 (Marquesas Islands)' },
+  { value: 'GMT-09:00', label: 'GMT-09:00 (Alaska, Gambier)' },
+  { value: 'GMT-08:00', label: 'GMT-08:00 (Pacific Time - US/Canada)' },
+  { value: 'GMT-07:00', label: 'GMT-07:00 (Mountain Time - US/Canada)' },
+  { value: 'GMT-06:00', label: 'GMT-06:00 (Central Time - US/Canada/Mexico)' },
+  { value: 'GMT-05:00', label: 'GMT-05:00 (Eastern Time - US/Canada/Bogota)' },
+  { value: 'GMT-04:00', label: 'GMT-04:00 (Atlantic Time - Halifax, Santiago)' },
+  { value: 'GMT-03:30', label: 'GMT-03:30 (Newfoundland)' },
+  { value: 'GMT-03:00', label: 'GMT-03:00 (Brazil, Buenos Aires, Greenland)' },
+  { value: 'GMT-02:00', label: 'GMT-02:00 (Mid-Atlantic)' },
+  { value: 'GMT-01:00', label: 'GMT-01:00 (Azores, Cape Verde)' },
+  { value: 'GMT+00:00', label: 'GMT+00:00 (UTC / London, Dublin, Lisbon)' },
+  { value: 'GMT+01:00', label: 'GMT+01:00 (Central Europe - Paris, Berlin, Rome)' },
+  { value: 'GMT+02:00', label: 'GMT+02:00 (Eastern Europe - Athens, Cairo, Kyiv)' },
+  { value: 'GMT+03:00', label: 'GMT+03:00 (East Africa - Nairobi, Moscow, Baghdad)' },
+  { value: 'GMT+03:30', label: 'GMT+03:30 (Tehran)' },
+  { value: 'GMT+04:00', label: 'GMT+04:00 (Gulf Time - Dubai, Baku, Tbilisi)' },
+  { value: 'GMT+04:30', label: 'GMT+04:30 (Kabul)' },
+  { value: 'GMT+05:00', label: 'GMT+05:00 (Pakistan, Karachi, Maldives)' },
+  { value: 'GMT+05:30', label: 'GMT+05:30 (India - New Delhi, Sri Lanka)' },
+  { value: 'GMT+05:45', label: 'GMT+05:45 (Nepal - Kathmandu)' },
+  { value: 'GMT+06:00', label: 'GMT+06:00 (Bangladesh, Dhaka, Almaty)' },
+  { value: 'GMT+06:30', label: 'GMT+06:30 (Myanmar - Yangon)' },
+  { value: 'GMT+07:00', label: 'GMT+07:00 (Indochina - Bangkok, Jakarta, Hanoi)' },
+  { value: 'GMT+08:00', label: 'GMT+08:00 (China, Singapore, Western Australia)' },
+  { value: 'GMT+08:45', label: 'GMT+08:45 (Eucla)' },
+  { value: 'GMT+09:00', label: 'GMT+09:00 (Japan, Korea, Tokyo, Seoul)' },
+  { value: 'GMT+09:30', label: 'GMT+09:30 (Central Australia - Adelaide, Darwin)' },
+  { value: 'GMT+10:00', label: 'GMT+10:00 (Eastern Australia - Sydney, Vladivostok)' },
+  { value: 'GMT+10:30', label: 'GMT+10:30 (Lord Howe Island)' },
+  { value: 'GMT+11:00', label: 'GMT+11:00 (Solomon Islands, Vanuatu)' },
+  { value: 'GMT+12:00', label: 'GMT+12:00 (New Zealand, Fiji)' },
+  { value: 'GMT+12:45', label: 'GMT+12:45 (Chatham Islands)' },
+  { value: 'GMT+13:00', label: 'GMT+13:00 (Tonga, Samoa)' },
+  { value: 'GMT+14:00', label: 'GMT+14:00 (Line Islands, Kiribati)' },
+];
+
+const normalizeToGmt = (tz?: string | null): string => {
+  if (!tz) return 'GMT+00:00';
+  if (tz === 'UTC' || tz === 'GMT') return 'GMT+00:00';
+  
+  if (GMT_OFFSETS.some(o => o.value === tz)) return tz;
+  
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'longOffset',
+    });
+    const parts = formatter.formatToParts(new Date());
+    const tzPart = parts.find((part) => part.type === 'timeZoneName');
+    if (tzPart) {
+      let val = tzPart.value;
+      if (val === 'GMT' || val === 'UTC') return 'GMT+00:00';
+      return val;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const match = tz.match(/GMT\s*([+-]\d{1,2}):?(\d{2})?/i);
+  if (match) {
+    const sign = match[1].startsWith('-') ? '-' : '+';
+    const hours = Math.abs(parseInt(match[1])).toString().padStart(2, '0');
+    const minutes = (match[2] || '00').padStart(2, '0');
+    return `GMT${sign}${hours}:${minutes}`;
+  }
+
+  return 'GMT+00:00';
+};
+
 interface SettingsViewProps {
   activeEvent?: Program | null;
   onDeleteEvent?: () => void;
@@ -519,13 +593,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">Timezone</label>
                         <select
-                          value={profile?.timezone || 'UTC'}
+                          value={normalizeToGmt(profile?.timezone || 'UTC')}
                           onChange={(e) => setProfile((p: any) => ({ ...(p || {}), timezone: e.target.value }))}
                           className="w-full px-4 py-2 border border-slate-200 rounded-lg"
                           disabled={loading}
                         >
-                          {Intl.supportedValuesOf('timeZone').map((tz) => (
-                            <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                          {GMT_OFFSETS.map((tz) => (
+                            <option key={tz.value} value={tz.value}>{tz.label}</option>
                           ))}
                         </select>
                       </div>
