@@ -15,6 +15,7 @@ import { TableSkeleton } from '../SkeletonLoader';
 import { realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { getProgramFormSetupState } from '../../lib/programFormSetup';
+import { ResolvedMediaLink } from '../ResolvedMediaUrl';
 
 const StatusBadge = ({ status }: { status: string }) => {
    const variants: Record<string, { container: string; icon: React.ReactNode; dot: string }> = {
@@ -123,27 +124,15 @@ const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
       return (
          <div className="flex items-center gap-1.5">
             {items.slice(0, 3).map((item, idx) => {
-               const url = item?.url || (typeof item === 'string' ? item : undefined);
-               const name = item?.name || url?.split('/').pop() || `file ${idx + 1}`;
-               if (type === 'image' && url) {
-                  return (
-                     <a key={idx} href={url} target="_blank" rel="noreferrer" className="block">
-                        <img src={url} alt={name} className="h-8 w-8 rounded-md object-cover border border-slate-200" />
-                     </a>
-                  );
-               }
+               const rawUrl = item?.url || (typeof item === 'string' ? item : undefined);
+               const name = item?.name || rawUrl?.split('/').pop() || `file ${idx + 1}`;
                return (
-                  <a
+                  <ResolvedMediaLink
                      key={idx}
-                     href={url}
-                     target="_blank"
-                     rel="noreferrer"
-                     className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-indigo-50 text-[11px] font-semibold text-slate-700 hover:text-indigo-700 max-w-[140px] truncate"
-                     title={name}
-                  >
-                     <ExternalLink className="w-3 h-3 shrink-0" />
-                     <span className="truncate">{name}</span>
-                  </a>
+                     value={rawUrl}
+                     name={name}
+                     asImage={type === 'image'}
+                  />
                );
             })}
             {items.length > 3 && (

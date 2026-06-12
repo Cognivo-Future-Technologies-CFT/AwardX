@@ -8,6 +8,8 @@ import {
 import { Program, EventType, Organization, Role, TeamMember } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
+import { sendTeamInviteEmail } from '../../services/email';
+import { toast } from 'sonner';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
@@ -550,12 +552,19 @@ const [newEvent, setNewEvent] = useState({
 
       setIsAddingMember(true);
       try {
-         await databaseService.addTeamMemberByEmail(email, newMemberRoleId);
-         await loadPrograms(false);
+         const roleName = orgRoles.find((role) => role.id === newMemberRoleId)?.name;
+         await sendTeamInviteEmail({
+            email,
+            roleId: newMemberRoleId,
+            roleName,
+            programTitle: activeOrganization.name,
+            organizationId: activeOrganization.id,
+         });
+         toast.success(`Invitation sent to ${email}`);
          setNewMemberEmail('');
          setIsAddMemberModalOpen(false);
       } catch (error: any) {
-         alert(error?.message || 'Failed to add member. Please try again.');
+         toast.error(error?.message || 'Failed to send invitation. Please try again.');
       } finally {
          setIsAddingMember(false);
       }
@@ -1016,11 +1025,11 @@ const [newEvent, setNewEvent] = useState({
          <Modal
             isOpen={isAddMemberModalOpen}
             onClose={() => setIsAddMemberModalOpen(false)}
-            title="Add Member"
+            title="Invite Member"
          >
             <form onSubmit={handleAddMember} className="space-y-4">
                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  Add an existing platform user to <span className="font-semibold">{activeOrganization.name}</span> and choose their role.
+                  Send an email invitation to join <span className="font-semibold">{activeOrganization.name}</span>. They must accept before gaining access.
                </div>
                <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1">Email Address</label>
@@ -1064,7 +1073,7 @@ const [newEvent, setNewEvent] = useState({
                      ) : (
                         <>
                            <UserPlus className="w-4 h-4 mr-2" />
-                           Add Member
+                           Send Invite
                         </>
                      )}
                   </Button>

@@ -767,14 +767,14 @@ export const FormSubmissionPage: React.FC = () => {
                 if (!file) return;
                 handleInputChange(field.id, { name: file.name, uploading: true });
                 const tempId = `temp-${Date.now()}`;
-                const { path, bucket, error } = await storage.uploadSubmissionFile(file, tempId);
+                const { path, error } = await storage.uploadSubmissionFile(file, tempId);
                 if (error || !path) {
                   handleInputChange(field.id, { error: (error as any)?.message || 'Upload failed' });
                   toast.error('File upload failed: ' + ((error as any)?.message || 'Unknown error'));
                   return;
                 }
-                const { data: urlData } = (supabase as any).storage.from(bucket || 'media').getPublicUrl(path);
-                handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path });
+                // Store the storage path; dashboard views resolve signed URLs at read time.
+                handleInputChange(field.id, { name: file.name, url: path });
               }}
             />
             {fileState.url ? (

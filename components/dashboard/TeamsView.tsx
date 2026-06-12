@@ -170,7 +170,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             const message = error instanceof Error ? error.message : 'An unexpected error occurred';
             toast.error(`Error: ${message}`);
         },
-        onSuccess: () => {
+        onSuccess: (_result, vars) => {
             queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
             if (orgId) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.invites.pending(orgId) });

@@ -284,6 +284,11 @@ export const resolveMediaUrl = async (value?: string | null, expiresIn = 60 * 60
   const raw = (value || '').trim();
   if (!raw) return '';
 
+  // External URLs that are not Supabase storage routes.
+  if (/^https?:\/\//i.test(raw) && !raw.includes('/storage/v1/object/')) {
+    return raw;
+  }
+
   const parsed = extractStorageBucketAndPath(raw);
   if (!parsed || !supabase) {
     return resolveMediaPublicUrl(raw);
@@ -294,7 +299,8 @@ export const resolveMediaUrl = async (value?: string | null, expiresIn = 60 * 60
     .createSignedUrl(parsed.path, expiresIn);
 
   if (error || !data?.signedUrl) {
-    return resolveMediaPublicUrl(raw);
+    // media bucket is private; public URLs 404 — do not fall back.
+    return '';
   }
 
   return data.signedUrl;
@@ -799,7 +805,8 @@ export const organizations = {
       .eq('id', userId)
       .maybeSingle();
 
-    if (profile?.organization_id) {
+    // Legacy org creators may only have profiles.organization_id until backfilled.
+    if (profile?.organization_id && orgIds.size === 0) {
       orgIds.add(profile.organization_id);
     }
 
@@ -2360,6 +2367,41 @@ export const scheduledPosts = {
 // TEAM / MEMBERS (Organization members, roles)
 // ============================================================================
 
+const syncProfileOrganizationLink = async (userId: string, orgId: string) => {
+  if (!supabase || !userId || !orgId) return;
+
+  const { count: remainingInOrg } = await supabase
+    .from('organization_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('organization_id', orgId)
+    .eq('status', 'active');
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if ((remainingInOrg || 0) > 0 || profileRow?.organization_id !== orgId) {
+    return;
+  }
+
+  const { data: fallbackMembership } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('joined_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  await supabase
+    .from('profiles')
+    .update({ organization_id: fallbackMembership?.organization_id || null })
+    .eq('id', userId);
+};
+
 export const team = {
   getMembers: async (programId?: string) => {
     const orgId = await getCurrentOrgId();
@@ -2461,28 +2503,30 @@ export const team = {
       .select()
       .single();
 
-    // Ensure the added user's profile is linked to this organization
-    // (the rest of the app uses profiles.organization_id to discover "current org").
-    try {
-      await supabase
-        .from('profiles')
-        .update({ organization_id: orgId })
-        .eq('id', profile.id);
-    } catch {
-      // ignore
-    }
-
     return { data, error };
   },
 
   removeMember: async (memberId: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
+
+    const { data: targetMember } = await supabase
+      .from('organization_members')
+      .select('id, user_id, program_id, organization_id')
+      .eq('id', memberId)
+      .eq('organization_id', orgId)
+      .maybeSingle();
+
     const { error } = await supabase
       .from('organization_members')
       .delete()
       .eq('id', memberId)
       .eq('organization_id', orgId);
+
+    if (targetMember?.user_id && !error) {
+      await syncProfileOrganizationLink(targetMember.user_id, orgId);
+    }
+
     return { error };
   },
 };

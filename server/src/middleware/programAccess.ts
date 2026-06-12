@@ -14,7 +14,18 @@ export async function canAccessOrganization(userId: string, organizationId: stri
     .eq('id', userId)
     .maybeSingle();
 
-  if (profile?.organization_id === organizationId) return true;
+  if (profile?.organization_id === organizationId) {
+    const { count: activeMembershipCount } = await supabase
+      .from('organization_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .in('status', ['active', 'pending']);
+
+    if ((activeMembershipCount || 0) === 0) {
+      return true;
+    }
+  }
 
   const { data: memberships } = await supabase
     .from('organization_members')

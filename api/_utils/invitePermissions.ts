@@ -10,7 +10,16 @@ export async function canManageInvites(supabase: any, userId: string, organizati
     .maybeSingle();
 
   if (profile && profile.organization_id === organizationId) {
-    return true;
+    const { count: activeMembershipCount } = await supabase
+      .from('organization_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if ((activeMembershipCount || 0) === 0) {
+      return true;
+    }
   }
 
   const { data: memberships, error } = await supabase

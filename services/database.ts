@@ -646,10 +646,19 @@ class DatabaseService {
       .maybeSingle();
 
     if (profile?.organization_id === this.currentOrgId) {
-      this.cachedRoleName = 'owner';
-      this.cachedPermissions = new Set(['all']);
-      this.permissionsLoaded = true;
-      return;
+      const { count: activeMembershipCount } = await supabase
+        .from('organization_members')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', this.currentOrgId)
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      if ((activeMembershipCount || 0) === 0) {
+        this.cachedRoleName = 'owner';
+        this.cachedPermissions = new Set(['all']);
+        this.permissionsLoaded = true;
+        return;
+      }
     }
 
     // Prefer event-scoped membership, fall back to org-wide (program_id IS NULL).

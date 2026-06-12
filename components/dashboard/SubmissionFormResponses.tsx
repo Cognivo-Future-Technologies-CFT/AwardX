@@ -5,6 +5,7 @@ import { Submission } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
 import { forms as formsService } from '../../services/supabase';
 import { extractSubmissionResponses, getSubmissionFormId } from '../../lib/submissionFormData';
+import { ResolvedMediaFile } from '../ResolvedMediaUrl';
 
 interface SubmissionFormResponsesProps {
   submission: Submission;
@@ -48,28 +49,8 @@ const renderValue = (value: unknown, type: string, isPage = false) => {
 
   if (typeof value === 'object') {
     const fileUrl = (value as { url?: string }).url;
-    const fileName = (value as { name?: string }).name;
     if (fileUrl) {
-      return (
-        <div className="space-y-3">
-          {fileName && <p className="text-sm font-medium text-slate-700">{fileName}</p>}
-          {/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileUrl) && (
-            <img
-              src={fileUrl}
-              alt={fileName || 'Upload'}
-              className={`max-w-full rounded-xl border border-slate-200 object-cover ${isPage ? 'max-h-80' : 'max-h-48'}`}
-            />
-          )}
-          <a
-            href={fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline"
-          >
-            Open file <ExternalLink className="h-4 w-4" />
-          </a>
-        </div>
-      );
+      return <ResolvedMediaFile value={value} type={type} isPage={isPage} />;
     }
     return (
       <pre className="max-h-48 overflow-auto rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
@@ -78,25 +59,9 @@ const renderValue = (value: unknown, type: string, isPage = false) => {
     );
   }
 
-  if (typeof value === 'string' && value.startsWith('http')) {
-    if (type === 'file' || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(value)) {
-      return (
-        <div className="space-y-3">
-          <img
-            src={value}
-            alt="Upload"
-            className={`max-w-full rounded-xl border border-slate-200 object-cover ${isPage ? 'max-h-80' : 'max-h-48'}`}
-          />
-          <a
-            href={value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline"
-          >
-            View full file <ExternalLink className="h-4 w-4" />
-          </a>
-        </div>
-      );
+  if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('submissions/'))) {
+    if (type === 'file' || type === 'image' || type === 'video' || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(value)) {
+      return <ResolvedMediaFile value={value} type={type} isPage={isPage} />;
     }
     return (
       <a
