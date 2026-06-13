@@ -11,7 +11,7 @@ import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
 import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, X, FileIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, X, FileIcon , ImageIcon} from 'lucide-react';
 import { storage } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -818,6 +818,116 @@ export const FormSubmissionPage: React.FC = () => {
           </div>
         );
       }
+      
+      case 'image': {
+  const imageState: {
+    name?: string;
+    url?: string;
+    uploading?: boolean;
+    error?: string;
+  } = typeof value === 'object' && value !== null ? value : {};
+
+  return (
+    <div className="relative">
+      <input
+        type="file"
+        accept="image/*"
+        id={`image-${field.id}`}
+        className="sr-only"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          handleInputChange(field.id, {
+            name: file.name,
+            uploading: true,
+          });
+
+          const tempId = `temp-${Date.now()}`;
+
+          const { path, bucket, error } =
+            await storage.uploadSubmissionFile(file, tempId);
+
+          if (error || !path) {
+            handleInputChange(field.id, {
+              error: (error as any)?.message || 'Upload failed',
+            });
+
+            toast.error(
+              'Image upload failed: ' +
+                ((error as any)?.message || 'Unknown error')
+            );
+
+            return;
+          }
+
+          const { data: urlData } = (supabase as any)
+            .storage
+            .from(bucket || 'media')
+            .getPublicUrl(path);
+
+          handleInputChange(field.id, {
+            name: file.name,
+            url: urlData?.publicUrl || path,
+          });
+        }}
+      />
+
+{imageState.url ? (
+  <div className="flex items-center gap-3 p-4 bg-indigo-50 border-2 border-indigo-200 rounded-[20px]">
+    <ImageIcon className="w-6 h-6 text-indigo-500 flex-shrink-0" />
+
+    <span className="flex-1 text-sm font-medium text-indigo-900 truncate">
+      {imageState.name}
+    </span>
+
+    <button
+      type="button"
+      onClick={() => handleInputChange(field.id, '')}
+      className="text-indigo-400 hover:text-indigo-700 transition-colors"
+    >
+      <X className="w-5 h-5" />
+    </button>
+  </div>
+) : (
+        <label
+          htmlFor={`image-${field.id}`}
+          className="flex flex-col items-center justify-center gap-3 p-8 bg-[#F2F2F7] hover:bg-[#E5E5EA] border-2 border-dashed border-[#C7C7CC] hover:border-indigo-400 rounded-[20px] cursor-pointer transition-all duration-300"
+        >
+          {imageState.uploading ? (
+            <>
+              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+              <span className="text-sm text-slate-500">
+                Uploading...
+              </span>
+            </>
+          ) : (
+            <>
+              <ImageIcon className="w-8 h-8 text-slate-400" />
+
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">
+                  Upload image
+                </p>
+
+                <p className="text-xs text-slate-400 mt-1">
+                  PNG, JPG, JPEG, SVG, WEBP
+                </p>
+              </div>
+
+              {imageState.error && (
+                <p className="text-xs text-red-500">
+                  {imageState.error}
+                </p>
+              )}
+            </>
+          )}
+        </label>
+      )}
+    </div>
+  );
+}
+      
       default:
         return (
           <input

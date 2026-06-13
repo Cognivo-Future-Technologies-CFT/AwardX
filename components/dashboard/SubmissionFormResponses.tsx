@@ -46,69 +46,57 @@ const renderValue = (value: unknown, type: string, isPage = false) => {
     );
   }
 
-  if (typeof value === 'object') {
-    const fileUrl = (value as { url?: string }).url;
-    const fileName = (value as { name?: string }).name;
-    if (fileUrl) {
-      return (
-        <div className="space-y-3">
-          {fileName && <p className="text-sm font-medium text-slate-700">{fileName}</p>}
-          {/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileUrl) && (
-            <img
-              src={fileUrl}
-              alt={fileName || 'Upload'}
-              className={`max-w-full rounded-xl border border-slate-200 object-cover ${isPage ? 'max-h-80' : 'max-h-48'}`}
-            />
-          )}
+ if (typeof value === 'object') {
+  const fileUrl = (value as { url?: string }).url;
+  const fileName = (value as { name?: string }).name;
+
+  if (fileUrl) {
+    const isImage =
+      type === 'image' ||
+      /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(fileUrl);
+
+    return (
+      <div className="space-y-3">
+        {fileName && (
+          <p className="text-sm font-medium text-slate-700">
+            {fileName}
+          </p>
+        )}
+
+        {/* Only show preview for real file uploads, not Image fields */}
+        {!isImage && (
           <a
             href={fileUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline"
           >
-            Open file <ExternalLink className="h-4 w-4" />
+            Open file
+            <ExternalLink className="h-4 w-4" />
           </a>
-        </div>
-      );
-    }
-    return (
-      <pre className="max-h-48 overflow-auto rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-        {JSON.stringify(value, null, 2)}
-      </pre>
-    );
-  }
+        )}
 
-  if (typeof value === 'string' && value.startsWith('http')) {
-    if (type === 'file' || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(value)) {
-      return (
-        <div className="space-y-3">
-          <img
-            src={value}
-            alt="Upload"
-            className={`max-w-full rounded-xl border border-slate-200 object-cover ${isPage ? 'max-h-80' : 'max-h-48'}`}
-          />
+        {isImage && (
           <a
-            href={value}
+            href={fileUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline"
           >
-            View full file <ExternalLink className="h-4 w-4" />
+            Open file
+            <ExternalLink className="h-4 w-4" />
           </a>
-        </div>
-      );
-    }
-    return (
-      <a
-        href={value}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 break-all text-indigo-600 hover:underline"
-      >
-        {value} <ExternalLink className="h-4 w-4" />
-      </a>
+        )}
+      </div>
     );
   }
+
+  return (
+    <pre className="max-h-48 overflow-auto rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+      {JSON.stringify(value, null, 2)}
+    </pre>
+  );
+}
 
   return (
     <p className={`whitespace-pre-wrap leading-relaxed text-slate-800 ${isPage ? 'text-base sm:text-[17px]' : 'text-sm'}`}>

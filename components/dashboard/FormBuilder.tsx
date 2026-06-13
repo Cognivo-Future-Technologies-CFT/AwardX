@@ -19,6 +19,11 @@ export interface FormField {
   required: boolean;
   options?: string[];
   pageId: string;
+
+  imageUrl?: string;
+  imageAlt?: string;
+  imageWidth?: string;
+
   validation?: {
     min?: number;
     max?: number;
@@ -90,6 +95,12 @@ const fieldTypes = [
       { type: 'url', label: 'Website', icon: Link2, description: 'External links' },
       { type: 'number', label: 'Number', icon: Layout, description: 'Quantities, scores' },
       { type: 'award_selector', label: 'Award Selector', icon: Award, description: 'Pick award category' },
+          {
+      type: 'image',
+      label: 'Image',
+      icon: ImageIcon,
+      description: 'Display banners, logos, and images'
+    },
     ]
   },
   {
@@ -313,6 +324,13 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         ? { options: ['Option 1', 'Option 2', 'Option 3'] }
         : type === 'award_selector'
         ? { options: awardOptions.length > 0 ? awardOptions : ['General'] }
+          : type === 'image'
+  ? {
+      imageUrl: '',
+      imageAlt: '',
+      imageWidth: '100%'
+    }
+
         : {}),
     };
     setFields(prev => [...prev, newField]);
@@ -534,6 +552,37 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
             <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG or GIF (max. 5MB)</p>
           </div>
         );
+        case 'image':
+  return (
+    <div
+      className="border-2 border-dashed rounded-lg p-4 text-center bg-slate-50/50"
+      style={{
+        borderColor: theme.borderColor,
+        borderRadius: theme.borderRadius,
+      }}
+    >
+      {field.imageUrl ? (
+        <img
+          src={field.imageUrl}
+          alt={field.imageAlt || field.label}
+          className="mx-auto rounded-lg max-w-full h-auto"
+          style={{ width: field.imageWidth || '100%' }}
+        />
+      ) : (
+        <>
+          <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-3 text-indigo-500">
+            <ImageIcon className="w-5 h-5" />
+          </div>
+          <p className="text-sm font-medium text-slate-600">
+            No image selected
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Configure an image in Field Properties
+          </p>
+        </>
+      )}
+    </div>
+  );
       case 'award_selector':
         return (
           <div className="relative">

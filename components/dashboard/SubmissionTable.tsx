@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirm } from '../ConfirmDialog';
-import { Filter, Download, Eye, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles, LayoutTemplate, AlertCircle, ExternalLink } from 'lucide-react';
+import { Filter, Download, Eye, ImageIcon, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles, LayoutTemplate, AlertCircle, ExternalLink } from 'lucide-react';
 
 import { db } from '../../services/database';
 import { Program, Submission } from '../../services/models';
@@ -110,6 +110,12 @@ const DISPLAY_FIELD_TYPES = new Set([
 const FILE_FIELD_TYPES = new Set(['file', 'image', 'video']);
 
 const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
+console.log('FIELD TYPE:', type);
+console.log('FIELD VALUE:', value);
+
+if (typeof value === 'object' && value !== null) {
+  console.log('FIELD OBJECT:', JSON.stringify(value, null, 2));
+}
    if (value == null || value === '') return <span className="text-slate-300">—</span>;
 
    // File-like values may be { url, name } or string URLs
@@ -125,13 +131,21 @@ const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
             {items.slice(0, 3).map((item, idx) => {
                const url = item?.url || (typeof item === 'string' ? item : undefined);
                const name = item?.name || url?.split('/').pop() || `file ${idx + 1}`;
-               if (type === 'image' && url) {
-                  return (
-                     <a key={idx} href={url} target="_blank" rel="noreferrer" className="block">
-                        <img src={url} alt={name} className="h-8 w-8 rounded-md object-cover border border-slate-200" />
-                     </a>
-                  );
-               }
+if (type === 'image' && url) {
+  return (
+    <a
+      key={idx}
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-indigo-50 text-[11px] font-semibold text-slate-700 hover:text-indigo-700 max-w-[180px] truncate"
+      title={name}
+    >
+      <ImageIcon className="w-3 h-3 shrink-0" />
+      <span className="truncate">{name}</span>
+    </a>
+  );
+}
                return (
                   <a
                      key={idx}
@@ -145,7 +159,8 @@ const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
                      <span className="truncate">{name}</span>
                   </a>
                );
-            })}
+            }
+            )}
             {items.length > 3 && (
                <span className="text-[10px] font-bold text-slate-500">+{items.length - 3}</span>
             )}
