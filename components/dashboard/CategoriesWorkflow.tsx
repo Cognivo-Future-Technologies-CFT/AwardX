@@ -36,7 +36,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState({ x: 0, y: 0 });
     const [isFullscreen, setIsFullscreen] = useState(false);
-
+const STORAGE_KEY = `awardx-category-layout-${programId}`;
     const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
     const [dragStart, setDragStart] = useState({ mouseX: 0, mouseY: 0, nodeX: 0, nodeY: 0 });
 
@@ -85,17 +85,59 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
         });
     }, [nodes]);
 
-    useEffect(() => {
-        if (!categories.length) {
-            setNodes([]);
-            setEdges([]);
-            return;
-        }
+useEffect(() => {
+    if (!categories.length) {
+        setNodes([]);
+        setEdges([]);
+        return;
+    }
 
-        const { nodes: layoutNodes, edges: layoutEdges } = layoutCategoryTree(categories);
+    const { nodes: layoutNodes, edges: layoutEdges } =
+        layoutCategoryTree(categories);
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (saved) {
+        const savedPositions = JSON.parse(saved);
+
+        setNodes(
+            layoutNodes.map(node => {
+                const pos = savedPositions[node.id];
+
+                return pos
+                    ? {
+                          ...node,
+                          x: pos.x,
+                          y: pos.y,
+                      }
+                    : node;
+            })
+        );
+    } else {
         setNodes(layoutNodes);
-        setEdges(layoutEdges);
-    }, [programId, categorySignature, categories]);
+    }
+
+    setEdges(layoutEdges);
+}, [programId, categorySignature, categories]);
+
+useEffect(() => {
+    if (!nodes.length) return;
+
+    const positions = Object.fromEntries(
+        nodes.map(n => [
+            n.id,
+            {
+                x: n.x,
+                y: n.y,
+            },
+        ])
+    );
+
+    localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(positions)
+    );
+}, [nodes, STORAGE_KEY]);
 
     useEffect(() => {
         const handler = (e: Event) => {
