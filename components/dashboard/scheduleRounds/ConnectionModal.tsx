@@ -3,7 +3,7 @@ import { Modal } from '../../Modal';
 import { Round, RoundEdge, InputPort } from '../../../types/scheduleRounds';
 import { Button } from '../../Button';
 import { Plus } from 'lucide-react';
-
+import { toast } from 'sonner';
 interface ConnectionModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -14,6 +14,7 @@ interface ConnectionModalProps {
   initialSourceHandle?: string;
   initialTargetHandle?: string;
   onUseDefaults?: () => void; // Callback to skip configuration
+  onDelete?: (edgeId: string) => void;
 }
 
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
@@ -22,6 +23,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   sourceRound,
   targetRound,
   onConfirm,
+   onDelete,
   existingEdge,
   initialSourceHandle,
   initialTargetHandle,
@@ -34,7 +36,7 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const [dataStream, setDataStream] = useState<string>(existingEdge?.dataStream || 'all');
   const [condition, setCondition] = useState<RoundEdge['condition'] | undefined>(existingEdge?.condition || undefined);
   const [connectionName, setConnectionName] = useState<string>(existingEdge?.name || '');
-
+const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Reset form when modal opens/closes or rounds change
   useEffect(() => {
     if (isOpen) {
@@ -221,17 +223,70 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
               Use Defaults
             </Button>
           )}
-          <div className={`flex gap-3 ${existingEdge ? 'ml-auto' : ''}`}>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary">
-              {existingEdge ? 'Save Changes' : 'Create Connection'}
-            </Button>
-          </div>
+<div className={`flex gap-3 ${existingEdge ? 'ml-auto' : ''}`}>
+  <Button
+    type="button"
+    variant="ghost"
+    onClick={onClose}
+  >
+    Cancel
+  </Button>
+
+  {existingEdge && (
+<Button
+  type="button"
+  variant="ghost"
+  className="!text-red-600 hover:!text-red-700 hover:bg-red-50"
+  onClick={() => setShowDeleteConfirm(true)}
+>
+  Delete Connection
+</Button>
+  )}
+
+  <Button type="submit" variant="primary">
+    {existingEdge ? 'Save Changes' : 'Create Connection'}
+  </Button>
+</div>
+
         </div>
       </form>
+      <Modal
+  isOpen={showDeleteConfirm}
+  onClose={() => setShowDeleteConfirm(false)}
+  title="Delete Connection"
+>
+  <div className="space-y-4">
+    <p className="text-sm text-slate-600">
+      This will permanently remove the connection between
+      <strong> {sourceRound.name}</strong> and
+      <strong> {targetRound.name}</strong>.
+    </p>
+
+    <div className="flex justify-end gap-2">
+      <Button
+        variant="ghost"
+        onClick={() => setShowDeleteConfirm(false)}
+      >
+        Cancel
+      </Button>
+
+      <Button
+        variant="primary"
+        className="bg-red-600 hover:bg-red-700"
+        onClick={() => {
+          onDelete?.(existingEdge!.id);
+          setShowDeleteConfirm(false);
+          onClose();
+          toast.success('Connection deleted');
+        }}
+      >
+        Delete Connection
+      </Button>
+    </div>
+  </div>
+</Modal>
     </Modal>
+    
   );
 };
 

@@ -18,7 +18,6 @@ import { ConnectionModal } from './ConnectionModal';
 import { RoundNode } from './RoundNode';
 import { Plus } from 'lucide-react';
 import { Button } from '../../Button';
-import { toast } from 'sonner';
 
 interface WorkflowViewProps {
   rounds: Round[];
@@ -261,17 +260,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
       // Ports should be created in the round configuration panel, not here
       const sourceHandle = params.sourceHandle || 'output-0';
       const targetHandle = params.targetHandle || 'input-0';
-      if (!sourceRound || !targetRound) return;
 
-// Prevent incoming connections to nomination rounds
-if (
-  targetRound.type?.toLowerCase() === 'nomination'
-) {
-  toast.error(
-    'Nomination rounds cannot accept incoming connections.'
-  );
-  return;
-}
       // Get data streams from the selected output port
       const sourceOutputPorts = sourceRound.outputPorts || [];
       const selectedOutputPort = sourceOutputPorts.find(p => p.id === sourceHandle);
@@ -547,6 +536,9 @@ if (
             onUseDefaults={handleUseDefaults}
             initialSourceHandle={pendingConnection.sourceHandle}
             initialTargetHandle={pendingConnection.targetHandle}
+            onDelete={(edgeId) => {
+  onEdgeDelete(edgeId);
+}}
           />
         );
       })()}
