@@ -80,6 +80,9 @@ export const SignupPage: React.FC = () => {
     setError(null);
 
     try {
+       if (nextPath) {
+        storePostAuthRedirect(nextPath);
+      }
       const { error: authError } = await auth.signUp(email, password, { full_name: fullName });
       if (authError) {
         setError(humanizeAuthError(authError.message));
