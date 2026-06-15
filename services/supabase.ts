@@ -1,198 +1,31 @@
-import { createClient, SupabaseClient, type RealtimeChannel } from '@supabase/supabase-js';
-import { trackSupabaseRequest } from './supabaseLoading';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { fetchBackendJson } from './backendApi';
+import { supabase, supabaseUrl, isSupabaseReady } from './supabaseClient';
+import {
+  clearUserCache,
+  getCachedOrganizationDetails,
+  getCachedSession,
+  getCurrentOrgId,
+  getCurrentUserId,
+  invalidateSessionCache,
+  isAuthUnauthorizedError,
+  refreshUserCache,
+  resolveUserContext,
+  setActiveOrganization,
+  setCachedOrganizationDetails,
+  setCachedSession,
+  subscribeAuthState,
+  type OrganizationSummary,
+} from './userContext';
 
-// Environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-// Check if Supabase is configured
-const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
-
-const trackedSupabaseFetch: typeof fetch = (input, init) =>
-  trackSupabaseRequest(() => fetch(input, init));
-
-// Create Supabase client (untyped for flexibility until database is set up)
-// After running the SQL schema, regenerate types with: npx supabase gen types typescript --project-id YOUR_PROJECT_ID > services/database.types.ts
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      fetch: trackedSupabaseFetch,
-    },
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  })
-  : null; // Will be null if not configured - app should handle this gracefully
-
-// Helper to check if Supabase is configured
-export const isSupabaseReady = () => supabase !== null;
-
-// ============================================================================
-// HELPER FUNCTIONS FOR USER/ORG CONTEXT
-// ============================================================================
-
-const USER_CONTEXT_TTL_MS = 45_000;
-const ORG_DETAILS_TTL_MS = 45_000;
-
-type CachedUserContext = {
-  userId: string | null;
-  orgId: string | null;
-  fetchedAt: number;
-};
-
-type OrganizationSummary = {
-  id: string;
-  name?: string | null;
-  slug?: string | null;
-  logo_url?: string | null;
-  website?: string | null;
-  industry?: string | null;
-  plan?: string | null;
-};
-
-type CachedOrganizationDetails = {
-  orgId: string;
-  data: OrganizationSummary;
-  fetchedAt: number;
-};
-
-let cachedUserContext: CachedUserContext | null = null;
-let cachedUserContextPromise: Promise<CachedUserContext> | null = null;
-let cachedOrganizationDetails: CachedOrganizationDetails | null = null;
-let activeOrganizationOverride: string | null = null;
-
-/** Clear invalid/expired auth tokens so the client stops calling /auth/v1/user with a bad JWT. */
-const clearStaleAuthSession = async () => {
-  if (!supabase) return;
-  try {
-    await supabase.auth.signOut({ scope: 'local' });
-  } catch {
-    // ignore — storage may already be empty
-  }
-  clearUserCache();
-};
-
-const isAuthUnauthorizedError = (error: unknown): boolean => {
-  if (!error || typeof error !== 'object') return false;
-  const status = (error as { status?: number }).status;
-  const message = String((error as { message?: string }).message || '').toLowerCase();
-  return status === 401 || message.includes('invalid jwt') || message.includes('jwt expired');
-};
-
-const resolveUserContext = async (forceRefresh = false): Promise<CachedUserContext> => {
-  if (!supabase) {
-    return { userId: null, orgId: null, fetchedAt: Date.now() };
-  }
-
-  const now = Date.now();
-  if (!forceRefresh && cachedUserContext && now - cachedUserContext.fetchedAt < USER_CONTEXT_TTL_MS) {
-    return cachedUserContext;
-  }
-
-  if (!forceRefresh && cachedUserContextPromise) {
-    return cachedUserContextPromise;
-  }
-
-  const resolver = (async (): Promise<CachedUserContext> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    let userId = session?.user?.id || null;
-
-    // Only validate with the server when we have a token; otherwise getUser() spams 401s.
-    if (!userId && session?.access_token) {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError && isAuthUnauthorizedError(userError)) {
-        await clearStaleAuthSession();
-        const next = { userId: null, orgId: null, fetchedAt: Date.now() };
-        cachedUserContext = next;
-        return next;
-      }
-      userId = user?.id || null;
-    }
-
-    if (!userId) {
-      const next = { userId: null, orgId: null, fetchedAt: Date.now() };
-      cachedUserContext = next;
-      return next;
-    }
-
-    let orgId: string | null = activeOrganizationOverride;
-
-    if (!orgId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!profileError && profile?.organization_id) {
-        orgId = profile.organization_id;
-      }
-
-      if (!orgId) {
-        const { data: membership } = await supabase
-          .from('organization_members')
-          .select('organization_id, joined_at')
-          .eq('user_id', userId)
-          .order('joined_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        orgId = membership?.organization_id || null;
-
-        if (orgId && (!profile || !profile.organization_id)) {
-          void supabase.from('profiles').update({ organization_id: orgId }).eq('id', userId);
-        }
-      }
-    }
-
-    const next = { userId, orgId, fetchedAt: Date.now() };
-    cachedUserContext = next;
-    return next;
-  })();
-
-  cachedUserContextPromise = resolver;
-  try {
-    return await resolver;
-  } finally {
-    if (cachedUserContextPromise === resolver) {
-      cachedUserContextPromise = null;
-    }
-  }
-};
-
-// Helper to get current user ID
-export const getCurrentUserId = async (): Promise<string | null> => {
-  const context = await resolveUserContext();
-  return context.userId;
-};
-
-// Helper to get current organization ID
-export const getCurrentOrgId = async (): Promise<string | null> => {
-  const context = await resolveUserContext();
-  return context.orgId;
-};
-
-// Clear cache (call on logout or when user changes)
-export const clearUserCache = () => {
-  cachedUserContext = null;
-  cachedUserContextPromise = null;
-  cachedOrganizationDetails = null;
-  activeOrganizationOverride = null;
-};
-
-export const setActiveOrganization = (orgId: string | null) => {
-  activeOrganizationOverride = orgId;
-  if (cachedUserContext) {
-    cachedUserContext = {
-      ...cachedUserContext,
-      orgId,
-      fetchedAt: Date.now(),
-    };
-  }
-  cachedOrganizationDetails = null;
-};
+export { getSupabaseClient, supabase, isSupabaseReady } from './supabaseClient';
+export {
+  clearUserCache,
+  getCurrentOrgId,
+  getCurrentUserId,
+  refreshUserCache,
+  setActiveOrganization,
+} from './userContext';
 
 export const resolveMediaPublicUrl = (value?: string | null): string => {
   const raw = (value || '').trim();
@@ -297,17 +130,6 @@ export const resolveMediaUrl = async (value?: string | null, expiresIn = 60 * 60
   return data.signedUrl;
 };
 
-// Refresh cache (call after login or when org changes)
-export const refreshUserCache = async () => {
-  await resolveUserContext(true);
-};
-
-if (supabase) {
-  supabase.auth.onAuthStateChange(() => {
-    clearUserCache();
-  });
-}
-
 // ============================================================================
 // AUTH HELPERS
 // ============================================================================
@@ -358,8 +180,8 @@ export const auth = {
       email,
       password,
     });
-    if (data && !error) {
-      // Refresh cache after successful login
+    if (data?.session && !error) {
+      setCachedSession(data.session);
       await refreshUserCache();
     }
     return { data, error };
@@ -400,7 +222,8 @@ export const auth = {
       return { error: { message: 'Supabase is not configured. Please check your environment variables.' } };
     }
     const { error } = await supabase.auth.signOut();
-    clearUserCache(); // Clear cached user/org data
+    invalidateSessionCache();
+    clearUserCache();
     return { error };
   },
 
@@ -410,10 +233,7 @@ export const auth = {
       return { user: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
     }
 
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      return { user: null, error: sessionError };
-    }
+    const session = await getCachedSession();
     if (session?.user) {
       return { user: session.user, error: null };
     }
@@ -423,8 +243,17 @@ export const auth = {
 
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error && isAuthUnauthorizedError(error)) {
-      await clearStaleAuthSession();
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        // ignore
+      }
+      invalidateSessionCache();
+      clearUserCache();
       return { user: null, error: null };
+    }
+    if (user && session) {
+      setCachedSession({ ...session, user });
     }
     return { user, error };
   },
@@ -434,8 +263,8 @@ export const auth = {
     if (!supabase) {
       return { session: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
     }
-    const { data: { session }, error } = await supabase.auth.getSession();
-    return { session, error };
+    const session = await getCachedSession();
+    return { session, error: null };
   },
 
   // Reset password
@@ -460,15 +289,10 @@ export const auth = {
     return { data, error };
   },
 
-  // Listen to auth state changes
+  // Listen to auth state changes (shares the singleton listener in userContext)
   onAuthStateChange: (callback: (event: string, session: any) => void) => {
-    if (!supabase) {
-      return { data: { subscription: { unsubscribe: () => { } } } };
-    }
-    return supabase.auth.onAuthStateChange((event, session) => {
-      clearUserCache();
-      callback(event, session);
-    });
+    const unsubscribe = subscribeAuthState(callback);
+    return { data: { subscription: { unsubscribe } } };
   },
 };
 
@@ -496,12 +320,9 @@ export const organizations = {
     }
 
     if (context.orgId) {
-      if (
-        cachedOrganizationDetails &&
-        cachedOrganizationDetails.orgId === context.orgId &&
-        Date.now() - cachedOrganizationDetails.fetchedAt < ORG_DETAILS_TTL_MS
-      ) {
-        return { data: cachedOrganizationDetails.data as { id: string }, error: null };
+      const cachedOrgDetails = getCachedOrganizationDetails();
+      if (cachedOrgDetails && cachedOrgDetails.orgId === context.orgId) {
+        return { data: cachedOrgDetails.data as { id: string }, error: null };
       }
 
       const { data: cachedOrg, error: cachedOrgError } = await supabase
@@ -511,11 +332,7 @@ export const organizations = {
         .single();
 
       if (!cachedOrgError && cachedOrg) {
-        cachedOrganizationDetails = {
-          orgId: context.orgId,
-          data: cachedOrg as OrganizationSummary,
-          fetchedAt: Date.now(),
-        };
+        setCachedOrganizationDetails(context.orgId, cachedOrg as OrganizationSummary);
         return { data: cachedOrg as { id: string }, error: null };
       }
 
@@ -576,11 +393,7 @@ export const organizations = {
         .single();
 
       if (org) {
-        cachedOrganizationDetails = {
-          orgId: fallbackOrgId,
-          data: org as OrganizationSummary,
-          fetchedAt: Date.now(),
-        };
+        setCachedOrganizationDetails(fallbackOrgId, org as OrganizationSummary);
         return { data: org as { id: string }, error: null };
       }
 
@@ -616,11 +429,7 @@ export const organizations = {
         .single();
 
       if (org) {
-        cachedOrganizationDetails = {
-          orgId: membership.organization_id,
-          data: org as OrganizationSummary,
-          fetchedAt: Date.now(),
-        };
+        setCachedOrganizationDetails(membership.organization_id, org as OrganizationSummary);
         return { data: org as { id: string }, error: null };
       }
 
@@ -638,11 +447,7 @@ export const organizations = {
       return { data: null, error: orgError || 'Organization not found' };
     }
 
-    cachedOrganizationDetails = {
-      orgId: profile.organization_id,
-      data: org as OrganizationSummary,
-      fetchedAt: Date.now(),
-    };
+    setCachedOrganizationDetails(profile.organization_id, org as OrganizationSummary);
 
     return { data: org as { id: string }, error: null };
   },

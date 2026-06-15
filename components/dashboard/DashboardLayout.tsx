@@ -26,7 +26,8 @@ interface DashboardUser {
 import { db as databaseService, programPages } from '../../services/database';
 import { queryKeys } from '../../services/queryKeys';
 import { getProgramFormSetupState } from '../../lib/programFormSetup';
-import { auth, realtime, supabase } from '../../services/supabase';
+import { realtime, supabase } from '../../services/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -217,6 +218,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onScheduleRepresentationChange,
   isDemoMode = false,
 }) => {
+  const { user: authUser, isLoading: isAuthLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(isDemoMode);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
@@ -672,7 +674,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       return;
     }
 
-    // Fetch user + permissions once per mount instead of on every event/category refresh.
+    if (isAuthLoading) {
+      return;
+    }
+
     const fetchUserData = async () => {
       try {
         await databaseService.initialize();
@@ -688,16 +693,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           setCurrentUser(realUser);
           return;
         }
-        const { user } = await auth.getUser();
-        if (user) {
+        if (authUser) {
           setCurrentUser({
-            id: user.id,
-            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-            email: user.email || '',
+            id: authUser.id,
+            name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+            email: authUser.email || '',
             role: 'Admin',
             status: 'Active',
             lastActive: 'Now',
-            avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
+            avatar: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || '',
             joinedDate: new Date().toISOString().split('T')[0],
           });
         }
@@ -706,8 +710,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       }
     };
 
-    fetchUserData();
-  }, [isDemoMode]);
+    void fetchUserData();
+  }, [authUser, isAuthLoading, isDemoMode]);
 
   useEffect(() => {
     let cancelled = false;

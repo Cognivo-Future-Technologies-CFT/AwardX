@@ -2,6 +2,11 @@
 // Always use these keys so cache invalidation is deterministic.
 
 export const queryKeys = {
+  auth: {
+    session: () => ['auth', 'session'] as const,
+    user: () => ['auth', 'user'] as const,
+    orgId: () => ['auth', 'org-id'] as const,
+  },
   programs: {
     all: () => ['programs'] as const,
     byId: (id: string) => ['programs', id] as const,

@@ -1,4 +1,4 @@
-import { auth } from './supabase';
+import { getAccessToken } from './userContext';
 
 const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim().replace(/\/$/, '');
 
@@ -11,8 +11,7 @@ export function getBackendCandidateUrls(path: string): string[] {
 }
 
 export async function getAuthToken(): Promise<string | undefined> {
-  const { session } = await auth.getSession();
-  return session?.access_token;
+  return getAccessToken();
 }
 
 export type FetchBackendOptions = {

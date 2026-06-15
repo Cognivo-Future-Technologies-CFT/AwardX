@@ -1,4 +1,4 @@
-import { auth } from './supabase';
+import { getAccessToken } from './userContext';
 
 const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
 const normalizedBackendUrl = envBackendUrl.replace(/\/$/, '');
@@ -54,8 +54,7 @@ async function postJson(path: string, payload: Record<string, any>, onTrace?: Em
 
   let lastError: Error | null = null;
 
-  const { session } = await auth.getSession();
-  const authToken = session?.access_token;
+  const authToken = await getAccessToken();
 
   for (let i = 0; i < candidateUrls.length; i++) {
     const url = candidateUrls[i];

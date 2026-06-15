@@ -1,6 +1,7 @@
 
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
 import { OrganizationSelectionView } from './OrganizationSelectionView';
@@ -19,7 +20,6 @@ import { ProgramDetailsView } from './ProgramDetailsView';
 import { motion } from 'framer-motion';
 import { Program, Organization } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
-import { auth } from '../../services/supabase';
 import { resolveAllowedDashboardView } from '../../lib/dashboardViews';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { PublishedLockBanner } from './PublishedLockBanner';
@@ -47,6 +47,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [activeEvent, setActiveEvent] = useState<Program | null>(null);
   const [currentView, setCurrentView] = useState('overview');
@@ -58,8 +59,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const persistTimerRef = useRef<number | null>(null);
   const lastPersistKeyRef = useRef<string>('');
 
-  // Sync URL → state on mount
+  // Sync URL → state once auth is ready
   useEffect(() => {
+    if (isAuthLoading) {
+      return;
+    }
+
     let cancelled = false;
 
     const initialize = async () => {
@@ -79,11 +84,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             setCurrentView(resolveAllowedDashboardView(urlView, (p) => databaseService.hasPermission(p)));
           }
 
-          const { user } = await auth.getUser();
-          if (!user) return;
+          const currentUser = user;
+          if (!currentUser) return;
 
           const organizations = await databaseService.getUserOrganizations();
-          const { data: ws } = await workspaceState.get(user.id);
+          const { data: ws } = await workspaceState.get(currentUser.id);
           const savedOrgId = (ws?.preferences as Record<string, unknown> | undefined)?.active_organization_id;
           const savedOrg =
             typeof savedOrgId === 'string'
@@ -131,8 +136,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthLoading, searchParams, user]);
 
   // Sync active program + persist (view changes should not reload permissions)
   useEffect(() => {
@@ -160,7 +164,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     persistTimerRef.current = window.setTimeout(async () => {
       try {
-        const { user } = await auth.getUser();
         if (!user) {
           return;
         }
@@ -185,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         window.clearTimeout(persistTimerRef.current);
       }
     };
-  }, [activeEvent, currentView]);
+  }, [activeEvent, currentView, navigate, user]);
 
   useEffect(() => {
     if (activeEvent?.id) {

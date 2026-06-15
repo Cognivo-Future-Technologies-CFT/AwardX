@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db, PendingInvite } from '../../services/database';
 import { PERMISSIONS, Role, TeamMember, Program } from '../../services/models';
-import { auth, getCurrentOrgId } from '../../services/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import {
     Plus, UserPlus, Shield, MoreVertical, Search, Filter,
     Trash2, Edit2, CheckCircle2, UserCog, Clock, Copy,
@@ -106,10 +106,9 @@ interface TeamsViewProps {
 export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const { confirm, ConfirmDialogNode } = useConfirm();
     const queryClient = useQueryClient();
+    const { userId: currentUserId, orgId, user } = useAuth();
+    const currentUserEmail = user?.email ?? null;
     const [activeTab, setActiveTab] = useState<'members' | 'roles'>('members');
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-    const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-    const [orgId, setOrgId] = useState<string | null>(null);
     const [inviteEmailBlocks, setInviteEmailBlocks] = useState<string[]>([]);
     const [inviteEmailDraft, setInviteEmailDraft] = useState('');
     const [inviteRoleId, setInviteRoleId] = useState<string>('');
@@ -171,12 +170,6 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
 }, []);
-
-    // Load current user + org
-    useEffect(() => {
-        auth.getUser().then(({ user }) => { setCurrentUserId(user?.id || null); setCurrentUserEmail(user?.email || null); });
-        getCurrentOrgId().then((id) => setOrgId(id));
-    }, []);
 
     // ── Queries ────────────────────────────────────────────────────────────────
     const { data: members = [], isLoading: membersLoading } = useQuery({
