@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Github, ArrowRight, FileText, Gavel, Vote, CreditCard, Trophy } from 'lucide-react';
+import { Github, ArrowRight, FileText, Gavel, Vote, CreditCard, Trophy, ChevronDown } from 'lucide-react';
 import {
   motion,
   useScroll,
@@ -221,6 +221,9 @@ export const Hero: React.FC = () => {
   const ringsX = useTransform(mx, (v) => v * -30);
   const ringsXY = useTransform(my, (v) => v * -30);
 
+  const dashRotateX = useTransform(my, (v) => v * 6);
+  const dashRotateY = useTransform(mx, (v) => v * -6);
+
   return (
     <section ref={ref} className="relative pt-28 pb-24 lg:pt-36 overflow-hidden bg-white">
       {/* Subtle grid texture for premium depth */}
@@ -404,7 +407,12 @@ export const Hero: React.FC = () => {
 
         {/* Dashboard screenshot with browser chrome */}
         <motion.div
-          style={{ y: dashY }}
+          style={{
+            y: dashY,
+            rotateX: reduce ? 0 : dashRotateX,
+            rotateY: reduce ? 0 : dashRotateY,
+            transformPerspective: 1200,
+          }}
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.25, ease: 'easeOut' }}
@@ -444,6 +452,19 @@ export const Hero: React.FC = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Scroll cue */}
+        <motion.a
+          href="#features"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1, duration: 0.6 }}
+          className="mt-14 mx-auto flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors group"
+          aria-label="Scroll to features"
+        >
+          <span className="text-[11px] font-semibold uppercase tracking-widest">Explore</span>
+          <ChevronDown className="w-5 h-5 animate-bounce-soft group-hover:text-indigo-500" />
+        </motion.a>
       </div>
     </section>
   );

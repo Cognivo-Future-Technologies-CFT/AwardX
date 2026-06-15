@@ -56,7 +56,15 @@ export const FeatureScroll: React.FC = () => {
             <div className="absolute inset-0 grid-bg-light opacity-30 pointer-events-none" />
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[200px] bg-gradient-to-r from-indigo-100/40 via-purple-100/40 to-cyan-100/40 blur-[80px] pointer-events-none" />
 
-            <div className="flex flex-col gap-6 relative z-10">
+            <div className="text-center mb-10 px-4 relative z-10">
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-indigo-600 mb-3">Shipped in the repo today</p>
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 font-display tracking-tight">
+                    Every capability, one codebase
+                </h2>
+                <p className="text-sm text-slate-500 mt-2">Hover to pause · each tag maps to a real dashboard view</p>
+            </div>
+
+            <div className="pause-on-hover flex flex-col gap-6 relative z-10">
                 {/* Row 1 - Scroll Left */}
                 <div className="relative flex overflow-x-hidden">
                     <div className="animate-scroll flex space-x-6 px-4">

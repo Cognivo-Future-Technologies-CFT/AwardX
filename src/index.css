@@ -415,6 +415,80 @@ html {
   }
 }
 
+.pause-on-hover:hover .animate-scroll,
+.pause-on-hover:hover .animate-scroll-reverse,
+.pause-on-hover:hover .animate-scroll-marquee {
+  animation-play-state: paused;
+}
+
+@keyframes bounce-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+.animate-bounce-soft {
+  animation: bounce-soft 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bounce-soft {
+    animation: none;
+  }
+}
+
+@keyframes scroll-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-scroll-marquee {
+  animation: scroll-marquee 28s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scroll-marquee {
+    animation: none;
+  }
+}
+
+.cta-glow-border {
+  position: relative;
+}
+
+.cta-glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(129, 140, 248, 0.7),
+    rgba(192, 132, 252, 0.5),
+    rgba(34, 211, 238, 0.6),
+    rgba(129, 140, 248, 0.7)
+  );
+  background-size: 300% 300%;
+  animation: cta-border-shift 8s ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+@keyframes cta-border-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta-glow-border::before {
+    animation: none;
+  }
+}
+
 /* Offset left floating panel toggles when the desktop sidebar is expanded */
 @media (min-width: 1024px) {
   aside.w-64 ~ div button[data-side="left"] {

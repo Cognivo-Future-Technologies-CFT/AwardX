@@ -66,24 +66,26 @@ export const Testimonials: React.FC = () => {
           From global cultural awards to corporate innovation programs — organizers run high-stakes cycles on the platform every season.
         </p>
 
-        <div className="mb-20 rounded-3xl border border-slate-100 bg-slate-50/80 px-6 py-8 md:px-10">
+        <div className="mb-20 rounded-3xl border border-slate-100 bg-slate-50/80 px-6 py-8 md:px-10 overflow-hidden">
           <p className="text-center text-xs font-bold uppercase tracking-[0.25em] text-slate-400 mb-8">
             Trusted by organizations worldwide
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-8 md:gap-x-14">
-            {trustedOrganizations.map((org) => (
-              <div
-                key={org.name}
-                className="flex items-center justify-center min-h-[4rem] opacity-90 hover:opacity-100 transition-opacity"
-                title={org.name}
-              >
-                {org.logo ? (
-                  <img src={org.logo} alt={org.name} className={org.logoClassName} draggable={false} />
-                ) : (
-                  org.textMark
-                )}
-              </div>
-            ))}
+          <div className="relative pause-on-hover">
+            <div className="flex animate-scroll-marquee gap-x-14 md:gap-x-20 w-max">
+              {[...trustedOrganizations, ...trustedOrganizations].map((org, idx) => (
+                <div
+                  key={`${org.name}-${idx}`}
+                  className="flex items-center justify-center min-h-[4rem] min-w-[140px] opacity-90 hover:opacity-100 transition-opacity shrink-0"
+                  title={org.name}
+                >
+                  {org.logo ? (
+                    <img src={org.logo} alt={org.name} className={org.logoClassName} draggable={false} />
+                  ) : (
+                    org.textMark
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -95,8 +97,9 @@ export const Testimonials: React.FC = () => {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
               viewport={{ once: true }}
-              className="bg-white p-8 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
+              className="bg-white p-8 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
             >
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/0 via-transparent to-purple-50/0 group-hover:from-indigo-50/60 group-hover:to-purple-50/40 transition-colors duration-500 pointer-events-none" />
               <div className="absolute top-6 right-8 text-indigo-100">
                 <Quote className="w-12 h-12 fill-current" />
               </div>

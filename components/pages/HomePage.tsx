@@ -11,6 +11,9 @@ import { AnalyticsPreview } from '../AnalyticsPreview';
 import { Timeline } from '../Timeline';
 import { Testimonials } from '../Testimonials';
 import { OpenSourceShowcase } from '../OpenSourceShowcase';
+import { StatStrip } from '../StatStrip';
+import { ComparisonSection } from '../ComparisonSection';
+import { LandingFAQ } from '../LandingFAQ';
 import { Button } from '../Button';
 import { Logo } from '../Logo';
 import { GITHUB_REPO } from '@/lib/brand';
@@ -22,7 +25,7 @@ const CTASection = () => (
         initial={{ opacity: 0, scale: 0.9 }}
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
-        className="bg-slate-900 rounded-[3rem] p-12 md:p-24 relative overflow-hidden shadow-2xl shadow-indigo-900/20"
+        className="cta-glow-border bg-slate-900 rounded-[3rem] p-12 md:p-24 relative overflow-hidden shadow-2xl shadow-indigo-900/20"
       >
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/30 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/30 rounded-full blur-[100px] pointer-events-none"></div>
@@ -73,7 +76,9 @@ export const HomePage: React.FC = () => {
   return (
     <>
       <Hero />
+      <StatStrip />
       <FeatureScroll />
+      <ComparisonSection />
       <ProductShowcase />
       <UseCases />
       <Features />
@@ -81,6 +86,7 @@ export const HomePage: React.FC = () => {
       <Timeline />
       <Testimonials />
       <OpenSourceShowcase />
+      <LandingFAQ />
       <CTASection />
     </>
   );
