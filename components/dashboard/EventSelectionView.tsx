@@ -8,6 +8,7 @@ import {
 import { Program, EventType, Organization, Role, TeamMember } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
+import { sendTeamInviteEmail } from '../../services/email';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
@@ -549,6 +550,9 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       setIsAddingMember(true);
       try {
          await databaseService.addTeamMemberByEmail(email, newMemberRoleId);
+         // Also send invite email so the person gets notified
+         const roleName = orgRoles.find(r => r.id === newMemberRoleId)?.name;
+         sendTeamInviteEmail({ email, roleId: newMemberRoleId, roleName, programTitle: activeOrganization.name }).catch(() => {});
          await loadPrograms(false);
          setNewMemberEmail('');
          setIsAddMemberModalOpen(false);

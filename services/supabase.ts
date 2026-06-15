@@ -2255,8 +2255,7 @@ export const team = {
     return { data, error };
   },
 
-  // Direct-add user to org by email (no invite flow).
-  // Works only if the user already exists (i.e. they have signed up and have a profile row with email set).
+  // Direct-add user to org by email. If the user hasn't signed up yet, creates a pending invite instead.
   addMemberByEmail: async (email: string, roleId: string, programId?: string) => {
     const orgId = await getCurrentOrgId();
     const addedBy = await getCurrentUserId();
@@ -2272,8 +2271,24 @@ export const team = {
       .maybeSingle();
 
     if (profileError) return { data: null, error: profileError };
+
+    // User doesn't exist yet — create a pending invite
     if (!profile?.id) {
-      return { data: null, error: { message: 'User not found. Have them sign up first, then add them.' } };
+      const { data: invite, error: inviteError } = await supabase
+        .from('organization_invites')
+        .insert({
+          organization_id: orgId,
+          email: normalizedEmail,
+          role_id: roleId,
+          invited_by: addedBy,
+          status: 'pending',
+          program_id: programId || null,
+        })
+        .select()
+        .single();
+
+      if (inviteError) return { data: null, error: inviteError };
+      return { data: invite, error: null };
     }
 
     const { data, error } = await supabase
