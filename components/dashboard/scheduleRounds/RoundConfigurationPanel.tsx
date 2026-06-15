@@ -241,6 +241,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
         exit={{ x: '100%', opacity: 0 }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         className="absolute right-4 top-24 bottom-6 w-[400px] bg-white/80 backdrop-blur-3xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-20 flex flex-col rounded-[24px] overflow-hidden"
+        onPointerDownCapture={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-200/50 flex items-center justify-between bg-white/40 backdrop-blur-md">
