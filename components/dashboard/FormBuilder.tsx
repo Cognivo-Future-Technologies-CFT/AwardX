@@ -19,7 +19,7 @@ export interface FormField {
   required: boolean;
   options?: string[];
   pageId: string;
-
+  section?: string;
   imageUrl?: string;
   imageAlt?: string;
   imageWidth?: string;

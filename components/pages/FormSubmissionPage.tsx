@@ -11,7 +11,7 @@ import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
 import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, X, FileIcon , ImageIcon} from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles } from 'lucide-react';
 import { storage } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -86,6 +86,92 @@ const buildHierarchicalAwardOptions = (rows: Array<{ id: string; title: string; 
   }
 
   return Array.from(new Set(validRows.map((row) => row.title)));
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// PRESENTATION-ONLY HELPERS
+// These are purely derived/UI helpers. They do not introduce new state,
+// new data flow, or new mutations — they only categorize EXISTING
+// formFields into wizard "steps" for layout/UI purposes.
+// ─────────────────────────────────────────────────────────────────────────
+
+type WizardStepId = 'profile' | 'award' | 'media' | 'review';
+
+interface WizardStepDef {
+  id: WizardStepId;
+  label: string;
+  description: string;
+}
+
+const WIZARD_STEPS: WizardStepDef[] = [
+  { id: 'profile', label: 'Basic Info', description: 'Contact & profile details' },
+  { id: 'award', label: 'Award Info', description: 'Category & award questions' },
+  { id: 'media', label: 'Uploads', description: 'Supporting media & files' },
+  { id: 'review', label: 'Review', description: 'Confirm & submit' },
+];
+
+const PROFILE_FIELD_KEYWORDS = [
+  'name', 'email', 'phone', 'contact', 'organization', 'organisation',
+  'designation', 'website', 'linkedin', 'company', 'affiliation', 'job title',
+];
+
+const ACCENT_GREEN = '#059669';
+
+const isFullWidthField = (field: FormField) =>
+  ['textarea', 'radio', 'checkbox', 'select', 'award_selector', 'file', 'image'].includes(field.type);
+
+const SECTION_TITLES = {
+  profile: "Basic Information",
+  award: "Award Information",
+  media: "Supporting Evidence",
+  review: "Review & Submit",
+};
+
+const getFieldWizardStep = (field: FormField) => {
+  switch (field.type) {
+    // Basic Information
+    case 'email':
+      return 'profile';
+
+    case 'text':
+    case 'number':
+    case 'date':
+    case 'url':
+      return 'profile';
+
+    // Award Information
+    case 'textarea':
+    case 'select':
+    case 'radio':
+    case 'checkbox':
+    case 'award_selector':
+      return 'award';
+
+    // Supporting Evidence
+    case 'file':
+    case 'image':
+      return 'media';
+
+    default:
+      return 'award';
+  }
+};
+
+const formatFieldValue = (field: FormField, value: any): string => {
+  if (!hasFieldValue(value)) return '—';
+  if (field.type === 'file' || field.type === 'image') {
+    const fileState = typeof value === 'object' && value !== null ? value : {};
+    return fileState.name || 'Uploaded file';
+  }
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const hasFieldValue = (value: any) => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return value != null && value !== '';
 };
 
 export const FormSubmissionPage: React.FC = () => {
@@ -465,27 +551,45 @@ export const FormSubmissionPage: React.FC = () => {
     setShowRequirements(false);
   };
 
-  const stepFields = formFields;
-  const stepCount = Math.max(1, stepFields.length);
-  const safeStepIndex = Math.min(currentFieldIdx, Math.max(stepCount - 1, 0));
-  const currentField = stepFields[safeStepIndex] || null;
-  const currentPage = formPages.find((page) => page.id === currentField?.pageId) || formPages[0] || null;
-  const isLastStep = safeStepIndex >= stepCount - 1;
-
-  useEffect(() => {
-    setCurrentFieldIdx((prev) => Math.min(prev, Math.max(stepFields.length - 1, 0)));
-  }, [stepFields.length]);
-
-  const hasFieldValue = (value: any) => {
-    if (Array.isArray(value)) return value.length > 0;
-    if (typeof value === 'string') return value.trim().length > 0;
-    return value != null && value !== '';
+  
+const fieldsByStep = useMemo(() => {
+  const grouped = {
+    profile: [] as FormField[],
+    award: [] as FormField[],
+    media: [] as FormField[],
   };
 
+  formFields.forEach((field) => {
+    const step = getFieldWizardStep(field);
+    grouped[step].push(field);
+  });
+
+  return grouped;
+}, [formFields]);
+
+  const wizardStepCount = WIZARD_STEPS.length;
+  const wizardStepIndex = Math.min(currentFieldIdx, wizardStepCount - 1);
+  const currentWizardStep = WIZARD_STEPS[wizardStepIndex];
+  const isReviewStep = currentWizardStep.id === 'review';
+  const isLastStep = wizardStepIndex >= wizardStepCount - 1;
+  const accentColor = theme.primaryColor && theme.primaryColor !== '#6366f1'
+    ? theme.primaryColor
+    : ACCENT_GREEN;
+
+  useEffect(() => {
+    setCurrentFieldIdx((prev) => Math.min(prev, wizardStepCount - 1));
+  }, [formFields.length, wizardStepCount]);
+
   const validateCurrentStep = () => {
-    if (!currentField) return true;
-    if (!currentField.required) return true;
-    return hasFieldValue(formData[currentField.id]);
+    if (isReviewStep) return true;
+    const stepId = currentWizardStep.id as Exclude<WizardStepId, 'review'>;
+    const stepFields = fieldsByStep[stepId];
+    for (const field of stepFields) {
+      if (field.required && !hasFieldValue(formData[field.id])) {
+        return false;
+      }
+    }
+    return true;
   };
 
   const validateAllRequired = () => {
@@ -506,17 +610,17 @@ export const FormSubmissionPage: React.FC = () => {
 
   const handleNext = () => {
     if (!validateCurrentStep()) {
-      toast.error('Please fill in all required fields');
+      toast.error('Please fill in all required fields in this section');
       return;
     }
-    if (safeStepIndex < stepCount - 1) {
-      setCurrentFieldIdx(prev => prev + 1);
+    if (wizardStepIndex < wizardStepCount - 1) {
+      setCurrentFieldIdx((prev) => prev + 1);
     }
   };
 
   const handleBack = () => {
-    if (safeStepIndex > 0) {
-      setCurrentFieldIdx(prev => prev - 1);
+    if (wizardStepIndex > 0) {
+      setCurrentFieldIdx((prev) => prev - 1);
     }
   };
 
@@ -639,9 +743,9 @@ export const FormSubmissionPage: React.FC = () => {
 
   const renderFieldInput = (field: FormField) => {
     const value = formData[field.id] || '';
-    
-    // Apple-style base input class
-    const inputBaseClass = "w-full p-5 bg-[#F2F2F7] hover:bg-[#E5E5EA] focus:bg-white border-2 border-transparent focus:border-indigo-400 rounded-[20px] outline-none transition-all duration-300 text-[18px] text-[#1C1C1E] placeholder:text-[#C7C7CC] shadow-sm focus:shadow-md";
+
+    const inputBaseClass =
+      'w-full px-4 py-3.5 sm:px-5 sm:py-4 bg-white hover:bg-slate-50 focus:bg-white border-2 border-slate-200 focus:border-emerald-500 rounded-[20px] outline-none transition-all duration-300 text-[16px] text-slate-900 placeholder:text-slate-400 shadow-sm focus:shadow-md focus:ring-4 focus:ring-emerald-500/10';
 
     switch (field.type) {
       case 'textarea':
@@ -674,19 +778,19 @@ export const FormSubmissionPage: React.FC = () => {
               ))}
             </select>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-              <ChevronDown className="w-5 h-5 text-[#AEAEB2]" />
+              <ChevronDown className="w-5 h-5 text-slate-400" />
             </div>
           </div>
         );
       case 'radio':
         return (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {field.options?.map((opt, i) => {
               const isSelected = value === opt;
               return (
-                <label key={i} className={`flex items-center gap-5 p-5 rounded-[20px] border-2 cursor-pointer transition-all duration-300 group hover:-translate-y-0.5 ${isSelected ? 'border-indigo-600 bg-[#F0F5FF]' : 'border-[#E5E5EA] hover:border-[#D1D1D6] bg-white hover:shadow-sm'}`}>
-                  <div className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full border-[2.5px] transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-[#C7C7CC] group-hover:border-[#AEAEB2]'}`}>
-                    {isSelected && <div className="w-3 h-3 rounded-full bg-white" />}
+                <label key={i} className={`flex items-center gap-4 p-4 sm:p-5 rounded-[20px] border-2 cursor-pointer transition-all duration-200 group ${isSelected ? 'border-emerald-500 bg-emerald-50/70 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white hover:shadow-sm'}`}>
+                  <div className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full border-2 transition-colors ${isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 group-hover:border-slate-400'}`}>
+                    {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
                   </div>
                   <input
                     type="radio"
@@ -697,7 +801,7 @@ export const FormSubmissionPage: React.FC = () => {
                     required={field.required}
                     className="sr-only"
                   />
-                  <span className="text-[18px] font-semibold text-[#1C1C1E]">{opt}</span>
+                  <span className="text-[16px] font-medium text-slate-900">{opt}</span>
                 </label>
               );
             })}
@@ -705,13 +809,13 @@ export const FormSubmissionPage: React.FC = () => {
         );
       case 'checkbox':
         return (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {field.options?.map((opt, i) => {
               const isSelected = Array.isArray(value) && value.includes(opt);
               return (
-                <label key={i} className={`flex items-center gap-5 p-5 rounded-[20px] border-2 cursor-pointer transition-all duration-300 group hover:-translate-y-0.5 ${isSelected ? 'border-indigo-600 bg-[#F0F5FF]' : 'border-[#E5E5EA] hover:border-[#D1D1D6] bg-white hover:shadow-sm'}`}>
-                  <div className={`flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-[8px] border-[2.5px] transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-[#C7C7CC] group-hover:border-[#AEAEB2]'}`}>
-                    {isSelected && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                <label key={i} className={`flex items-center gap-4 p-4 sm:p-5 rounded-[20px] border-2 cursor-pointer transition-all duration-200 group ${isSelected ? 'border-emerald-500 bg-emerald-50/70 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white hover:shadow-sm'}`}>
+                  <div className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-lg border-2 transition-colors ${isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 group-hover:border-slate-400'}`}>
+                    {isSelected && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                   </div>
                   <input
                     type="checkbox"
@@ -725,7 +829,7 @@ export const FormSubmissionPage: React.FC = () => {
                     }}
                     className="sr-only"
                   />
-                  <span className="text-[18px] font-semibold text-[#1C1C1E]">{opt}</span>
+                  <span className="text-[16px] font-medium text-slate-900">{opt}</span>
                 </label>
               );
             })}
@@ -733,30 +837,37 @@ export const FormSubmissionPage: React.FC = () => {
         );
       case 'award_selector':
         return (
-          <div className="relative">
-            <select
-              value={value}
-              onChange={(e) => handleInputChange(field.id, e.target.value)}
-              required={field.required}
-              className={`${inputBaseClass} appearance-none cursor-pointer pr-20 font-bold text-indigo-900 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100 focus:border-indigo-400`}
-              style={{ fontFamily: theme.fontFamily }}
-            >
-              <option value="">{field.placeholder || 'Select award category...'}</option>
-              {field.options?.map((opt, i) => (
-                <option key={i} value={opt}>{opt}</option>
-              ))}
-            </select>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none flex items-center gap-2">
-              <Award className="w-5 h-5 text-indigo-500" />
-              <ChevronDown className="w-5 h-5 text-indigo-400" />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {(field.options || []).map((opt, i) => {
+              const isSelected = value === opt;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleInputChange(field.id, opt)}
+                  className={`relative flex items-center gap-3 p-4 sm:p-5 rounded-[20px] border-2 text-left transition-all duration-200 ${isSelected ? 'border-emerald-500 bg-emerald-50/80 shadow-md ring-1 ring-emerald-500/20' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}`}
+                  style={{ fontFamily: theme.fontFamily }}
+                >
+                  <div className={`flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl ${isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <span className={`text-[15px] font-semibold leading-snug ${isSelected ? 'text-emerald-900' : 'text-slate-700'}`}>{opt}</span>
+                  {isSelected && (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 absolute top-3 right-3" />
+                  )}
+                </button>
+              );
+            })}
+            {(!field.options || field.options.length === 0) && (
+              <div className="col-span-full text-sm text-slate-400 italic p-4">No award categories available.</div>
+            )}
           </div>
         );
       case 'file': {
         const fileState: { name?: string; url?: string; uploading?: boolean; error?: string } =
           typeof value === 'object' && value !== null ? value : {};
         return (
-          <div className="relative">
+          <div className="relative space-y-3">
             <input
               type="file"
               id={`file-${field.id}`}
@@ -777,157 +888,197 @@ export const FormSubmissionPage: React.FC = () => {
                 handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path });
               }}
             />
-            {fileState.url ? (
-              <div className="flex items-center gap-3 p-4 bg-indigo-50 border-2 border-indigo-200 rounded-[20px]">
-                <FileIcon className="w-6 h-6 text-indigo-500 flex-shrink-0" />
-                <span className="flex-1 text-sm font-medium text-indigo-900 truncate">{fileState.name}</span>
-                <button
-                  type="button"
-                  onClick={() => handleInputChange(field.id, '')}
-                  className="text-indigo-400 hover:text-indigo-700 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            ) : (
+            {!fileState.url && !fileState.uploading && (
               <label
                 htmlFor={`file-${field.id}`}
-                className="flex flex-col items-center justify-center gap-3 p-8 bg-[#F2F2F7] hover:bg-[#E5E5EA] border-2 border-dashed border-[#C7C7CC] hover:border-indigo-400 rounded-[20px] cursor-pointer transition-all duration-300"
+                className="flex flex-col items-center justify-center gap-3 min-h-[220px] sm:min-h-[260px] px-6 py-10 bg-gradient-to-b from-slate-50 to-white border-2 border-dashed border-slate-300 hover:border-emerald-400 hover:bg-emerald-50/30 rounded-[20px] cursor-pointer transition-all duration-300"
               >
-                {fileState.uploading ? (
-                  <>
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                    <span className="text-sm text-slate-500">Uploading…</span>
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="w-8 h-8 text-slate-400" />
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-slate-700">
-                        {field.placeholder || 'Click to upload a file'}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG, PDF or GIF (max 10 MB)</p>
-                    </div>
-                    {fileState.error && (
-                      <p className="text-xs text-red-500">{fileState.error}</p>
-                    )}
-                  </>
+                <div className="w-14 h-14 rounded-[20px] bg-emerald-100 flex items-center justify-center">
+                  <UploadCloud className="w-7 h-7 text-emerald-600" />
+                </div>
+                <div className="text-center">
+                  <p className="text-base font-semibold text-slate-800">
+                    {field.placeholder || 'Upload Supporting Files'}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-1">Drop files or click to upload</p>
+                  <p className="text-xs text-slate-400 mt-2">SVG, PNG, JPG, PDF or GIF (max 10 MB)</p>
+                </div>
+                {fileState.error && (
+                  <p className="text-xs text-red-500">{fileState.error}</p>
                 )}
               </label>
+            )}
+            {fileState.uploading && (
+              <div className="rounded-[20px] border-2 border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
+                    <FileIcon className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{fileState.name || 'Uploading file…'}</p>
+                    <div className="mt-3 h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full w-[45%] bg-emerald-500 rounded-full animate-pulse" />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Uploading…</p>
+                  </div>
+                  <Loader2 className="w-5 h-5 text-emerald-600 animate-spin flex-shrink-0" />
+                </div>
+              </div>
+            )}
+            {fileState.url && (
+              <div className="rounded-[20px] border-2 border-emerald-200 bg-emerald-50/60 p-4 sm:p-5 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+                    <FileIcon className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-emerald-950 truncate">{fileState.name}</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">Uploaded successfully</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                  <label
+                    htmlFor={`file-${field.id}`}
+                    className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-emerald-300 bg-white text-sm font-semibold text-emerald-800 hover:bg-emerald-50 cursor-pointer transition-colors"
+                  >
+                    Replace
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange(field.id, '')}
+                    className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         );
       }
-      
+
       case 'image': {
-  const imageState: {
-    name?: string;
-    url?: string;
-    uploading?: boolean;
-    error?: string;
-  } = typeof value === 'object' && value !== null ? value : {};
+        const imageState: {
+          name?: string;
+          url?: string;
+          uploading?: boolean;
+          error?: string;
+        } = typeof value === 'object' && value !== null ? value : {};
 
-  return (
-    <div className="relative">
-      <input
-        type="file"
-        accept="image/*"
-        id={`image-${field.id}`}
-        className="sr-only"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
+        return (
+          <div className="relative space-y-3">
+            <input
+              type="file"
+              accept="image/*"
+              id={`image-${field.id}`}
+              className="sr-only"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
 
-          handleInputChange(field.id, {
-            name: file.name,
-            uploading: true,
-          });
+                handleInputChange(field.id, {
+                  name: file.name,
+                  uploading: true,
+                });
 
-          const tempId = `temp-${Date.now()}`;
+                const tempId = `temp-${Date.now()}`;
 
-          const { path, bucket, error } =
-            await storage.uploadSubmissionFile(file, tempId);
+                const { path, bucket, error } =
+                  await storage.uploadSubmissionFile(file, tempId);
 
-          if (error || !path) {
-            handleInputChange(field.id, {
-              error: (error as any)?.message || 'Upload failed',
-            });
+                if (error || !path) {
+                  handleInputChange(field.id, {
+                    error: (error as any)?.message || 'Upload failed',
+                  });
 
-            toast.error(
-              'Image upload failed: ' +
-                ((error as any)?.message || 'Unknown error')
-            );
+                  toast.error(
+                    'Image upload failed: ' +
+                      ((error as any)?.message || 'Unknown error')
+                  );
 
-            return;
-          }
+                  return;
+                }
 
-          const { data: urlData } = (supabase as any)
-            .storage
-            .from(bucket || 'media')
-            .getPublicUrl(path);
+                const { data: urlData } = (supabase as any)
+                  .storage
+                  .from(bucket || 'media')
+                  .getPublicUrl(path);
 
-          handleInputChange(field.id, {
-            name: file.name,
-            url: urlData?.publicUrl || path,
-          });
-        }}
-      />
+                handleInputChange(field.id, {
+                  name: file.name,
+                  url: urlData?.publicUrl || path,
+                });
+              }}
+            />
 
-{imageState.url ? (
-  <div className="flex items-center gap-3 p-4 bg-indigo-50 border-2 border-indigo-200 rounded-[20px]">
-    <ImageIcon className="w-6 h-6 text-indigo-500 flex-shrink-0" />
+            {!imageState.url && !imageState.uploading && (
+              <label
+                htmlFor={`image-${field.id}`}
+                className="flex flex-col items-center justify-center gap-3 min-h-[220px] sm:min-h-[260px] px-6 py-10 bg-gradient-to-b from-slate-50 to-white border-2 border-dashed border-slate-300 hover:border-emerald-400 hover:bg-emerald-50/30 rounded-[20px] cursor-pointer transition-all duration-300"
+              >
+                <div className="w-14 h-14 rounded-[20px] bg-emerald-100 flex items-center justify-center">
+                  <ImageIcon className="w-7 h-7 text-emerald-600" />
+                </div>
+                <div className="text-center">
+                  <p className="text-base font-semibold text-slate-800">Upload image, or drag and drop</p>
+                  <p className="text-xs text-slate-400 mt-2">PNG, JPG, JPEG, SVG, WEBP</p>
+                </div>
+                {imageState.error && (
+                  <p className="text-xs text-red-500">{imageState.error}</p>
+                )}
+              </label>
+            )}
 
-    <span className="flex-1 text-sm font-medium text-indigo-900 truncate">
-      {imageState.name}
-    </span>
-
-    <button
-      type="button"
-      onClick={() => handleInputChange(field.id, '')}
-      className="text-indigo-400 hover:text-indigo-700 transition-colors"
-    >
-      <X className="w-5 h-5" />
-    </button>
-  </div>
-) : (
-        <label
-          htmlFor={`image-${field.id}`}
-          className="flex flex-col items-center justify-center gap-3 p-8 bg-[#F2F2F7] hover:bg-[#E5E5EA] border-2 border-dashed border-[#C7C7CC] hover:border-indigo-400 rounded-[20px] cursor-pointer transition-all duration-300"
-        >
-          {imageState.uploading ? (
-            <>
-              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-              <span className="text-sm text-slate-500">
-                Uploading...
-              </span>
-            </>
-          ) : (
-            <>
-              <ImageIcon className="w-8 h-8 text-slate-400" />
-
-              <div className="text-center">
-                <p className="text-sm font-semibold text-slate-700">
-                  Upload image
-                </p>
-
-                <p className="text-xs text-slate-400 mt-1">
-                  PNG, JPG, JPEG, SVG, WEBP
-                </p>
+            {imageState.uploading && (
+              <div className="rounded-[20px] border-2 border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center">
+                    <ImageIcon className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{imageState.name || 'Uploading image…'}</p>
+                    <div className="mt-3 h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full w-[45%] bg-emerald-500 rounded-full animate-pulse" />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">Uploading…</p>
+                  </div>
+                  <Loader2 className="w-5 h-5 text-emerald-600 animate-spin flex-shrink-0" />
+                </div>
               </div>
+            )}
 
-              {imageState.error && (
-                <p className="text-xs text-red-500">
-                  {imageState.error}
-                </p>
-              )}
-            </>
-          )}
-        </label>
-      )}
-    </div>
-  );
-}
-      
+            {imageState.url && (
+              <div className="rounded-[20px] border-2 border-emerald-200 bg-emerald-50/60 p-4 sm:p-5 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center overflow-hidden">
+                    <img src={imageState.url} alt={imageState.name || 'Uploaded image'} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-emerald-950 truncate">{imageState.name}</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">Uploaded successfully</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                  <label
+                    htmlFor={`image-${field.id}`}
+                    className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-emerald-300 bg-white text-sm font-semibold text-emerald-800 hover:bg-emerald-50 cursor-pointer transition-colors"
+                  >
+                    Replace
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange(field.id, '')}
+                    className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       default:
         return (
           <input
@@ -943,12 +1094,170 @@ export const FormSubmissionPage: React.FC = () => {
     }
   };
 
+  const renderFieldBlock = (field: FormField, fullWidth = false) => (
+    <div
+      key={field.id}
+      className={`group flex flex-col items-start w-full ${fullWidth ? 'md:col-span-2' : ''}`}
+    >
+      <label
+        className="block text-[15px] sm:text-base font-semibold text-slate-800 mb-2.5 group-focus-within:text-emerald-700 transition-colors tracking-tight w-full"
+        style={{ fontFamily: theme.fontFamily }}
+      >
+        {field.label} {field.required && <span className="text-rose-500 ml-0.5">*</span>}
+      </label>
+      {renderFieldInput(field)}
+      {field.helpText && (
+        <p className="text-[13px] mt-2 text-slate-500" style={{ fontFamily: theme.fontFamily }}>
+          {field.helpText}
+        </p>
+      )}
+    </div>
+  );
+
+const renderSectionFields = (fields: FormField[]) => {
+  if (fields.length === 0) {
+    return (
+      <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
+        No fields in this section.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-10">
+      {fields.map((field, index) => (
+        <div
+          key={field.id}
+          className={`
+            ${isFullWidthField(field) ? 'md:col-span-2' : ''}
+            pb-8
+            border-b border-slate-100
+            last:border-b-0
+          `}
+        >
+          {renderFieldBlock(field, isFullWidthField(field))}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+  const renderReviewSection = (title: string, fields: FormField[]) => {
+    if (fields.length === 0) return null;
+
+    return (
+      <section className="rounded-[20px] border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+        <h3 className="text-lg font-bold text-slate-900 mb-4">{title}</h3>
+        <dl className="space-y-3">
+          {fields.map((field) => (
+            <div key={field.id} className="grid grid-cols-1 sm:grid-cols-[minmax(140px,220px)_1fr] gap-1 sm:gap-4 py-2 border-b border-slate-100 last:border-0">
+              <dt className="text-sm font-medium text-slate-500">{field.label}</dt>
+              <dd className="text-sm font-semibold text-slate-900 break-words">
+                {formatFieldValue(field, formData[field.id])}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    );
+  };
+
+  const renderStepContent = () => {
+    switch (currentWizardStep.id) {
+      case 'profile':
+        return renderSectionFields(fieldsByStep.profile?? []);
+      case 'award':
+        return renderSectionFields(fieldsByStep.award?? []);
+      case 'media':
+        return renderSectionFields(fieldsByStep.media?? []);
+      case 'review':
+        return (
+          <div className="space-y-5">
+            {renderReviewSection('Basic Information', fieldsByStep.profile)}
+            {renderReviewSection('Award Information', fieldsByStep.award)}
+            {renderReviewSection('Uploaded Media', fieldsByStep.media)}
+
+            {paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0 && (
+              <section className="rounded-[20px] border border-emerald-200 bg-emerald-50/50 p-5 sm:p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Payment</h3>
+                <p className="text-sm text-slate-600 mb-4">
+                  A submission fee is required before your entry is finalized.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-[16px] bg-white border border-emerald-100 px-4 py-4">
+                  <div>
+                    <p className="text-sm text-slate-500">Amount due</p>
+                    <p className="text-2xl font-bold text-emerald-700">
+                      {paymentConfig.currency} {Number(paymentConfig.fee || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    Provider: {paymentConfig.provider}
+                    {!paymentConfig.connected && (
+                      <span className="block text-amber-600 mt-1">Payment provider not connected</span>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {showRequirements && requiredFields.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="rounded-[20px] bg-slate-50 p-5 sm:p-6 border border-slate-100"
+              >
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <p className="text-[16px] font-semibold text-slate-900">Before you submit</p>
+                    <p className="text-[14px] text-slate-500 mt-1">Complete required items to avoid deadline risk.</p>
+                  </div>
+                  <button
+                    onClick={dismissRequirements}
+                    className="text-[14px] font-medium text-emerald-700 hover:text-emerald-900 bg-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"
+                    type="button"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <div className="w-full h-1.5 bg-slate-200 rounded-full mb-4 overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                    style={{ width: `${(completedRequiredCount / requiredFields.length) * 100}%` }}
+                  />
+                </div>
+                <ul className="space-y-2.5">
+                  {requiredFields.slice(0, 6).map((field) => {
+                    const filled = hasFieldValue(formData[field.id]);
+                    return (
+                      <li key={field.id} className="flex items-center gap-3 text-[14px]">
+                        <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${filled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-transparent'}`}>
+                          {filled && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        </div>
+                        <span className={filled ? 'text-slate-900' : 'text-slate-400'}>{field.label}</span>
+                      </li>
+                    );
+                  })}
+                  {requiredFields.length > 6 && (
+                    <li className="text-[14px] text-slate-400 pl-8">...and {requiredFields.length - 6} more</li>
+                  )}
+                </ul>
+              </motion.div>
+            )}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-emerald-50/30">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-slate-600">Loading form...</p>
+          <div className="w-16 h-16 rounded-[20px] bg-white shadow-lg flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+          </div>
+          <p className="text-slate-600 font-medium">Loading form...</p>
         </div>
       </div>
     );
@@ -1002,19 +1311,18 @@ export const FormSubmissionPage: React.FC = () => {
   if (isSubmitted) {
     try {
       return (
-        <div className="min-h-screen bg-white">
-          <div className="min-h-[60vh] flex items-center justify-center px-4">
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="text-center max-w-md"
-            >
-              <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto mb-6" />
-              <h2 className="text-3xl font-bold text-slate-900 mb-4">Thank You!</h2>
-              <p className="text-lg text-slate-600">{paymentMessage || 'Your form has been submitted successfully.'}</p>
-            </motion.div>
-          </div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/40 flex items-center justify-center px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center max-w-md bg-white rounded-[32px] shadow-xl border border-slate-100 p-12"
+          >
+            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+            </div>
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Thank You!</h2>
+            <p className="text-lg text-slate-600">{paymentMessage || 'Your form has been submitted successfully.'}</p>
+          </motion.div>
         </div>
       );
     } catch (error) {
@@ -1033,167 +1341,242 @@ export const FormSubmissionPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen w-full font-sans selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-500" style={{ backgroundColor: theme.backgroundColor !== '#ffffff' ? theme.backgroundColor : '#F5F5F7' }}>
-      <div className="w-full max-w-[1400px] mx-auto py-6 sm:py-10 px-4 sm:px-8 lg:px-12 min-h-screen flex flex-col justify-center">
+    <div
+      className="min-h-screen w-full font-sans selection:bg-emerald-100 selection:text-emerald-900 transition-colors duration-500 bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 pb-28 sm:pb-10"
+      style={{ backgroundColor: theme.backgroundColor !== '#ffffff' ? theme.backgroundColor : undefined }}
+    >
+      <div className="w-full max-w-[1040px] mx-auto py-5 sm:py-8 px-4 sm:px-6 lg:px-8">
 
         {paymentState === 'cancelled' && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 mx-auto w-full max-w-4xl rounded-[20px] border border-amber-200 bg-amber-50 px-6 py-5 text-amber-900 flex items-start gap-4 shadow-sm">
-            <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 rounded-[20px] border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 flex items-start gap-3 shadow-sm"
+          >
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-lg tracking-tight">Payment Cancelled</p>
-              <p className="text-[16px] opacity-80 mt-1">{paymentMessage || 'Your draft is safe. Submit again when you are ready to complete payment.'}</p>
+              <p className="font-bold text-base tracking-tight">Payment Cancelled</p>
+              <p className="text-sm opacity-80 mt-1">
+                {paymentMessage || 'Your draft is safe. Submit again when you are ready to complete payment.'}
+              </p>
             </div>
           </motion.div>
         )}
 
-        <div className="mb-10 px-4 max-w-4xl mx-auto w-full">
-          <div className="flex justify-between items-end mb-4">
-            <span className="text-[13px] font-bold tracking-widest text-[#86868B] uppercase">Question {safeStepIndex + 1} of {stepCount}</span>
-            <span className="text-[15px] font-semibold text-[#1D1D1F]">{Math.round(((safeStepIndex + 1) / stepCount) * 100)}% Completed</span>
-          </div>
-          <div className="w-full h-2.5 bg-slate-200/60 rounded-full overflow-hidden mb-2">
-            <div
-              className="h-full rounded-full transition-all duration-700 ease-out shadow-sm"
-              style={{ width: `${((safeStepIndex + 1) / stepCount) * 100}%`, backgroundColor: theme.primaryColor || '#007AFF' }}
-            />
-          </div>
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-[32px] md:rounded-[40px] shadow-sm md:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.06)] border border-slate-200/60 overflow-hidden relative w-full lg:max-w-6xl mx-auto"
-        >
-          <div className="p-6 sm:p-14 md:p-20 flex flex-col items-center">
-            <div className="mb-10 w-full max-w-4xl">
-              <div className="mb-8 flex items-center justify-between gap-3">
-                <Button
-                  variant="ghost"
-                  onClick={handleBack}
-                  disabled={safeStepIndex === 0}
-                  className={`rounded-full px-5 py-2.5 text-sm font-semibold ${safeStepIndex === 0 ? 'opacity-40' : 'text-[#1D1D1F] hover:bg-[#F5F5F7]'}`}
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Back
-                </Button>
-
-                <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#86868B]">
-                  {currentPage?.title || formTitle}
-                </div>
-
-                {isLastStep ? (
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="rounded-full px-6 py-2.5 text-sm font-bold"
-                    style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
-                  >
-                    {isSubmitting
-                      ? 'Submitting...'
-                      : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
-                        ? `Pay ${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)}`
-                        : 'Submit'}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleNext}
-                    className="rounded-full px-6 py-2.5 text-sm font-bold"
-                    style={{ backgroundColor: theme.primaryColor || '#007AFF', color: theme.buttonTextColor || '#fff' }}
-                  >
-                    Next <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                )}
-              </div>
-
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-[#1D1D1F] mb-4" style={{ fontFamily: theme.fontFamily }}>
-                {formTitle}
-              </h1>
-              {currentPage?.description && (
-                <p className="text-lg md:text-xl text-[#86868B] leading-relaxed max-w-3xl" style={{ fontFamily: theme.fontFamily }}>
-                  {currentPage.description}
-                </p>
-              )}
-              
-              {showRequirements && requiredFields.length > 0 && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-8 rounded-[20px] bg-[#F5F5F7] p-6 border border-[#E5E5EA]">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <div>
-                      <p className="text-[17px] font-semibold text-[#1D1D1F]">Before you submit</p>
-                      <p className="text-[15px] text-[#86868B] mt-1">Complete required items to avoid deadline risk.</p>
-                    </div>
-                    <button
-                      onClick={dismissRequirements}
-                      className="text-[15px] font-medium text-indigo-600 hover:text-indigo-800 bg-white px-4 py-2 rounded-full shadow-sm hover:shadow transition-all"
-                      type="button"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                  <div className="w-full h-1.5 bg-[#E5E5EA] rounded-full mb-4 overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${(completedRequiredCount / requiredFields.length) * 100}%` }} />
-                  </div>
-                  <ul className="space-y-2.5">
-                    {requiredFields.slice(0, 5).map((field) => {
-                      const value = formData[field.id];
-                      const filled = Array.isArray(value)
-                        ? value.length > 0
-                        : typeof value === 'string'
-                          ? value.trim().length > 0
-                          : value != null && value !== '';
-                      return (
-                        <li key={field.id} className="flex items-center gap-3 text-[15px]">
-                          <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${filled ? 'bg-emerald-500 text-white' : 'bg-[#E5E5EA] text-transparent'}`}>
-                            {filled && <CheckCircle2 className="w-3.5 h-3.5" />}
-                          </div>
-                          <span className={filled ? 'text-[#1D1D1F]' : 'text-[#86868B]'}>{field.label}</span>
-                        </li>
-                      );
-                    })}
-                    {requiredFields.length > 5 && (
-                      <li className="text-[15px] text-[#86868B] pl-8">...and {requiredFields.length - 5} more</li>
-                    )}
-                  </ul>
-                </motion.div>
-              )}
+        <div className="bg-white rounded-[5px] shadow-xl border border-slate-100 overflow-hidden w-full">
+          <div className="px-4 sm:px-8 lg:px-10 pt-6 sm:pt-8 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Submission</span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900" style={{ fontFamily: theme.fontFamily }}>
+              {formTitle}
+            </h1>
+
+          </div>
+
+          {/* Desktop / tablet wizard progress */}
+      {/* Premium Segmented Progress */}
+
+<div className="px-6 sm:px-8 lg:px-10 py-6 border-b border-slate-100 bg-white">
+  <div className="flex items-center justify-between mb-4">
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+        Submission Progress
+      </p>
+      <p className="text-sm text-slate-500 mt-1">
+        {Math.round(((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100)}% Complete
+      </p>
+    </div>
+
+    <div className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1">
+      <span className="text-xs font-semibold text-emerald-700">
+        Step {wizardStepIndex + 1}/{WIZARD_STEPS.length}
+      </span>
+    </div>
+  </div>
+
+  <div className="flex gap-2">
+    {WIZARD_STEPS.map((_, idx) => {
+      const completed = idx < wizardStepIndex;
+      const active = idx === wizardStepIndex;
+
+      return (
+        <motion.div
+          key={idx}
+          layout
+          className={`
+            h-2.5 flex-1 rounded-full transition-all duration-500
+            ${
+              completed
+                ? "bg-emerald-600"
+                : active
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-600"
+                : "bg-slate-200"
+            }
+          `}
+        />
+      );
+    })}
+  </div>
+</div>
+
+
+
+         <div className="px-4 sm:px-8 lg:px-10 py-6 sm:py-8 pb-32 sm:pb-8">
+<div className="mb-12 sm:mb-14">
+  <div className="flex items-center gap-3 mb-2">
+    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+      <Sparkles className="w-5 h-5 text-emerald-600" />
+    </div>
+
+    <div>
+      <h2 className="text-2xl font-bold text-slate-900">
+        {SECTION_TITLES[currentWizardStep.id]}
+      </h2>
+
+      <p className="text-sm text-slate-500">
+        {currentWizardStep.id === 'profile' &&
+          'Provide your contact and profile information'}
+
+        {currentWizardStep.id === 'award' &&
+          'Tell us about your achievements and award submission'}
+
+        {currentWizardStep.id === 'media' &&
+          'Upload supporting documents and media'}
+
+        {currentWizardStep.id === 'review' &&
+          'Review your submission before finalizing'}
+      </p>
+    </div>
+  </div>
+</div>
+            {/* {requiredFields.length > 0 && !isReviewStep && (
+              <div className="mb-6 rounded-[16px] bg-slate-50 border border-slate-100 px-4 py-3">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-2">
+                  <span>Overall progress</span>
+                  <span>{completedRequiredCount}/{requiredFields.length} required</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${(completedRequiredCount / requiredFields.length) * 100}%`,
+                      backgroundColor: accentColor,
+                    }}
+                  />
+                </div>
+              </div>
+            )} */}
+
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={currentField?.id || safeStepIndex}
-                initial={{ opacity: 0, x: 10, filter: 'blur(4px)' }}
-                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, x: -10, filter: 'blur(4px)' }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="w-full max-w-2xl"
+                key={currentWizardStep.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                className="w-full"
               >
-                {currentField ? (
-                  <div className="group flex flex-col items-start w-full">
-                    <label className="block text-[22px] md:text-[26px] font-bold text-[#1D1D1F] mb-5 ml-1 group-focus-within:text-indigo-600 transition-colors tracking-tight w-full" style={{ fontFamily: theme.fontFamily }}>
-                      {currentField.label} {currentField.required && <span className="text-rose-500 ml-1">*</span>}
-                    </label>
-                    {renderFieldInput(currentField)}
-                    {currentField.helpText && (
-                      <p className="text-[14px] mt-2.5 ml-1 text-[#86868B]" style={{ fontFamily: theme.fontFamily }}>
-                        {currentField.helpText}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
+
+
+                {formFields.length === 0 ? (
+                  <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
                     No questions found in this form.
                   </div>
+                ) : (
+                  renderStepContent()
                 )}
               </motion.div>
             </AnimatePresence>
 
-            <div className="mt-16 pt-8 flex justify-center items-center w-full max-w-4xl border-t border-slate-100">
-              <div className="text-[14px] text-[#86868B] font-medium text-center">
+            
+
+            <div className="hidden sm:flex mt-8 pt-6 border-t border-slate-100 items-center justify-between gap-4">
+              <Button
+                variant="ghost"
+                onClick={handleBack}
+                disabled={wizardStepIndex === 0}
+                className={`rounded-full px-5 py-2.5 text-sm font-semibold ${wizardStepIndex === 0 ? 'opacity-40' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+
+              <div className="text-[13px] text-slate-400 font-medium text-center">
                 {saveState === 'saving' && 'Saving draft...'}
-                {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}`}
+                {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`}
                 {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
               </div>
+
+              {isLastStep ? (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="rounded-full px-7 py-2.5 text-sm font-bold shadow-md min-w-[140px]"
+                  style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                >
+                  {isSubmitting
+                    ? 'Submitting...'
+                    : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
+                      ? `Pay ${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)}`
+                      : 'Submit'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleNext}
+                  className="rounded-full px-7 py-2.5 text-sm font-bold shadow-md min-w-[120px]"
+                  style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                >
+                  Continue <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              )}
             </div>
           </div>
-        </motion.div>
+        </div>
+      </div>
+
+      {/* Mobile sticky footer actions */}
+      <div className="sm:hidden fixed inset-x-0 bottom-0 z-[999] border-t border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="max-w-[1040px] mx-auto flex flex-col gap-2">
+          <div className="text-[12px] text-slate-400 font-medium text-center">
+            {saveState === 'saving' && 'Saving draft...'}
+            {saveState === 'saved' && `Saved${lastSavedAt ? ` at ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+            {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              variant="ghost"
+              onClick={handleBack}
+              disabled={wizardStepIndex === 0}
+              className={`w-full rounded-[16px] py-3 text-sm font-semibold ${wizardStepIndex === 0 ? 'opacity-40' : 'text-slate-700 border border-slate-200'}`}
+            >
+              Back
+            </Button>
+            {isLastStep ? (
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="w-full rounded-[16px] py-3 text-sm font-bold shadow-md"
+                style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+              >
+                {isSubmitting
+                  ? 'Submitting...'
+                  : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
+                    ? `Pay ${Number(paymentConfig.fee || 0).toFixed(2)}`
+                    : 'Submit'}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleNext}
+                className="w-full rounded-[16px] py-3 text-sm font-bold shadow-md"
+                style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+              >
+                Continue
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
