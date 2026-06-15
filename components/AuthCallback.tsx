@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { auth, refreshUserCache, supabase } from '../services/supabase';
+import { refreshUserCache } from '../services/supabase';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { consumePostAuthRedirect } from '../lib/safeRedirect';
+import {
+  invalidateSessionCache,
+  refreshSessionFromAuth,
+  setCachedSession,
+  subscribeAuthState,
+} from '../services/userContext';
+import { getSupabaseClient } from '../services/supabaseClient';
 
 export const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +18,7 @@ export const AuthCallback: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
+    const supabase = getSupabaseClient();
     if (!supabase) {
       setStatus('error');
       setErrorMessage('Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
@@ -18,9 +26,12 @@ export const AuthCallback: React.FC = () => {
     }
 
     let settled = false;
-    const finishSuccess = async () => {
-      if (settled) return;
+    invalidateSessionCache();
+
+    const finishSuccess = async (session: Awaited<ReturnType<typeof refreshSessionFromAuth>>) => {
+      if (settled || !session) return;
       settled = true;
+      setCachedSession(session);
       await refreshUserCache();
       setStatus('success');
       setTimeout(() => {
@@ -47,29 +58,24 @@ export const AuthCallback: React.FC = () => {
       return;
     }
 
-    // Wait for Supabase to finish parsing the OAuth/magic-link URL (detectSessionInUrl).
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
-        await finishSuccess();
+    const unsubscribe = subscribeAuthState(async (event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        await finishSuccess(session);
       }
     });
 
     const timeout = window.setTimeout(async () => {
       if (settled) return;
-      const { session, error } = await auth.getSession();
-      if (error) {
-        finishError(error.message || 'Authentication failed');
-        return;
-      }
+      const session = await refreshSessionFromAuth();
       if (session) {
-        await finishSuccess();
+        await finishSuccess(session);
         return;
       }
       finishError('No session found. Please try signing in again.');
     }, 8000);
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
       window.clearTimeout(timeout);
     };
   }, [navigate]);
@@ -116,4 +122,3 @@ export const AuthCallback: React.FC = () => {
     </div>
   );
 };
-

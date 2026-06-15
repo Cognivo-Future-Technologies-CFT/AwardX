@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { resolveAuthCallbackUrl, resolveSiteUrl } from '../lib/siteUrl';
 import { fetchBackendJson } from './backendApi';
 import { supabase, supabaseUrl, isSupabaseReady } from './supabaseClient';
 import {
@@ -195,7 +196,7 @@ export const auth = {
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${import.meta.env.VITE_SITE_URL}/auth/callback`,
+        emailRedirectTo: resolveAuthCallbackUrl(),
       },
     });
     return { data, error };
@@ -206,13 +207,22 @@ export const auth = {
     if (!supabase) {
       return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
     }
-    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+
+    invalidateSessionCache();
+
+    const redirectTo = resolveAuthCallbackUrl();
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${siteUrl}/auth/callback`,
+        redirectTo,
+        skipBrowserRedirect: false,
       },
     });
+
+    if (!error && data?.url && typeof window !== 'undefined') {
+      window.location.assign(data.url);
+    }
+
     return { data, error };
   },
 
@@ -273,7 +283,7 @@ export const auth = {
       return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
     }
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${import.meta.env.VITE_SITE_URL}/auth/reset-password`,
+      redirectTo: `${resolveSiteUrl()}/auth/reset-password`,
     });
     return { data, error };
   },

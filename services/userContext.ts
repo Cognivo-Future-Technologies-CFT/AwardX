@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import { hasPendingAuthCallback } from '../lib/siteUrl';
 import { getSupabaseClient } from './supabaseClient';
 
 const USER_CONTEXT_TTL_MS = 45_000;
@@ -58,8 +59,22 @@ export const invalidateSessionCache = () => {
   sessionHydrationPromise = null;
 };
 
-export const getCachedSession = async (): Promise<Session | null> => {
-  if (cachedSession !== undefined) {
+const shouldBypassSessionCache = (): boolean => hasPendingAuthCallback();
+
+export const refreshSessionFromAuth = async (): Promise<Session | null> => {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    cachedSession = null;
+    return null;
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  cachedSession = session;
+  return session;
+};
+
+export const getCachedSession = async (forceRefresh = false): Promise<Session | null> => {
+  if (!forceRefresh && !shouldBypassSessionCache() && cachedSession !== undefined) {
     return cachedSession;
   }
 
@@ -73,11 +88,7 @@ export const getCachedSession = async (): Promise<Session | null> => {
     return null;
   }
 
-  const hydration = (async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    cachedSession = session;
-    return session;
-  })();
+  const hydration = refreshSessionFromAuth();
 
   sessionHydrationPromise = hydration;
   try {
@@ -264,7 +275,17 @@ const ensureAuthListener = () => {
   authListenerRegistered = true;
   supabase.auth.onAuthStateChange((event, session) => {
     setCachedSession(session);
-    clearUserCache();
+
+    if (
+      event === 'SIGNED_IN' ||
+      event === 'SIGNED_OUT' ||
+      event === 'TOKEN_REFRESHED' ||
+      event === 'USER_UPDATED' ||
+      event === 'PASSWORD_RECOVERY'
+    ) {
+      clearUserCache();
+    }
+
     authStateListeners.forEach((listener) => listener(event, session));
   });
 };
