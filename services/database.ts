@@ -2750,9 +2750,7 @@ class DatabaseService {
     try {
       await this.enrollSubmissionInFirstRound(form.program_id, submissionId);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error';
-      console.error('[pipeline] Failed to auto-enroll submission in first round:', e);
-      throw new Error(`Submission created but failed to enroll in round pipeline: ${message}`);
+      console.warn('[pipeline] Failed to auto-enroll submission in first round:', e);
     }
 
     return data;
@@ -3581,7 +3579,8 @@ class DatabaseService {
       .select('id, type, sort_order, start_date')
       .eq('program_id', programId);
     if (!allRounds || allRounds.length === 0) {
-      throw new Error('No rounds configured for this program');
+      console.info('[pipeline] No rounds configured for program:', programId);
+      return;
     }
 
     // Get all edges to find which rounds are targets (have incoming edges)
