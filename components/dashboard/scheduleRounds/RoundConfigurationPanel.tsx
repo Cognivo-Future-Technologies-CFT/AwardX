@@ -87,7 +87,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   }, [allRounds, formData.id]);
 
   // Sync formData when round prop changes
-  const isPublicVotingRound = PUBLIC_VOTING_TYPES.has(formData.type);
+  const isPublicVotingRound = ['public voting', 'public rating', 'public'].includes(formData.type?.toLowerCase());
 
   useEffect(() => {
     setFormData(round);
@@ -122,9 +122,10 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
     setFormData((prev) => {
       const next = { ...prev, [field]: value };
       if (field === 'type') {
-        if (PUBLIC_VOTING_TYPES.has(value)) {
+        const valLower = value?.toLowerCase();
+        if (['public voting', 'public rating', 'public'].includes(valLower)) {
           next.evaluationLogic = 'voting';
-        } else if (value === 'Nomination' || value === 'Announce') {
+        } else if (valLower === 'nomination' || valLower === 'announce') {
           next.evaluationLogic = 'none';
         } else if (prev.evaluationLogic === 'none') {
           next.evaluationLogic = 'scoring';
@@ -217,7 +218,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
       setFormData(persisted);
 
       if (
-        PUBLIC_VOTING_TYPES.has(persisted.type) &&
+        ['public voting', 'public rating', 'public'].includes(persisted.type?.toLowerCase()) &&
         !persisted.id.startsWith('round-') &&
         votingConfigRef.current
       ) {
@@ -328,7 +329,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
           )}
 
           {/* Evaluation Settings — hidden for public voting, nomination, and announce rounds */}
-          {formData.type !== 'Nomination' && formData.type !== 'Announce' && !isPublicVotingRound && (
+          {formData.type?.toLowerCase() !== 'nomination' && formData.type?.toLowerCase() !== 'announce' && !isPublicVotingRound && (
           <section className="space-y-4">
             <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Logic System</h4>
             <div className="space-y-4 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">
@@ -511,93 +512,97 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
           </section>
 
           {/* Shortlist Configuration */}
-          <section className="space-y-4">
-            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Pipeline Output</h4>
-            <div className="space-y-5 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">
-              <button
-                onClick={() => handleShortlistConfigChange({ enabled: !formData.shortlistConfig.enabled })}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${formData.shortlistConfig.enabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200/60 text-slate-600'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <Plus className={`w-4 h-4 transition-transform duration-500 ${formData.shortlistConfig.enabled ? 'rotate-45' : ''}`} />
-                  <span className="text-sm font-bold">Announce Result</span>
-                </div>
-                <div className={`w-10 h-5 rounded-full relative transition-colors ${formData.shortlistConfig.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}>
-                  <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all shadow-md ${formData.shortlistConfig.enabled ? 'left-[23px]' : 'left-1'}`} />
-                </div>
-              </button>
+          {formData.type?.toLowerCase() !== 'nomination' && (
+            <section className="space-y-4">
+              <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Pipeline Output</h4>
+              <div className="space-y-5 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">
+                <button
+                  onClick={() => handleShortlistConfigChange({ enabled: !formData.shortlistConfig.enabled })}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${formData.shortlistConfig.enabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200/60 text-slate-600'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Plus className={`w-4 h-4 transition-transform duration-500 ${formData.shortlistConfig.enabled ? 'rotate-45' : ''}`} />
+                    <span className="text-sm font-bold">Announce Result</span>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${formData.shortlistConfig.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}>
+                    <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all shadow-md ${formData.shortlistConfig.enabled ? 'left-[23px]' : 'left-1'}`} />
+                  </div>
+                </button>
 
-              <AnimatePresence>
-                {formData.shortlistConfig.enabled && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="space-y-5 overflow-hidden"
-                  >
-                    <div className="grid grid-cols-2 gap-3">
-                      {['percentage', 'fixed_count'].map((method) => (
-                        <button
-                          key={method}
-                          onClick={() => handleShortlistConfigChange({ method: method as 'percentage' | 'fixed_count' })}
-                          className={`px-4 py-3 rounded-xl text-[10px] font-black tracking-tighter uppercase transition-all border ${formData.shortlistConfig.method === method ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-200/50'}`}
-                        >
-                          {method.replace('_', ' ')}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[11px] font-bold text-slate-400 ml-1">Threshold</label>
-                      <input
-                        type="number"
-                        value={formData.shortlistConfig.value}
-                        onChange={(e) => handleShortlistConfigChange({ value: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-                        className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-black transition-all"
-                        min={0}
-                        max={formData.shortlistConfig.method === 'percentage' ? 100 : undefined}
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <label className="block text-[11px] font-bold text-slate-400 ml-1">Audience Scope</label>
-                      <div className="flex flex-wrap gap-2">
-                        {(['admin', 'judges', 'public'] as const).map((visibility) => (
+                <AnimatePresence>
+                  {formData.shortlistConfig.enabled && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="space-y-5 overflow-hidden"
+                    >
+                      <div className="grid grid-cols-2 gap-3">
+                        {['percentage', 'fixed_count'].map((method) => (
                           <button
-                            key={visibility}
-                            onClick={() => {
-                              const current = formData.shortlistConfig.visibility;
-                              const updated = current.includes(visibility)
-                                ? current.filter(v => v !== visibility)
-                                : [...current, visibility];
-                              handleShortlistConfigChange({ visibility: updated });
-                            }}
-                            className={`px-4 py-2 rounded-full text-[10px] font-bold transition-all border capitalize ${formData.shortlistConfig.visibility.includes(visibility) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                            key={method}
+                            onClick={() => handleShortlistConfigChange({ method: method as 'percentage' | 'fixed_count' })}
+                            className={`px-4 py-3 rounded-xl text-[10px] font-black tracking-tighter uppercase transition-all border ${formData.shortlistConfig.method === method ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-200/50'}`}
                           >
-                            {visibility}
+                            {method.replace('_', ' ')}
                           </button>
                         ))}
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </section>
+                      <div className="space-y-1.5">
+                        <label className="block text-[11px] font-bold text-slate-400 ml-1">Threshold</label>
+                        <input
+                          type="number"
+                          value={formData.shortlistConfig.value}
+                          onChange={(e) => handleShortlistConfigChange({ value: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                          className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-black transition-all"
+                          min={0}
+                          max={formData.shortlistConfig.method === 'percentage' ? 100 : undefined}
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="block text-[11px] font-bold text-slate-400 ml-1">Audience Scope</label>
+                        <div className="flex flex-wrap gap-2">
+                          {(['admin', 'judges', 'public'] as const).map((visibility) => (
+                            <button
+                              key={visibility}
+                              onClick={() => {
+                                const current = formData.shortlistConfig.visibility;
+                                const updated = current.includes(visibility)
+                                  ? current.filter(v => v !== visibility)
+                                  : [...current, visibility];
+                                handleShortlistConfigChange({ visibility: updated });
+                              }}
+                              className={`px-4 py-2 rounded-full text-[10px] font-bold transition-all border capitalize ${formData.shortlistConfig.visibility.includes(visibility) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                            >
+                              {visibility}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </section>
+          )}
 
           {/* Output Ports Configuration */}
           <section className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Connectors</h4>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingOutputPort(undefined);
-                  setOutputPortModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter text-indigo-600 hover:bg-indigo-50 rounded-full transition-all active:scale-95"
-              >
-                <Plus className="w-3 h-3" />
-                Add Link
-              </button>
+              {formData.type !== 'Nomination' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingOutputPort(undefined);
+                    setOutputPortModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter text-indigo-600 hover:bg-indigo-50 rounded-full transition-all active:scale-95"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Link
+                </button>
+              )}
             </div>
             <div className="space-y-2.5">
               {(formData.outputPorts && formData.outputPorts.length > 0) ? (
@@ -609,29 +614,33 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                   >
                     <div className="flex-1">
                       <div className="font-bold text-sm text-slate-800">{port.name}</div>
-                      <div className="text-[10px] font-medium text-slate-400 mt-0.5 uppercase tracking-wide">
-                        Streams: {port.dataStreams.length > 0 ? port.dataStreams.join(' • ') : 'Disconnected'}
+                      {formData.type !== 'Nomination' && (
+                        <div className="text-[10px] font-medium text-slate-400 mt-0.5 uppercase tracking-wide">
+                          Streams: {port.dataStreams.length > 0 ? port.dataStreams.join(' • ') : 'Disconnected'}
+                        </div>
+                      )}
+                    </div>
+                    {formData.type !== 'Nomination' && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingOutputPort(port);
+                            setOutputPortModalOpen(true);
+                          }}
+                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                        >
+                          <Settings className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOutputPortDelete(port.id)}
+                          className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingOutputPort(port);
-                          setOutputPortModalOpen(true);
-                        }}
-                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOutputPortDelete(port.id)}
-                        className="p-2 text-red-400 hover:bg-red-50 rounded-full transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    )}
                   </motion.div>
                 ))
               ) : (

@@ -19,7 +19,10 @@ interface AdvancementPreviewModalProps {
   advancing: Participant[];
   eliminated: Participant[];
   ties: Participant[];
-  onExecute: (overrides: Array<{ submissionId: string; action: 'advance' | 'eliminate'; reason?: string }>) => Promise<void>;
+  onExecute: (
+    overrides: Array<{ submissionId: string; action: 'advance' | 'eliminate'; reason?: string }>,
+    targetRoundId?: string
+  ) => Promise<void>;
   onClose: () => void;
 }
 
@@ -34,7 +37,6 @@ export const AdvancementPreviewModal: React.FC<AdvancementPreviewModalProps> = (
 }) => {
   const [overrides, setOverrides] = useState<Map<string, { action: 'advance' | 'eliminate'; reason: string }>>(new Map());
   const [selectedTab, setSelectedTab] = useState<'advancing' | 'eliminated' | 'ties'>('advancing');
-
   const executeMutation = useMutation({
     mutationFn: () => {
       const overrideArray = Array.from(overrides.entries()).map(([submissionId, { action, reason }]) => ({
@@ -42,7 +44,7 @@ export const AdvancementPreviewModal: React.FC<AdvancementPreviewModalProps> = (
         action,
         ...(reason && { reason }),
       }));
-      return onExecute(overrideArray);
+      return onExecute(overrideArray, undefined);
     },
     onSuccess: () => {
       toast.success('Participants advanced successfully');
@@ -165,6 +167,8 @@ export const AdvancementPreviewModal: React.FC<AdvancementPreviewModalProps> = (
             {selectedTab === 'ties' && ties.map((p) => <ParticipantRow key={p.submissionId} p={p} status="tied" />)}
           </AnimatePresence>
         </div>
+
+
 
         {/* Actions */}
         <div className="sticky bottom-0 bg-white border-t border-slate-200 pt-4 flex gap-2">

@@ -62,6 +62,7 @@ export async function executeAdvancement(
     criteriaOverride?: AdvancementCriteria;
     overrides?: Array<{ submissionId: string; action: 'advance' | 'eliminate'; reason?: string }>;
     tieResolutions?: Array<{ submissionId: string; action: 'advance' | 'eliminate' }>;
+    targetRoundId?: string;
   },
 ) {
   const response = await fetchBackendJson<{ data: { ok: boolean; error?: string } }>(
@@ -73,6 +74,7 @@ export async function executeAdvancement(
         criteriaOverride: options?.criteriaOverride,
         overrides: options?.overrides,
         tieResolutions: options?.tieResolutions,
+        targetRoundId: options?.targetRoundId,
       },
       errorPrefix: 'Advancement API',
     },

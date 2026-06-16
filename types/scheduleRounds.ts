@@ -31,6 +31,11 @@ export type EdgeCondition =
   | { type: 'always' }
   | { type: 'if_shortlisted' }
   | { type: 'if_score_gte'; score: number }
+  | { type: 'if_score_gt'; score: number }
+  | { type: 'if_score_lt'; score: number }
+  | { type: 'if_score_lte'; score: number }
+  | { type: 'if_score_eq'; score: number }
+  | { type: 'if_score_range'; minScore: number; maxScore: number }
   | { type: 'manual_approval' }
   | { type: 'custom_logic'; expression: string };
 

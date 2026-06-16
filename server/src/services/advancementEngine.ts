@@ -90,7 +90,7 @@ async function computeParticipantScores(roundId: string, roundType: string): Pro
 
   const submissionIds = enrollments.map(e => e.submission_id);
 
-  const isVotingRound = ['Public Voting', 'Public Rating', 'public'].includes(roundType);
+  const isVotingRound = ['public voting', 'public rating', 'public'].includes(roundType?.toLowerCase());
 
   if (isVotingRound) {
     // Score by vote count
@@ -281,17 +281,46 @@ async function evaluateEdgeCondition(
     return participant.score >= threshold;
   }
 
+  if (type === 'if_score_gt') {
+    const threshold = Number(condition.score ?? condition.value ?? NaN);
+    if (!Number.isFinite(threshold)) return false;
+    return participant.score > threshold;
+  }
+
+  if (type === 'if_score_lt') {
+    const threshold = Number(condition.score ?? condition.value ?? NaN);
+    if (!Number.isFinite(threshold)) return false;
+    return participant.score < threshold;
+  }
+
+  if (type === 'if_score_lte') {
+    const threshold = Number(condition.score ?? condition.value ?? NaN);
+    if (!Number.isFinite(threshold)) return false;
+    return participant.score <= threshold;
+  }
+
+  if (type === 'if_score_eq') {
+    const threshold = Number(condition.score ?? condition.value ?? NaN);
+    if (!Number.isFinite(threshold)) return false;
+    return participant.score === threshold;
+  }
+
+  if (type === 'if_score_range') {
+    const minScore = Number((condition as any).minScore ?? (condition as any).min ?? NaN);
+    const maxScore = Number((condition as any).maxScore ?? (condition as any).max ?? NaN);
+    if (!Number.isFinite(minScore) || !Number.isFinite(maxScore)) return false;
+    return participant.score >= minScore && participant.score <= maxScore;
+  }
+
   if (type === 'if_shortlisted') {
     return shortlistedIds.has(participant.submissionId);
   }
 
   if (type === 'manual_approval') {
-    // Manual-approval edges require an explicit manual flow; auto advancement won't route to them.
     return false;
   }
 
   if (type === 'custom_logic') {
-    // Custom expressions are not server-evaluated yet; keep fail-closed.
     return false;
   }
 
@@ -310,12 +339,15 @@ export async function previewAdvancement(
   const round = await getRound(roundId);
   if (!round) throw new Error('Round not found');
 
-  const criteria: AdvancementCriteria = criteriaOverride || round.advancement_criteria as AdvancementCriteria || { type: 'all_pass' };
+  const isNomination = round.type?.toLowerCase() === 'nomination';
+  const criteria: AdvancementCriteria = isNomination
+    ? { type: 'all_pass' }
+    : (criteriaOverride || round.advancement_criteria as AdvancementCriteria || { type: 'all_pass' });
   const ranked = await computeParticipantScores(roundId, round.type);
 
   // Check for empty scores
   // Nomination rounds have no judges and use all_pass logic — they never need scores.
-  const isJudgingRound = !['Public Voting', 'Public Rating', 'public', 'Nomination'].includes(round.type);
+  const isJudgingRound = !['public voting', 'public rating', 'public', 'nomination'].includes(round.type?.toLowerCase());
   const hasEmptyScores = isJudgingRound && ranked.every(r => r.score === 0);
 
   if (hasEmptyScores && ranked.length > 0) {
@@ -361,7 +393,8 @@ export async function executeAdvancement(
   overrides?: AdvancementOverride[],
   triggeredBy?: string,
   criteriaOverride?: AdvancementCriteria,
-  tieResolutions?: Array<{ submissionId: string; action: 'advance' | 'eliminate' }>
+  tieResolutions?: Array<{ submissionId: string; action: 'advance' | 'eliminate' }>,
+  targetRoundId?: string
 ): Promise<ExecuteResult> {
   const supabase = getSupabaseAdmin();
   const round = await getRound(roundId);
@@ -379,7 +412,7 @@ export async function executeAdvancement(
     const preview = await previewAdvancement(roundId, criteriaOverride);
 
     // Handle empty scores — skip for Nomination rounds (they don't need scores)
-    if (preview.hasEmptyScores && !overrides?.length && round.type !== 'Nomination') {
+    if (preview.hasEmptyScores && !overrides?.length && round.type?.toLowerCase() !== 'nomination') {
       return { ok: false, paused: true, reason: 'no_scores', error: 'No scores submitted. Cannot auto-advance with empty data.' };
     }
 
@@ -439,65 +472,97 @@ export async function executeAdvancement(
     const scoreMap = new Map(allScored.map(p => [p.submissionId, p]));
     const enrollmentsByRound = new Map<string, Array<Record<string, any>>>();
 
-    // Enroll advancing participants in successor round(s) that match edge conditions.
-    if (edges.length > 0 && advancingSet.size > 0) {
+    // Enroll advancing participants in chosen targetRoundId or successor round(s) that match edge conditions.
+    if (advancingSet.size > 0) {
       const advancingParticipants = Array.from(advancingSet)
         .map((submissionId) => scoreMap.get(submissionId))
         .filter(Boolean) as ParticipantScore[];
 
-      const { data: shortlistedRows } = await supabase
-        .from('submissions')
-        .select('id, status, submission_data')
-        .in('id', advancingParticipants.map((p) => p.submissionId));
-
-      const shortlistedIds = new Set(
-        (shortlistedRows || [])
-          .filter((row: any) => {
-            const status = String(row.status || '').toLowerCase();
-            const dataStatus = String(row.submission_data?.status || '').toLowerCase();
-            const dataFlag = row.submission_data?.shortlisted === true;
-            return status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag;
-          })
-          .map((row: any) => row.id)
-      );
-
-      const unroutedSubmissionIds: string[] = [];
-
-      for (const participant of advancingParticipants) {
-        let matchedTargetRoundId: string | null = null;
-
-        for (const edge of edges) {
-          const allowed = await evaluateEdgeCondition(edge.condition, participant, shortlistedIds);
-          if (!allowed) continue;
-
-          matchedTargetRoundId = edge.target_round_id;
-
-          if (!enrollmentsByRound.has(edge.target_round_id)) {
-            enrollmentsByRound.set(edge.target_round_id, []);
-          }
-
-          enrollmentsByRound.get(edge.target_round_id)!.push({
-            round_id: edge.target_round_id,
+      if (targetRoundId) {
+        if (!enrollmentsByRound.has(targetRoundId)) {
+          enrollmentsByRound.set(targetRoundId, []);
+        }
+        for (const participant of advancingParticipants) {
+          enrollmentsByRound.get(targetRoundId)!.push({
+            round_id: targetRoundId,
             submission_id: participant.submissionId,
             status: 'active',
             source_round_id: roundId,
             carried_score: participant.score,
           });
+        }
+      } else if (edges.length > 0) {
+        const { data: shortlistedRows } = await supabase
+          .from('submissions')
+          .select('id, status, submission_data')
+          .in('id', advancingParticipants.map((p) => p.submissionId));
 
-          // Deterministic branching: first matching edge by sort_order wins.
-          break;
+        const shortlistedIds = new Set(
+          (shortlistedRows || [])
+            .filter((row: any) => {
+              const status = String(row.status || '').toLowerCase();
+              const dataStatus = String(row.submission_data?.status || '').toLowerCase();
+              const dataFlag = row.submission_data?.shortlisted === true;
+              return status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag;
+            })
+            .map((row: any) => row.id)
+        );
+
+        const unroutedSubmissionIds: string[] = [];
+
+        for (const participant of advancingParticipants) {
+          let matchedTargetRoundId: string | null = null;
+
+          for (const edge of edges) {
+            const allowed = await evaluateEdgeCondition(edge.condition, participant, shortlistedIds);
+            if (!allowed) continue;
+
+            matchedTargetRoundId = edge.target_round_id;
+
+            if (!enrollmentsByRound.has(edge.target_round_id)) {
+              enrollmentsByRound.set(edge.target_round_id, []);
+            }
+
+            enrollmentsByRound.get(edge.target_round_id)!.push({
+              round_id: edge.target_round_id,
+              submission_id: participant.submissionId,
+              status: 'active',
+              source_round_id: roundId,
+              carried_score: participant.score,
+            });
+
+            // Deterministic branching: first matching edge by sort_order wins.
+            break;
+          }
+
+          if (!matchedTargetRoundId) {
+            unroutedSubmissionIds.push(participant.submissionId);
+          }
         }
 
-        if (!matchedTargetRoundId) {
-          unroutedSubmissionIds.push(participant.submissionId);
+        if (unroutedSubmissionIds.length > 0) {
+          return {
+            ok: false,
+            error: `Failed to route ${unroutedSubmissionIds.length} advancing participant(s) to a successor round based on edge conditions.`,
+          };
         }
-      }
-
-      if (unroutedSubmissionIds.length > 0) {
-        return {
-          ok: false,
-          error: `Failed to route ${unroutedSubmissionIds.length} advancing participant(s) to a successor round based on edge conditions.`,
-        };
+      } else {
+        // Fallback to first successor if no edges are configured
+        const defaultTarget = successors[0]?.id;
+        if (defaultTarget) {
+          if (!enrollmentsByRound.has(defaultTarget)) {
+            enrollmentsByRound.set(defaultTarget, []);
+          }
+          for (const participant of advancingParticipants) {
+            enrollmentsByRound.get(defaultTarget)!.push({
+              round_id: defaultTarget,
+              submission_id: participant.submissionId,
+              status: 'active',
+              source_round_id: roundId,
+              carried_score: participant.score,
+            });
+          }
+        }
       }
     }
 

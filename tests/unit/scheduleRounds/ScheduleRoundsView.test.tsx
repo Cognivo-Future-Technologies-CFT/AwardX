@@ -98,14 +98,28 @@ describe('ScheduleRoundsView representation conversion', () => {
   });
 
   it('does not rewrite edges while in block diagram mode', async () => {
+    mocks.getRounds.mockResolvedValue([
+      buildRound('db-round-1', 0),
+      buildRound('db-round-2', 1),
+      buildRound('db-round-3', 2),
+    ]);
     mocks.getEdges.mockResolvedValue([
       {
-        id: 'edge-custom',
+        id: 'edge-linear-1',
         programId: 'program-1',
         sourceRoundId: 'db-round-1',
         targetRoundId: 'db-round-2',
-        condition: { type: 'if_score_gte', score: 80 },
+        condition: { type: 'always' },
         order: 0,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'edge-custom',
+        programId: 'program-1',
+        sourceRoundId: 'db-round-2',
+        targetRoundId: 'db-round-3',
+        condition: { type: 'if_score_gte', score: 80 },
+        order: 1,
         createdAt: new Date().toISOString(),
       },
     ]);

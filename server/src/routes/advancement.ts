@@ -40,6 +40,7 @@ router.post('/rounds/:roundId/execute', requireAuth, async (req: AuthenticatedRe
       req.userId,
       req.body?.criteriaOverride,
       req.body?.tieResolutions,
+      req.body?.targetRoundId,
     );
 
     if (!result.ok) {

@@ -34,17 +34,31 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   const targetHandle = existingEdge?.targetHandle || initialTargetHandle || 'input-0';
   
   const [dataStream, setDataStream] = useState<string>(existingEdge?.dataStream || 'all');
-  const [condition, setCondition] = useState<RoundEdge['condition'] | undefined>(existingEdge?.condition || undefined);
+  const [condition, setCondition] = useState<RoundEdge['condition'] | undefined>(
+    existingEdge?.condition || (sourceRound.type === 'Nomination' ? undefined : { type: 'if_shortlisted' })
+  );
   const [connectionName, setConnectionName] = useState<string>(existingEdge?.name || '');
-const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [priority, setPriority] = useState<number>(existingEdge?.order ?? 0);
+
+  const scoreLabel = useMemo(() => {
+    const logic = sourceRound.evaluationLogic?.toLowerCase();
+    if (logic === 'voting') return 'Voting';
+    if (logic === 'ranking') return 'Rank';
+    return 'Score';
+  }, [sourceRound.evaluationLogic]);
+
   // Reset form when modal opens/closes or rounds change
   useEffect(() => {
     if (isOpen) {
       setDataStream(existingEdge?.dataStream || 'all');
-      setCondition(existingEdge?.condition || undefined);
+      setCondition(
+        existingEdge?.condition || (sourceRound.type === 'Nomination' ? undefined : { type: 'if_shortlisted' })
+      );
       setConnectionName(existingEdge?.name || '');
+      setPriority(existingEdge?.order ?? 0);
     }
-  }, [isOpen, existingEdge]);
+  }, [isOpen, existingEdge, sourceRound.type]);
 
   // Get configured output ports from source round
   // Output ports are based on the source round's input data streams
@@ -52,7 +66,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     if (sourceRound.outputPorts && sourceRound.outputPorts.length > 0) {
       return sourceRound.outputPorts.map(port => ({
         id: port.id,
-        label: `${port.name} (${port.dataStreams.join(', ')})`,
+        label: sourceRound.type === 'Nomination' ? port.name : `${port.name} (${port.dataStreams.join(', ')})`,
         value: port.dataStreams.join(','),
         dataStreams: port.dataStreams,
       }));
@@ -94,6 +108,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
       dataStream: finalDataStream,
       condition,
       name: connectionName.trim() || undefined,
+      order: priority,
     });
     onClose();
   };
@@ -109,7 +124,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
         sourceHandle: sourceHandle,
         targetHandle: targetHandle,
         dataStream: defaultOutput?.value || 'all',
-        condition: undefined, // No condition = always
+        condition: sourceRound.type === 'Nomination' ? undefined : { type: 'if_shortlisted' },
         name: undefined,
       });
     }
@@ -144,7 +159,7 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
             <div className="p-2 bg-slate-50 rounded-lg text-xs">
               <div className="font-medium text-slate-700 mb-1">Output Port:</div>
               <div className="text-slate-600">{sourceOutputs.find(o => o.id === sourceHandle)?.label || sourceHandle}</div>
-              {sourceOutputs.find(o => o.id === sourceHandle)?.dataStreams && sourceOutputs.find(o => o.id === sourceHandle)!.dataStreams.length > 0 && (
+              {sourceRound.type !== 'Nomination' && sourceOutputs.find(o => o.id === sourceHandle)?.dataStreams && sourceOutputs.find(o => o.id === sourceHandle)!.dataStreams.length > 0 && (
                 <div className="mt-1 text-slate-500">
                   Data streams: <span className="font-medium">{sourceOutputs.find(o => o.id === sourceHandle)!.dataStreams.join(', ')}</span>
                 </div>
@@ -159,58 +174,115 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
           )}
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs text-slate-600 mb-1">
-            Connection Logic <span className="text-slate-400">(optional)</span>
-          </label>
-          <p className="text-xs text-slate-400 mb-2">
-            Add conditions or logic to control when this connection is active
-          </p>
-          <select
-            value={condition?.type || 'always'}
-            onChange={(e) => {
-              const type = e.target.value;
-              if (type === 'always' || type === '') {
-                setCondition(undefined);
-              } else if (type === 'if_shortlisted') {
-                setCondition({ type: 'if_shortlisted' });
-              } else if (type === 'if_score_gte') {
-                setCondition({ type: 'if_score_gte', score: 70 });
-              } else if (type === 'custom_logic') {
-                setCondition({ type: 'custom_logic', expression: '' });
-              } else {
-                setCondition({ type: 'manual_approval' });
-              }
-            }}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-          >
-            <option value="always">Always (default)</option>
-            <option value="if_shortlisted">If Shortlisted</option>
-            <option value="if_score_gte">If Score ≥ Threshold</option>
-            <option value="manual_approval">Manual Approval</option>
-            <option value="custom_logic">Custom Logic Expression</option>
-          </select>
-          {condition?.type === 'if_score_gte' && 'score' in condition && (
-            <input
-              type="number"
-              value={condition.score}
-              onChange={(e) => setCondition({ type: 'if_score_gte', score: parseInt(e.target.value) || 0 })}
-              placeholder="Score threshold (0-100)"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm mt-2"
-              min={0}
-              max={100}
-            />
-          )}
-          {condition?.type === 'custom_logic' && 'expression' in condition && (
-            <textarea
-              value={condition.expression || ''}
-              onChange={(e) => setCondition({ type: 'custom_logic', expression: e.target.value })}
-              placeholder="Enter custom logic expression (e.g., score > 80 AND status == 'approved')"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm mt-2 resize-none"
-              rows={3}
-            />
-          )}
-        </div>
+        {sourceRound.type !== 'Nomination' ? (
+          <div className="space-y-2">
+            <label className="block text-xs text-slate-600 mb-1">
+              Connection Logic <span className="text-slate-400">(optional)</span>
+            </label>
+            <p className="text-xs text-slate-400 mb-2">
+              Add conditions or logic to control when this connection is active
+            </p>
+            <select
+              value={condition?.type || 'if_shortlisted'}
+              onChange={(e) => {
+                const type = e.target.value;
+                if (type === 'if_shortlisted') {
+                  setCondition({ type: 'if_shortlisted' });
+                } else if (type === 'if_score_gte') {
+                  setCondition({ type: 'if_score_gte', score: 70 });
+                } else if (type === 'if_score_gt') {
+                  setCondition({ type: 'if_score_gt', score: 70 } as any);
+                } else if (type === 'if_score_lt') {
+                  setCondition({ type: 'if_score_lt', score: 50 } as any);
+                } else if (type === 'if_score_lte') {
+                  setCondition({ type: 'if_score_lte', score: 50 } as any);
+                } else if (type === 'if_score_eq') {
+                  setCondition({ type: 'if_score_eq', score: 50 } as any);
+                } else if (type === 'if_score_range') {
+                  setCondition({ type: 'if_score_range', minScore: 40, maxScore: 80 } as any);
+                } else if (type === 'custom_logic') {
+                  setCondition({ type: 'custom_logic', expression: '' });
+                } else {
+                  setCondition({ type: 'manual_approval' });
+                }
+              }}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+            >
+              <option value="if_shortlisted">If Shortlisted (default)</option>
+              <option value="if_score_gte">If {scoreLabel} ≥ Threshold</option>
+              <option value="if_score_gt">If {scoreLabel} &gt; Threshold</option>
+              <option value="if_score_lt">If {scoreLabel} &lt; Threshold</option>
+              <option value="if_score_lte">If {scoreLabel} ≤ Threshold</option>
+              <option value="if_score_eq">If {scoreLabel} = Threshold</option>
+              <option value="if_score_range">If {scoreLabel} Between Range</option>
+              <option value="manual_approval">Manual Approval</option>
+              <option value="custom_logic">Custom Logic Expression</option>
+            </select>
+
+            {condition && ['if_score_gte', 'if_score_gt', 'if_score_lt', 'if_score_lte', 'if_score_eq'].includes(condition.type) && 'score' in condition && (
+              <input
+                type="number"
+                value={condition.score}
+                onChange={(e) => setCondition({ type: condition.type, score: parseInt(e.target.value) || 0 } as any)}
+                placeholder={`${scoreLabel} threshold`}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm mt-2"
+                min={0}
+                max={100}
+              />
+            )}
+
+            {condition?.type === 'if_score_range' && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 mb-1">MIN {scoreLabel.toUpperCase()}</label>
+                  <input
+                    type="number"
+                    value={(condition as any).minScore ?? 0}
+                    onChange={(e) => setCondition({
+                      type: 'if_score_range',
+                      minScore: parseInt(e.target.value) || 0,
+                      maxScore: (condition as any).maxScore ?? 100,
+                    } as any)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    min={0}
+                    max={100}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 mb-1">MAX {scoreLabel.toUpperCase()}</label>
+                  <input
+                    type="number"
+                    value={(condition as any).maxScore ?? 100}
+                    onChange={(e) => setCondition({
+                      type: 'if_score_range',
+                      minScore: (condition as any).minScore ?? 0,
+                      maxScore: parseInt(e.target.value) || 0,
+                    } as any)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    min={0}
+                    max={100}
+                  />
+                </div>
+              </div>
+            )}
+
+            {condition?.type === 'custom_logic' && 'expression' in condition && (
+              <textarea
+                value={condition.expression || ''}
+                onChange={(e) => setCondition({ type: 'custom_logic', expression: e.target.value })}
+                placeholder={`Enter custom logic expression (e.g., ${scoreLabel.toLowerCase()} > 80 AND status == 'approved')`}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm mt-2 resize-none"
+                rows={3}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-500">
+            <span className="font-semibold text-slate-700">Connection Logic:</span> Always Proceed (Default for Nomination Round)
+          </div>
+        )}
+
+
 
         <div className="flex justify-between items-center pt-4 border-t border-slate-200">
           {!existingEdge && (

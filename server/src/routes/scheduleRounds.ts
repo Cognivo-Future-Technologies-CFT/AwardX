@@ -3,6 +3,7 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ensureCanManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
+import { validateRoundTransitions } from '../services/flowValidation.js';
 
 const router = Router();
 const ALLOWED_ROUND_TYPES = new Set([
@@ -184,16 +185,38 @@ function validateEdgesAsDag(roundIds: string[], edges: Array<{ source_round_id?:
 function validateEdgeCondition(raw: any) {
   const condition = raw && typeof raw === 'object' ? raw : { type: 'always' };
   const type = String(condition.type || 'always').toLowerCase();
-  const allowed = new Set(['always', 'if_shortlisted', 'if_score_gte', 'manual_approval', 'custom_logic']);
+  const allowed = new Set([
+    'always',
+    'if_shortlisted',
+    'if_score_gte',
+    'if_score_gt',
+    'if_score_lt',
+    'if_score_lte',
+    'if_score_eq',
+    'if_score_range',
+    'manual_approval',
+    'custom_logic'
+  ]);
 
   if (!allowed.has(type)) {
     return { ok: false, error: `Unsupported edge condition type: ${type}` };
   }
 
-  if (type === 'if_score_gte') {
-    const value = Number((condition as any).score ?? (condition as any).value);
+  if (['if_score_gte', 'if_score_gt', 'if_score_lt', 'if_score_lte', 'if_score_eq'].includes(type)) {
+    const value = Number(condition.score ?? condition.value);
     if (!Number.isFinite(value)) {
-      return { ok: false, error: 'if_score_gte condition requires a numeric score threshold' };
+      return { ok: false, error: `${type} condition requires a numeric score threshold` };
+    }
+  }
+
+  if (type === 'if_score_range') {
+    const minScore = Number(condition.minScore ?? condition.min);
+    const maxScore = Number(condition.maxScore ?? condition.max);
+    if (!Number.isFinite(minScore) || !Number.isFinite(maxScore)) {
+      return { ok: false, error: 'if_score_range condition requires numeric min and max score thresholds' };
+    }
+    if (minScore > maxScore) {
+      return { ok: false, error: 'if_score_range minimum score cannot exceed maximum score' };
     }
   }
 
@@ -479,7 +502,7 @@ router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, r
 
     const { data: roundRows, error: roundsError } = await supabase
       .from('rounds')
-      .select('id')
+      .select('id, title, type')
       .eq('program_id', programId);
 
     if (roundsError) {
@@ -487,6 +510,7 @@ router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, r
     }
 
     const roundIds = (roundRows || []).map((row: any) => row.id);
+    const roundsMap = new Map((roundRows || []).map((row: any) => [row.id, row]));
 
     for (const edge of edges) {
       const conditionValidation = validateEdgeCondition(edge?.condition);
@@ -494,6 +518,25 @@ router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, r
         return res.status(400).json(validationError({
           'edges.condition': conditionValidation.error || 'Invalid edge condition',
         }));
+      }
+
+      // Check backend rule constraints
+      const sourceRound = roundsMap.get(edge.source_round_id);
+      if (sourceRound) {
+        const conditionType = edge.condition?.type || 'always';
+        if (sourceRound.type === 'Nomination') {
+          if (conditionType !== 'always') {
+            return res.status(400).json(validationError({
+              'edges.condition': 'Nomination rounds can only have "always" connection logic.',
+            }));
+          }
+        } else {
+          if (conditionType === 'always') {
+            return res.status(400).json(validationError({
+              'edges.condition': 'Only Nomination rounds can have "always" connection logic.',
+            }));
+          }
+        }
       }
     }
 
@@ -504,19 +547,32 @@ router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, r
       }));
     }
 
+    const roundsList = (roundRows || []).map((row: any) => ({ id: row.id, title: row.title, type: row.type }));
+    const transitionValidation = validateRoundTransitions(edges, roundsList);
+    if (!transitionValidation.isValid) {
+      const firstError = transitionValidation.errors.find(e => e.type === 'error');
+      return res.status(400).json(validationError({
+        edges: firstError?.message || 'Round flow transition logic contains overlapping or shadowed conditions.',
+      }));
+    }
+
     const { error: deleteError } = await supabase.from('round_edges').delete().eq('program_id', programId);
     if (deleteError) {
       return res.status(500).json({ error: deleteError.message || 'Failed to clear existing edges' });
     }
 
     if (edges.length > 0) {
-      const normalizedEdges = edges.map((edge: any, idx: number) => ({
-        program_id: programId,
-        source_round_id: edge.source_round_id,
-        target_round_id: edge.target_round_id,
-        condition: edge.condition || { type: 'always' },
-        sort_order: edge.sort_order ?? idx,
-      }));
+      const normalizedEdges = edges.map((edge: any, idx: number) => {
+        const sourceRound = roundsMap.get(edge.source_round_id);
+        const defaultCondition = sourceRound?.type === 'Nomination' ? { type: 'always' } : { type: 'if_shortlisted' };
+        return {
+          program_id: programId,
+          source_round_id: edge.source_round_id,
+          target_round_id: edge.target_round_id,
+          condition: edge.condition || defaultCondition,
+          sort_order: edge.sort_order ?? idx,
+        };
+      });
 
       const { error: insertError } = await supabase.from('round_edges').insert(normalizedEdges);
       if (insertError) {

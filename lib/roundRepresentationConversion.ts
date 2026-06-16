@@ -134,7 +134,7 @@ export function topologicalSortRounds(rounds: Round[], edges: RoundEdge[]): Roun
   return [...orderedReal, ...tempRounds].map((round, index) => ({ ...round, order: index }));
 }
 
-function layoutRoundsOnCanvas(orderedRounds: Round[]): Round[] {
+export function layoutRoundsOnCanvas(orderedRounds: Round[]): Round[] {
   const columnWidth = 400;
   const rowHeight = 320;
 

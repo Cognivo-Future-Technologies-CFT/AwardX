@@ -65,10 +65,15 @@ describe('roundRepresentationConversion', () => {
   });
 
   it('creates sequential edges only when none exist', () => {
-    const rounds = [round('a', 0), round('b', 1), round('c', 2)];
+    const rounds = [
+      { ...round('a', 0), type: 'Nomination' as const },
+      round('b', 1),
+      round('c', 2),
+    ];
     const converted = convertToWorkflowRepresentation('program-1', rounds, []);
     expect(converted.edges).toHaveLength(2);
-    expect(converted.edges.every((edge) => edge.condition?.type === 'always')).toBe(true);
+    expect(converted.edges[0].condition?.type).toBe('always');
+    expect(converted.edges[1].condition?.type).toBe('if_shortlisted');
   });
 
   it('topologically sorts rounds for display order', () => {

@@ -60,8 +60,14 @@ export async function fetchBackendJson<T = unknown>(
 
       if (!resp.ok) {
         const parsed = await resp.json().catch(() => ({}));
-        const message =
+        let message =
           (parsed as { error?: string })?.error || `${errorPrefix} returned ${resp.status}`;
+        if (parsed && typeof parsed === 'object' && parsed.fields && typeof parsed.fields === 'object') {
+          const fieldMsgs = Object.values(parsed.fields).join(', ');
+          if (fieldMsgs) {
+            message = `${message}: ${fieldMsgs}`;
+          }
+        }
         lastError = new Error(message);
         continue;
       }

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Program } from '../../../services/models';
-import { ArrowRightLeft, LayoutGrid, Plus, Workflow } from 'lucide-react';
+import { ArrowRightLeft, LayoutGrid, Plus, Workflow, AlertCircle } from 'lucide-react';
 import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
@@ -17,6 +17,7 @@ import {
   convertToWorkflowRepresentation,
   hasCustomWorkflowEdges,
   inferRepresentation,
+  layoutRoundsOnCanvas,
   readStoredRepresentation,
   writeStoredRepresentation,
   type ConversionAnalysis,
@@ -33,6 +34,7 @@ import {
 import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges } from '../../../lib/roundScheduleUtils';
 import type { AdvancementCriteria } from '../../../types/scheduleRounds';
 import { AddRoundSheet } from './AddRoundSheet';
+import { validateRoundTransitions } from '../../../lib/flowValidation';
 
 interface RoundCardInsight {
   participantTotal: number;
@@ -67,6 +69,25 @@ type AdvancementModalState = {
   criteriaOverride: AdvancementCriteria;
 };
 
+function normalizeEdgesCondition(edges: RoundEdge[], rounds: Round[]): RoundEdge[] {
+  const roundsMap = new Map(rounds.map(r => [r.id, r]));
+  return edges.map(edge => {
+    const sourceRound = roundsMap.get(edge.sourceRoundId);
+    if (sourceRound) {
+      if (sourceRound.type === 'Nomination') {
+        if (edge.condition && edge.condition.type !== 'always') {
+          return { ...edge, condition: { type: 'always' } };
+        }
+      } else {
+        if (!edge.condition || edge.condition.type === 'always') {
+          return { ...edge, condition: { type: 'if_shortlisted' } };
+        }
+      }
+    }
+    return edge;
+  });
+}
+
 export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   activeEvent,
   representation: representationProp,
@@ -98,6 +119,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   const [roundInsights, setRoundInsights] = useState<Record<string, RoundCardInsight>>({});
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [advancementModal, setAdvancementModal] = useState<AdvancementModalState | null>(null);
+
+  const validationResult = useMemo(() => {
+    return validateRoundTransitions(roundEdges, rounds.map(r => ({ id: r.id, name: r.name, type: r.type })));
+  }, [roundEdges, rounds]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -149,47 +174,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     [activeEvent],
   );
 
-  const handleEdgeCreate = useCallback(
-    async (edge: RoundEdge) => {
-      const updated = [...roundEdges, edge];
-      setRoundEdges(updated);
-      try {
-        await persistWorkflowEdges(updated, rounds);
-      } catch (error) {
-        console.error('Failed to save workflow edge:', error);
-        toast.error('Could not save workflow connection');
-      }
-    },
-    [roundEdges, rounds, persistWorkflowEdges],
-  );
 
-  const handleEdgeUpdate = useCallback(
-    async (edge: RoundEdge) => {
-      const updated = roundEdges.map((item) => (item.id === edge.id ? edge : item));
-      setRoundEdges(updated);
-      try {
-        await persistWorkflowEdges(updated, rounds);
-      } catch (error) {
-        console.error('Failed to update workflow edge:', error);
-        toast.error('Could not update workflow connection');
-      }
-    },
-    [roundEdges, rounds, persistWorkflowEdges],
-  );
-
-  const handleEdgeDelete = useCallback(
-    async (edgeId: string) => {
-      const updated = roundEdges.filter((item) => item.id !== edgeId);
-      setRoundEdges(updated);
-      try {
-        await persistWorkflowEdges(updated, rounds);
-      } catch (error) {
-        console.error('Failed to delete workflow edge:', error);
-        toast.error('Could not delete workflow connection');
-      }
-    },
-    [roundEdges, rounds, persistWorkflowEdges],
-  );
 
   const loadRoundInsights = useCallback(async (targetRounds: Round[]) => {
     if (!activeEvent || targetRounds.length === 0) {
@@ -300,14 +285,27 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       } else {
         normalizedRounds = await enforceNominationFirst(loadedRounds);
       }
-      const customDetected = hasCustomWorkflowEdges(normalizedRounds, loadedEdges);
+      
+      const normalizedEdges = normalizeEdgesCondition(loadedEdges, normalizedRounds);
+      const customDetected = hasCustomWorkflowEdges(normalizedRounds, normalizedEdges);
 
       setRounds(normalizedRounds);
-      setRoundEdges(loadedEdges);
+      setRoundEdges(normalizedEdges);
       setHasCustomEdges(customDetected);
 
       const storedRepresentation = readStoredRepresentation(activeEvent.id);
-      updateRepresentation(storedRepresentation || inferRepresentation(normalizedRounds, loadedEdges));
+      updateRepresentation(storedRepresentation || inferRepresentation(normalizedRounds, normalizedEdges));
+
+      // Persist migrated edges if they changed from loaded edges
+      const edgesChanged = normalizedEdges.some((edge, idx) => {
+        const loadedEdge = loadedEdges[idx];
+        return !loadedEdge || JSON.stringify(edge.condition) !== JSON.stringify(loadedEdge.condition);
+      });
+      if (edgesChanged) {
+        void persistWorkflowEdges(normalizedEdges, normalizedRounds).catch(err => 
+          console.error('Failed to auto-persist normalized edges:', err)
+        );
+      }
 
       if (customDetected && !customEdgeWarningShown.current) {
         customEdgeWarningShown.current = true;
@@ -333,6 +331,68 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       void loadWorkflow();
     }
   }, [activeEvent, loadWorkflow]);
+
+  const handleEdgeCreate = useCallback(
+    async (edge: RoundEdge) => {
+      const updated = [...roundEdges, edge];
+      
+      const roundsList = rounds.map(r => ({ id: r.id, name: r.name, type: r.type }));
+      const validation = validateRoundTransitions(updated, roundsList);
+      if (!validation.isValid) {
+        const firstError = validation.errors.find(e => e.type === 'error');
+        toast.error(`Invalid transition logic: ${firstError?.message || 'Overlap detected'}`);
+        return;
+      }
+
+      setRoundEdges(updated);
+      try {
+        await persistWorkflowEdges(updated, rounds);
+      } catch (error: any) {
+        console.error('Failed to save workflow edge:', error);
+        toast.error(error?.message || 'Could not save workflow connection');
+        await loadWorkflow(); // revert state
+      }
+    },
+    [roundEdges, rounds, persistWorkflowEdges, loadWorkflow],
+  );
+
+  const handleEdgeUpdate = useCallback(
+    async (edge: RoundEdge) => {
+      const updated = roundEdges.map((item) => (item.id === edge.id ? edge : item));
+      
+      const roundsList = rounds.map(r => ({ id: r.id, name: r.name, type: r.type }));
+      const validation = validateRoundTransitions(updated, roundsList);
+      if (!validation.isValid) {
+        const firstError = validation.errors.find(e => e.type === 'error');
+        toast.error(`Invalid transition logic: ${firstError?.message || 'Overlap detected'}`);
+        return;
+      }
+
+      setRoundEdges(updated);
+      try {
+        await persistWorkflowEdges(updated, rounds);
+      } catch (error: any) {
+        console.error('Failed to update workflow edge:', error);
+        toast.error(error?.message || 'Could not update workflow connection');
+        await loadWorkflow(); // revert state
+      }
+    },
+    [roundEdges, rounds, persistWorkflowEdges, loadWorkflow],
+  );
+
+  const handleEdgeDelete = useCallback(
+    async (edgeId: string) => {
+      const updated = roundEdges.filter((item) => item.id !== edgeId);
+      setRoundEdges(updated);
+      try {
+        await persistWorkflowEdges(updated, rounds);
+      } catch (error) {
+        console.error('Failed to delete workflow edge:', error);
+        toast.error('Could not delete workflow connection');
+      }
+    },
+    [roundEdges, rounds, persistWorkflowEdges],
+  );
 
   const handleRoundUpdate = useCallback(
     async (round: Round): Promise<Round> => {
@@ -377,17 +437,18 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
       const filtered = rounds.filter((r) => r.id !== roundId);
       const normalized = await enforceNominationFirst(filtered);
-      setRounds(normalized);
+      const repositioned = layoutRoundsOnCanvas(normalized);
+      setRounds(repositioned);
 
-      const nextEdges = activeEvent && representation === 'tiles'
-        ? buildLinearEdges(activeEvent.id, normalized)
-        : roundEdges.filter((edge) => edge.sourceRoundId !== roundId && edge.targetRoundId !== roundId);
+      const nextEdges = activeEvent
+        ? buildLinearEdges(activeEvent.id, repositioned)
+        : [];
       setRoundEdges(nextEdges);
 
       try {
         await Promise.all([
-          persistWorkflowEdges(nextEdges, normalized),
-          ...normalized
+          persistWorkflowEdges(nextEdges, repositioned),
+          ...repositioned
             .filter((round) => !round.id.startsWith('round-'))
             .map((round) =>
               scheduleRoundsService.updateRound({
@@ -403,16 +464,17 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
     },
-    [activeEvent, representation, persistWorkflowEdges, roundEdges, rounds, enforceNominationFirst],
+    [activeEvent, persistWorkflowEdges, rounds, enforceNominationFirst],
   );
 
   const handleRoundReorder = useCallback(
     async (reorderedRounds: Round[]) => {
       const normalized = await enforceNominationFirst(reorderedRounds);
-      setRounds(normalized);
+      const repositioned = layoutRoundsOnCanvas(normalized);
+      setRounds(repositioned);
       try {
         await Promise.all(
-          normalized.map((round) =>
+          repositioned.map((round) =>
             scheduleRoundsService.updateRound({
               ...round,
               updatedAt: new Date().toISOString(),
@@ -420,16 +482,16 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
           ),
         );
 
-        if (activeEvent && representation === 'tiles') {
-          const newEdges = buildLinearEdges(activeEvent.id, normalized);
-          await persistWorkflowEdges(newEdges, normalized);
+        if (activeEvent) {
+          const newEdges = buildLinearEdges(activeEvent.id, repositioned);
+          await persistWorkflowEdges(newEdges, repositioned);
         }
       } catch (error) {
         console.error('Failed to persist round order:', error);
         toast.error('Could not save round order');
       }
     },
-    [activeEvent, representation, enforceNominationFirst, persistWorkflowEdges],
+    [activeEvent, enforceNominationFirst, persistWorkflowEdges],
   );
 
   const openAddRoundSheet = useCallback(() => {
@@ -444,12 +506,22 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         const newRound = createDefaultRound(activeEvent.id, rounds.length, name, type);
         const updatedRound = await handleRoundUpdate(newRound);
 
-        if (representation === 'tiles') {
-          const updatedRounds = [...rounds.filter((r) => r.id !== newRound.id), updatedRound];
-          const normalized = await enforceNominationFirst(updatedRounds);
-          const newEdges = buildLinearEdges(activeEvent.id, normalized);
-          await persistWorkflowEdges(newEdges, normalized);
-        }
+        const updatedRounds = [...rounds.filter((r) => r.id !== newRound.id), updatedRound];
+        const normalized = await enforceNominationFirst(updatedRounds);
+        const repositioned = layoutRoundsOnCanvas(normalized);
+        const newEdges = buildLinearEdges(activeEvent.id, repositioned);
+        
+        await Promise.all(
+          repositioned.map((round) =>
+            scheduleRoundsService.updateRound({
+              ...round,
+              updatedAt: new Date().toISOString(),
+            }),
+          ),
+        );
+        
+        await persistWorkflowEdges(newEdges, repositioned);
+        setRounds(repositioned);
 
         setSelectedRoundId(updatedRound.id);
         setAddRoundOpen(false);
@@ -461,7 +533,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         setIsCreatingRound(false);
       }
     },
-    [activeEvent, representation, rounds, handleRoundUpdate, enforceNominationFirst, persistWorkflowEdges],
+    [activeEvent, rounds, handleRoundUpdate, enforceNominationFirst, persistWorkflowEdges],
   );
 
   const openConversionDialog = useCallback(
@@ -529,7 +601,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     const preview = await previewAdvancement(round.id, criteriaOverride);
 
     // Nomination rounds have no judges — skip the empty-scores guard for them.
-    if (preview.hasEmptyScores && round.type !== 'Nomination') {
+    if (preview.hasEmptyScores && round.type?.toLowerCase() !== 'nomination') {
       toast.error('No scores yet — judges must score submissions before shortlisting.');
       return;
     }
@@ -593,6 +665,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   const handleExecuteAdvancement = useCallback(
     async (
       overrides: Array<{ submissionId: string; action: 'advance' | 'eliminate'; reason?: string }>,
+      targetRoundId?: string,
     ) => {
       if (!advancementModal) return;
 
@@ -608,17 +681,18 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         criteriaOverride: advancementModal.criteriaOverride,
         overrides,
         tieResolutions,
+        targetRoundId,
       });
 
       if (!result?.ok) {
         throw new Error(result?.error || 'Advancement failed');
       }
 
-      const currentIndex = rounds.findIndex((r) => r.id === advancementModal.roundId);
-      const nextRound = rounds[currentIndex + 1];
-      if (nextRound && (nextRound.status === 'draft' || nextRound.status === 'scheduled')) {
-        await activateRound(nextRound.id);
-        toast.success(`Advanced participants into "${nextRound.name}"`);
+      const finalTargetRoundId = targetRoundId || rounds[rounds.findIndex((r) => r.id === advancementModal.roundId) + 1]?.id;
+      const targetRound = rounds.find((r) => r.id === finalTargetRoundId);
+      if (targetRound && (targetRound.status === 'draft' || targetRound.status === 'scheduled')) {
+        await activateRound(targetRound.id);
+        toast.success(`Advanced participants into "${targetRound.name}"`);
       } else {
         toast.success('Round shortlist completed');
       }
@@ -726,6 +800,31 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         </div>
       )}
 
+      {validationResult.errors.length > 0 && (
+        <div className="border-b border-slate-200 bg-slate-50/80 space-y-1 max-h-48 overflow-y-auto">
+          {validationResult.errors.map((err, idx) => (
+            <div
+              key={idx}
+              className={`flex items-start gap-2.5 px-6 py-2 text-xs ${
+                err.type === 'error'
+                  ? 'bg-rose-50/60 border-y border-rose-100/80 text-rose-800'
+                  : 'bg-amber-50/60 border-y border-amber-100/80 text-amber-800'
+              }`}
+            >
+              <AlertCircle
+                className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${
+                  err.type === 'error' ? 'text-rose-500 animate-pulse' : 'text-amber-500'
+                }`}
+              />
+              <div className="flex-1">
+                <span className="font-semibold capitalize">{err.type}: </span>
+                {err.message}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 min-w-0 overflow-hidden" data-demo-target="schedule-page-canvas">
         {representation === 'workflow' ? (
           <WorkflowView
@@ -743,6 +842,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         ) : (
           <TileView
             rounds={rounds}
+            edges={roundEdges}
             selectedRoundId={selectedRoundId}
             onRoundSelect={setSelectedRoundId}
             onRoundUpdate={handleRoundUpdate}

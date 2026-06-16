@@ -16,7 +16,7 @@ import RoundType, { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
 import { ConnectionModal } from './ConnectionModal';
 import { RoundNode } from './RoundNode';
-import { Plus } from 'lucide-react';
+import { Plus, GitBranch, Trash2 } from 'lucide-react';
 import { Button } from '../../Button';
 
 interface WorkflowViewProps {
@@ -56,12 +56,27 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   const [pendingConnection, setPendingConnection] = useState<{ source: string; target: string; sourceHandle?: string; targetHandle?: string } | null>(null);
   const [editingEdge, setEditingEdge] = useState<RoundEdge | null>(null); // Edge being edited
   const reactFlowWrapperRef = useRef<any>(null);
+  const [edgeMenu, setEdgeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (edgeMenu && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setEdgeMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [edgeMenu]);
 
   const onPaneClick = useCallback(() => {
     onRoundSelect(null);
     setSelectedEdgeId(null);
     setEditingEdge(null);
     setPendingConnection(null);
+    setEdgeMenu(null);
   }, [onRoundSelect]);
 
 
@@ -74,6 +89,8 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
     return edges.map((edge) => {
       const isCycle = cycleEdges.has(edge.id);
       const isSelected = selectedEdgeId === edge.id;
+      const sourceRound = rounds.find(r => r.id === edge.sourceRoundId);
+      const evaluationLogic = sourceRound?.evaluationLogic;
 
       return {
         id: edge.id,
@@ -97,7 +114,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
           width: 20,
           height: 20,
         },
-        label: edge.name || (edge.dataStream ? `${edge.dataStream.split(',').join(', ')}${edge.condition && getEdgeLabel(edge.condition) ? ` • ${getEdgeLabel(edge.condition)}` : ''}` : (edge.condition ? getEdgeLabel(edge.condition) : '')),
+        label: edge.name || (edge.dataStream ? `${edge.dataStream.split(',').join(', ')}${edge.condition && getEdgeLabel(edge.condition, evaluationLogic) ? ` • ${getEdgeLabel(edge.condition, evaluationLogic)}` : ''}` : (edge.condition ? getEdgeLabel(edge.condition, evaluationLogic) : '')),
         labelStyle: { fill: isCycle ? '#d97706' : '#6366f1', fontWeight: 600, fontSize: 11 },
         labelBgStyle: { fill: '#f8fafc', fillOpacity: 0.9 },
         data: { edge, isCycle },
@@ -139,13 +156,16 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
 
     onRoundUpdate(newRound);
 
+    const parentRound = rounds.find(r => r.id === parentRoundId);
+    const defaultCondition = parentRound?.type === 'Nomination' ? { type: 'always' } : { type: 'if_shortlisted' };
+
     // Create edge from parent to child
     const newEdge: RoundEdge = {
       id: `edge-${Date.now()}`,
       programId,
       sourceRoundId: parentRoundId,
       targetRoundId: newRound.id,
-      condition: { type: 'always' },
+      condition: defaultCondition,
       order: edges.filter(e => e.sourceRoundId === parentRoundId).length,
       createdAt: new Date().toISOString(),
     };
@@ -266,6 +286,8 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
       const selectedOutputPort = sourceOutputPorts.find(p => p.id === sourceHandle);
       const dataStream = selectedOutputPort?.dataStreams.join(',') || '';
 
+      const defaultCondition = sourceRound.type === 'Nomination' ? undefined : { type: 'if_shortlisted' };
+
       // Create edge automatically without showing modal
       const newEdge: RoundEdge = {
         id: `edge-${Date.now()}`,
@@ -275,7 +297,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
         sourceHandle: sourceHandle,
         targetHandle: targetHandle,
         dataStream: dataStream,
-        condition: undefined, // No condition = always
+        condition: defaultCondition as any,
         order: edges.filter(e => e.sourceRoundId === params.source).length,
         createdAt: new Date().toISOString(),
       };
@@ -392,7 +414,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
       sourceHandle: pendingConnection.sourceHandle || defaultSourceHandle,
       targetHandle: defaultTargetHandle,
       dataStream: defaultDataStream,
-      condition: undefined, // No condition = always
+      condition: sourceRound?.type === 'Nomination' ? undefined : { type: 'if_shortlisted' },
       order: edges.filter(e => e.sourceRoundId === pendingConnection.source).length,
       createdAt: new Date().toISOString(),
     };
@@ -441,19 +463,20 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
             onRoundSelect(node.id as string);
           }
           setSelectedEdgeId(null);
+          setEdgeMenu(null);
         }}
-        onEdgeClick={(_, edge) => {
+        onEdgeClick={(event, edge) => {
+          event.preventDefault();
+          event.stopPropagation();
           setSelectedEdgeId(edge.id);
           onRoundSelect(null);
-          // Open connection modal for editing
-          const edgeData = edges.find(e => e.id === edge.id);
-          if (edgeData) {
-            setEditingEdge(edgeData);
-            setPendingConnection({
-              source: edgeData.sourceRoundId,
-              target: edgeData.targetRoundId,
-              sourceHandle: edgeData.sourceHandle,
-              targetHandle: edgeData.targetHandle,
+          
+          if (reactFlowWrapperRef.current) {
+            const bounds = reactFlowWrapperRef.current.getBoundingClientRect();
+            setEdgeMenu({
+              id: edge.id,
+              x: event.clientX - bounds.left,
+              y: event.clientY - bounds.top,
             });
           }
         }}
@@ -542,19 +565,81 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
           />
         );
       })()}
+
+      {/* Edge Context Menu */}
+      {edgeMenu && (
+        <div
+          ref={menuRef}
+          style={{ top: edgeMenu.y, left: edgeMenu.x }}
+          className="absolute z-50 bg-white border border-slate-200 rounded-xl shadow-xl min-w-[180px] p-1.5 animate-in fade-in zoom-in-95 duration-100"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              const edgeData = edges.find(e => e.id === edgeMenu.id);
+              if (edgeData) {
+                setEditingEdge(edgeData);
+                setPendingConnection({
+                  source: edgeData.sourceRoundId,
+                  target: edgeData.targetRoundId,
+                  sourceHandle: edgeData.sourceHandle,
+                  targetHandle: edgeData.targetHandle,
+                });
+              }
+              setEdgeMenu(null);
+            }}
+            className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <GitBranch className="w-3.5 h-3.5 text-indigo-500" />
+            Configure Logic
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const edgeData = edges.find(e => e.id === edgeMenu.id);
+              if (edgeData) {
+                onEdgeDelete(edgeData.id);
+              }
+              setEdgeMenu(null);
+              setSelectedEdgeId(null);
+            }}
+            className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-2 transition-colors border-t border-slate-100 mt-1 pt-1.5 cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+            Delete Connection
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
-function getEdgeLabel(condition: RoundEdge['condition'] | undefined): string {
+function getEdgeLabel(condition: RoundEdge['condition'] | undefined, evaluationLogic?: string): string {
   if (!condition) return '';
+  const labelPrefix = (() => {
+    const logic = evaluationLogic?.toLowerCase();
+    if (logic === 'voting') return 'Voting';
+    if (logic === 'ranking') return 'Rank';
+    return 'Score';
+  })();
+
   switch (condition.type) {
     case 'always':
       return '';
     case 'if_shortlisted':
       return 'Shortlist';
     case 'if_score_gte':
-      return `≥ ${condition.score}`;
+      return `${labelPrefix} ≥ ${condition.score}`;
+    case 'if_score_gt':
+      return `${labelPrefix} > ${condition.score}`;
+    case 'if_score_lt':
+      return `${labelPrefix} < ${condition.score}`;
+    case 'if_score_lte':
+      return `${labelPrefix} ≤ ${condition.score}`;
+    case 'if_score_eq':
+      return `${labelPrefix} = ${condition.score}`;
+    case 'if_score_range':
+      return `${labelPrefix}: ${(condition as any).minScore ?? 0}-${(condition as any).maxScore ?? 100}`;
     case 'manual_approval':
       return 'Manual';
     case 'custom_logic':

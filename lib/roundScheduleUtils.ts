@@ -100,7 +100,7 @@ export function buildLinearEdges(programId: string, orderedRounds: Round[]): Rou
       programId,
       sourceRoundId: source.id,
       targetRoundId: target.id,
-      condition: { type: 'always' },
+      condition: source.type === 'Nomination' ? { type: 'always' } : { type: 'if_shortlisted' },
       order: i,
       createdAt: new Date().toISOString(),
     });

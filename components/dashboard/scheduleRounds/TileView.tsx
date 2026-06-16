@@ -35,6 +35,7 @@ interface RoundCardInsight {
 
 interface TileViewProps {
   rounds: Round[];
+  edges?: any[];
   selectedRoundId: string | null;
   onRoundSelect: (roundId: string | null) => void;
   onRoundUpdate: (round: Round) => Promise<Round>;
@@ -52,6 +53,7 @@ interface TileViewProps {
 
 export const TileView: React.FC<TileViewProps> = ({
   rounds,
+  edges = [],
   selectedRoundId,
   onRoundSelect,
   onRoundUpdate,
@@ -261,37 +263,39 @@ export const TileView: React.FC<TileViewProps> = ({
                           )}
                         </button>
 
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1.5 border border-slate-200 rounded-full bg-white px-2 py-1 hover:bg-slate-100 transition-colors"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setJudgesListRoundId(round.id);
-                          }}
-                        >
-                          <div className="flex -space-x-2">
-                            {(roundInsights?.[round.id]?.judges || []).slice(0, 3).map(judge => (
-                              <Avatar key={judge.id} className="w-6 h-6 border-2 border-white">
-                                <AvatarImage src={judge.avatarUrl} alt={judge.name} />
-                                <AvatarFallback className="bg-amber-100 text-amber-800 text-[10px]">
-                                  {getInitials(judge.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                            {(roundInsights?.[round.id]?.judges || []).length === 0 && (
-                              <span className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white text-slate-500 flex items-center justify-center">
-                                <Users className="w-3 h-3" />
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                            {insightsLoading
-                              ? 'Judges...'
-                              : (roundInsights?.[round.id]?.judgeTotal || 0) > 0
-                                ? `${roundInsights[round.id].judgeTotal} judges`
-                                : 'No judges yet'}
-                          </span>
-                        </button>
+                        {round.type?.toLowerCase() !== 'nomination' && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 border border-slate-200 rounded-full bg-white px-2 py-1 hover:bg-slate-100 transition-colors"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setJudgesListRoundId(round.id);
+                            }}
+                          >
+                            <div className="flex -space-x-2">
+                              {(roundInsights?.[round.id]?.judges || []).slice(0, 3).map(judge => (
+                                <Avatar key={judge.id} className="w-6 h-6 border-2 border-white">
+                                  <AvatarImage src={judge.avatarUrl} alt={judge.name} />
+                                  <AvatarFallback className="bg-amber-100 text-amber-800 text-[10px]">
+                                    {getInitials(judge.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {(roundInsights?.[round.id]?.judges || []).length === 0 && (
+                                <span className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white text-slate-500 flex items-center justify-center">
+                                  <Users className="w-3 h-3" />
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                              {insightsLoading
+                                ? 'Judges...'
+                                : (roundInsights?.[round.id]?.judgeTotal || 0) > 0
+                                  ? `${roundInsights[round.id].judgeTotal} judges`
+                                  : 'No judges yet'}
+                            </span>
+                          </button>
+                        )}
 
                         {getStatusBadge(round.status)}
                       </div>
@@ -310,14 +314,18 @@ export const TileView: React.FC<TileViewProps> = ({
                         <span className="text-slate-500">End:</span>
                         <span className="ml-2 text-slate-700">{formatDate(getEndDate(round))}</span>
                       </div>
-                      <div>
-                        <span className="text-slate-500">Evaluators:</span>
-                        <span className="ml-2 text-slate-700 capitalize">{round.evaluatorStrategy.replace('_', ' ')}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Blind:</span>
-                        <span className="ml-2 text-slate-700">{round.blindEvaluation ? 'Yes' : 'No'}</span>
-                      </div>
+                      {round.type?.toLowerCase() !== 'nomination' && (
+                        <>
+                          <div>
+                            <span className="text-slate-500">Evaluators:</span>
+                            <span className="ml-2 text-slate-700 capitalize">{round.evaluatorStrategy.replace('_', ' ')}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Blind:</span>
+                            <span className="ml-2 text-slate-700">{round.blindEvaluation ? 'Yes' : 'No'}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {round.shortlistConfig.enabled && (
@@ -344,7 +352,7 @@ export const TileView: React.FC<TileViewProps> = ({
                           <Play className="w-3.5 h-3.5" />
                           {pipelineAction}
                         </button>
-                        {round.type === 'Nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound && (
+                        {round.type?.toLowerCase() === 'nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound && (
                           <button
                             type="button"
                             onClick={(event) => {
@@ -370,19 +378,23 @@ export const TileView: React.FC<TileViewProps> = ({
       )}
 
       {/* Configuration Panel */}
-      {selectedRound && (
-        <RoundConfigurationPanel
-          round={selectedRound}
-          programId={programId}
-          onUpdate={onRoundUpdate}
-          onDelete={() => {
-            onRoundDelete(selectedRound.id);
-            onRoundSelect(null);
-          }}
-          onClose={() => onRoundSelect(null)}
-          allRounds={rounds}
-        />
-      )}
+      {selectedRound && (() => {
+        const roundIncomingEdges = edges.filter(e => e.targetRoundId === selectedRound.id);
+        return (
+          <RoundConfigurationPanel
+            round={selectedRound}
+            programId={programId}
+            onUpdate={onRoundUpdate}
+            onDelete={() => {
+              onRoundDelete(selectedRound.id);
+              onRoundSelect(null);
+            }}
+            onClose={() => onRoundSelect(null)}
+            incomingEdges={roundIncomingEdges}
+            allRounds={rounds}
+          />
+        );
+      })()}
 
       <Modal
         isOpen={Boolean(participantsListRound)}

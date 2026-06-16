@@ -256,7 +256,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
             }}
           >
             <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-              {port.name} ({dataStreamsLabel})
+              {port.name}{round.type !== 'Nomination' ? ` (${dataStreamsLabel})` : ''}
             </div>
           </Handle>
         );
