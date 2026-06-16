@@ -9,6 +9,7 @@ import {
   getRound,
   getRoundStatus,
   getPipelineStatus,
+  resetPipeline,
 } from '../services/roundEngine.js';
 import { canManageProgram } from '../middleware/programManagement.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
@@ -141,6 +142,23 @@ router.get('/programs/:programId/pipeline-status', requireAuth, async (req, res)
       return getPipelineStatus(programId);
     });
     return res.json({ data });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.post('/programs/:programId/reset-pipeline', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId } = req.params;
+  try {
+    const permitted = await canManageProgram(req.userId || '', programId);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
+    const result = await resetPipeline(programId, req.userId || 'admin');
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    await invalidateRound(programId);
+
+    return res.json({ ok: true });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }

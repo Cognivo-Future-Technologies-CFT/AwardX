@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canManageProgram: vi.fn(),
   getRound: vi.fn(),
   activateRound: vi.fn(),
+  resetPipeline: vi.fn(),
 }));
 
 vi.mock('../../../server/src/middleware/auth.js', () => ({
@@ -28,6 +29,7 @@ vi.mock('../../../server/src/services/roundEngine.js', () => ({
   getRound: mocks.getRound,
   getRoundStatus: vi.fn(),
   getPipelineStatus: vi.fn(async () => ({ rounds: [], edges: [] })),
+  resetPipeline: mocks.resetPipeline,
 }));
 
 vi.mock('../../../server/src/cache/redisCache.js', () => ({
@@ -89,5 +91,33 @@ describe('roundExecution route authorization', () => {
     expect(response.status).toBe(200);
     expect(response.body.ok).toBe(true);
     expect(mocks.activateRound).toHaveBeenCalledWith('round-1', 'user-1');
+  });
+
+  it('allows resetting pipeline when authorized', async () => {
+    mocks.resetPipeline.mockResolvedValue({ ok: true });
+
+    const app = express();
+    app.use(express.json());
+    app.use(roundExecutionRouter);
+
+    const response = await request(app).post('/programs/program-1/reset-pipeline').send({});
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(mocks.resetPipeline).toHaveBeenCalledWith('program-1', 'user-1');
+  });
+
+  it('rejects resetting pipeline when unauthorized', async () => {
+    mocks.canManageProgram.mockResolvedValue(false);
+
+    const app = express();
+    app.use(express.json());
+    app.use(roundExecutionRouter);
+
+    const response = await request(app).post('/programs/program-1/reset-pipeline').send({});
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('Insufficient permissions');
+    expect(mocks.resetPipeline).not.toHaveBeenCalled();
   });
 });

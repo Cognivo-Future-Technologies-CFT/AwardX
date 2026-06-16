@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Program } from '../../../services/models';
-import { ArrowRightLeft, LayoutGrid, Plus, Workflow, AlertCircle } from 'lucide-react';
+import { ArrowRightLeft, LayoutGrid, Plus, Workflow, AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
@@ -29,12 +29,14 @@ import {
   promoteRound,
   executeAdvancement,
   previewAdvancement,
+  resetPipeline,
   type AdvancementPreview,
 } from '../../../services/roundPipelineApi';
 import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges } from '../../../lib/roundScheduleUtils';
 import type { AdvancementCriteria } from '../../../types/scheduleRounds';
 import { AddRoundSheet } from './AddRoundSheet';
 import { validateRoundTransitions } from '../../../lib/flowValidation';
+import { Modal } from '../../Modal';
 
 interface RoundCardInsight {
   participantTotal: number;
@@ -136,6 +138,8 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   }, [rounds]);
   const [addRoundOpen, setAddRoundOpen] = useState(false);
   const [isCreatingRound, setIsCreatingRound] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const customEdgeWarningShown = useRef(false);
 
   const enforceNominationFirst = useCallback(async (inputRounds: Round[]): Promise<Round[]> => {
@@ -600,14 +604,19 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);
     const preview = await previewAdvancement(round.id, criteriaOverride);
 
-    // Nomination rounds have no judges — skip the empty-scores guard for them.
-    if (preview.hasEmptyScores && round.type?.toLowerCase() !== 'nomination') {
+    // Only enforce scoring guards if the round uses scoring logic.
+    const isJudgingRound = round.evaluationLogic
+      ? round.evaluationLogic === 'scoring'
+      : !['public voting', 'public rating', 'public', 'nomination'].includes(round.type?.toLowerCase());
+
+    if (preview.hasEmptyScores && isJudgingRound) {
       toast.error('No scores yet — judges must score submissions before shortlisting.');
       return;
     }
 
     setAdvancementModal({ roundId: round.id, preview, criteriaOverride });
   }, []);
+
 
   const handleRunPipelineAction = useCallback(
     async (roundId: string) => {
@@ -661,6 +670,22 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     },
     [loadWorkflow],
   );
+
+  const handleResetParticipants = useCallback(async () => {
+    if (!activeEvent) return;
+    setIsResetting(true);
+    try {
+      const result = await resetPipeline(activeEvent.id);
+      if (!result.ok) throw new Error(result.error || 'Failed to reset participants');
+      toast.success('All participants, evaluations, and rounds have been reset successfully.');
+      await loadWorkflow();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Reset failed');
+    } finally {
+      setIsResetting(false);
+      setShowResetConfirm(false);
+    }
+  }, [activeEvent, loadWorkflow]);
 
   const handleExecuteAdvancement = useCallback(
     async (
@@ -782,6 +807,16 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
             </Button>
           )}
           <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setShowResetConfirm(true)}
+            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+            disabled={isResetting || rounds.length === 0}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset participants
+          </Button>
+          <Button
             variant="primary"
             onClick={openAddRoundSheet}
             className="shadow-lg shadow-indigo-500/20"
@@ -896,6 +931,49 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
           onExecute={handleExecuteAdvancement}
           onClose={() => setAdvancementModal(null)}
         />
+      )}
+      {showResetConfirm && (
+        <Modal
+          isOpen
+          onClose={() => setShowResetConfirm(false)}
+          title="Reset Program Participants & Rounds"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Are you sure you want to reset all participants and rounds for this program?
+            </p>
+            <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-1.5">
+              <div className="font-semibold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                This is a destructive action that will:
+              </div>
+              <ul className="list-disc pl-4 space-y-1">
+                <li>Permanently delete all judging grades, scores, and judge assignments</li>
+                <li>Permanently delete all public votes and ratings cast for all rounds</li>
+                <li>Clear all round advancement outcomes and logs</li>
+                <li>Reset all rounds status back to <span className="font-semibold">Draft</span></li>
+                <li>Re-enroll all submissions back into the first round as active participants</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                variant="ghost"
+                onClick={() => setShowResetConfirm(false)}
+                disabled={isResetting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleResetParticipants}
+                disabled={isResetting}
+                className="bg-red-600 hover:bg-red-700 text-white border-none"
+              >
+                {isResetting ? 'Resetting...' : 'Yes, Reset All'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

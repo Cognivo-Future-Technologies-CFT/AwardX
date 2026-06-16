@@ -328,4 +328,146 @@ export async function getPipelineStatus(programId: string) {
   return { rounds: roundsWithStatus, edges: edges || [] };
 }
 
+export async function resetPipeline(programId: string, triggeredBy: string = 'admin'): Promise<{ ok: boolean; error?: string }> {
+  const supabase = getSupabaseAdmin();
+
+  // Get all rounds for the program
+  const { data: rounds, error: roundsError } = await supabase
+    .from('rounds')
+    .select('id, type, status, is_finalized')
+    .eq('program_id', programId);
+  
+  if (roundsError) return { ok: false, error: roundsError.message };
+  if (!rounds || rounds.length === 0) {
+    return { ok: true };
+  }
+
+  const roundIds = rounds.map(r => r.id);
+
+  // 1. Get submission_judges for these rounds to delete dependent scores/comments
+  const { data: sjList } = await supabase
+    .from('submission_judges')
+    .select('id')
+    .in('round_id', roundIds);
+
+  const sjIds = (sjList || []).map(sj => sj.id);
+
+  if (sjIds.length > 0) {
+    // Delete scores for these submission_judges
+    await supabase.from('scores').delete().in('submission_judge_id', sjIds);
+    // Delete judge_comments for these submission_judges
+    await supabase.from('judge_comments').delete().in('submission_judge_id', sjIds);
+  }
+
+  // 2. Delete submission_judges
+  const { error: delJudgeError } = await supabase
+    .from('submission_judges')
+    .delete()
+    .in('round_id', roundIds);
+  if (delJudgeError) return { ok: false, error: delJudgeError.message };
+
+  // 3. Delete public_votes
+  const { error: delVoteError } = await supabase
+    .from('public_votes')
+    .delete()
+    .in('round_id', roundIds);
+  if (delVoteError) return { ok: false, error: delVoteError.message };
+
+  // 4. Delete winner_announcements
+  const { error: delWinnerError } = await supabase
+    .from('winner_announcements')
+    .delete()
+    .eq('program_id', programId);
+  if (delWinnerError) return { ok: false, error: delWinnerError.message };
+
+  // 5. Delete advancement_events (which cascades to details)
+  const { error: delAdvError } = await supabase
+    .from('advancement_events')
+    .delete()
+    .in('round_id', roundIds);
+  if (delAdvError) return { ok: false, error: delAdvError.message };
+
+  // 6. Delete all round_submissions
+  const { error: delSubError } = await supabase
+    .from('round_submissions')
+    .delete()
+    .in('round_id', roundIds);
+  if (delSubError) return { ok: false, error: delSubError.message };
+
+  // 7. Reset rounds status to draft and un-finalize
+  const { error: resetRoundsError } = await supabase
+    .from('rounds')
+    .update({ status: 'draft', is_finalized: false })
+    .in('id', roundIds);
+  if (resetRoundsError) return { ok: false, error: resetRoundsError.message };
+
+  // 8. Reset cached scores/votes on program submissions
+  const { error: resetSubmissionsError } = await supabase
+    .from('submissions')
+    .update({
+      average_score: null,
+      total_scores: 0,
+      votes_count: 0
+    })
+    .eq('program_id', programId);
+  if (resetSubmissionsError) return { ok: false, error: resetSubmissionsError.message };
+
+  // 9. Re-enroll active submissions in the root round
+  const { data: edges } = await supabase
+    .from('round_edges')
+    .select('target_round_id')
+    .eq('program_id', programId);
+
+  const targetIds = new Set((edges || []).map(e => e.target_round_id));
+  const rootRounds = rounds.filter(r => !targetIds.has(r.id));
+
+  if (rootRounds.length > 0) {
+    const { data: fullRounds } = await supabase
+      .from('rounds')
+      .select('id, type, sort_order, start_date')
+      .in('id', rootRounds.map(r => r.id));
+
+    if (fullRounds && fullRounds.length > 0) {
+      const sortedRoots = [...fullRounds].sort((a: any, b: any) => {
+        const aSort = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER);
+        const bSort = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER);
+        if (aSort !== bSort) return aSort - bSort;
+        return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+      });
+
+      const nominatedRoot = sortedRoots.find((r: any) => {
+        const t = String(r.type || '').toLowerCase();
+        return t === 'nomination' || t === 'submission';
+      });
+
+      const selectedRoot = nominatedRoot || sortedRoots[0];
+
+      const { data: subs } = await supabase
+        .from('submissions')
+        .select('id')
+        .eq('program_id', programId);
+
+      if (subs && subs.length > 0) {
+        const rows = subs.map(s => ({
+          round_id: selectedRoot.id,
+          submission_id: s.id,
+          status: 'active'
+        }));
+        const { error: enrollError } = await supabase
+          .from('round_submissions')
+          .upsert(rows, { onConflict: 'round_id,submission_id' });
+        
+        if (enrollError) return { ok: false, error: enrollError.message };
+      }
+    }
+  }
+
+  // 10. Log transition logs
+  for (const r of rounds) {
+    await logTransition(r.id, r.status, 'draft', triggeredBy, { reset: true });
+  }
+
+  return { ok: true };
+}
+
 export { getPredecessorRounds, getSuccessorRounds, getRound };

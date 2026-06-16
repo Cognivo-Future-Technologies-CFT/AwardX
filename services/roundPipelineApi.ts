@@ -81,3 +81,7 @@ export async function executeAdvancement(
   );
   return response.data;
 }
+
+export async function resetPipeline(programId: string) {
+  return postRoundAction(`/api/execution/programs/${encodeURIComponent(programId)}/reset-pipeline`);
+}
