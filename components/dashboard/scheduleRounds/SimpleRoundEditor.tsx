@@ -34,7 +34,7 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
     form.startCondition.type === 'fixed_datetime' ? form.startCondition.datetime : '';
   const endIso = form.endCondition.type === 'fixed_datetime' ? form.endCondition.datetime : '';
 
-  const showShortlist = roundUsesShortlist(form) || form.type === 'Shortlisting';
+  const showShortlist = form.type !== 'Nomination' && (roundUsesShortlist(form) || form.type === 'Shortlisting');
 
   const handleSave = async () => {
     const trimmedName = form.name.trim();
@@ -53,9 +53,11 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
     setSaving(true);
     setError(null);
     try {
-      const shortlistConfig = showShortlist
-        ? { ...form.shortlistConfig, enabled: true }
-        : { ...form.shortlistConfig, enabled: false };
+      const shortlistConfig = (form.type === 'Nomination' || form.type === 'Announce')
+        ? { ...form.shortlistConfig, enabled: false }
+        : showShortlist
+          ? { ...form.shortlistConfig, enabled: true }
+          : { ...form.shortlistConfig, enabled: false };
 
       const payload: Round = {
         ...form,

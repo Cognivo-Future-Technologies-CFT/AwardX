@@ -941,6 +941,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         <AdvancementPreviewModal
           isOpen
           roundId={advancementModal.roundId}
+          isNomination={rounds.find(r => r.id === advancementModal.roundId)?.type === 'Nomination'}
           advancing={advancementModal.preview.advancing.map(mapPreviewParticipant)}
           eliminated={advancementModal.preview.eliminated.map(mapPreviewParticipant)}
           ties={advancementModal.preview.ties.map(mapPreviewParticipant)}

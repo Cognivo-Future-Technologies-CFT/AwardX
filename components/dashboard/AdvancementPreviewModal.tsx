@@ -16,6 +16,7 @@ interface Participant {
 interface AdvancementPreviewModalProps {
   isOpen: boolean;
   roundId: string;
+  isNomination?: boolean;
   advancing: Participant[];
   eliminated: Participant[];
   ties: Participant[];
@@ -29,6 +30,7 @@ interface AdvancementPreviewModalProps {
 export const AdvancementPreviewModal: React.FC<AdvancementPreviewModalProps> = ({
   isOpen,
   roundId,
+  isNomination = false,
   advancing,
   eliminated,
   ties,
@@ -85,10 +87,12 @@ export const AdvancementPreviewModal: React.FC<AdvancementPreviewModalProps> = (
           <div className="flex-1">
             <p className="font-semibold text-slate-900 text-sm">{p.title}</p>
             <p className="text-xs text-slate-500">{p.applicantName}</p>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs font-bold text-indigo-600">Score: {p.score.toFixed(1)}</span>
-              {status !== 'tied' && <span className="text-xs text-slate-500">#{p.rank}</span>}
-            </div>
+            {!isNomination && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs font-bold text-indigo-600">Score: {p.score.toFixed(1)}</span>
+                {status !== 'tied' && <span className="text-xs text-slate-500">#{p.rank}</span>}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -128,47 +132,75 @@ export const AdvancementPreviewModal: React.FC<AdvancementPreviewModalProps> = (
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Advancement Preview">
       <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-emerald-50 p-3 rounded-lg text-center">
-            <p className="text-2xl font-bold text-emerald-600">{advancing.length}</p>
-            <p className="text-xs text-emerald-700 font-semibold">Advancing</p>
-          </div>
-          <div className="bg-red-50 p-3 rounded-lg text-center">
-            <p className="text-2xl font-bold text-red-600">{eliminated.length}</p>
-            <p className="text-xs text-red-700 font-semibold">Eliminated</p>
-          </div>
-          <div className="bg-orange-50 p-3 rounded-lg text-center">
-            <p className="text-2xl font-bold text-orange-600">{ties.length}</p>
-            <p className="text-xs text-orange-700 font-semibold">Tied</p>
-          </div>
-        </div>
+        {isNomination ? (
+          <>
+            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-emerald-800 text-sm">Automatic Advancement</h4>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  Nomination rounds do not have scoring thresholds. All submissions automatically advance to the next round.
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                Submissions to Advance ({advancing.length})
+              </label>
+              <div className="space-y-2">
+                {advancing.map((p) => (
+                  <div key={p.submissionId} className="p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                    <p className="font-semibold text-slate-900 text-sm">{p.title}</p>
+                    <p className="text-xs text-slate-500">{p.applicantName}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Summary Stats */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-emerald-50 p-3 rounded-lg text-center">
+                <p className="text-2xl font-bold text-emerald-600">{advancing.length}</p>
+                <p className="text-xs text-emerald-700 font-semibold">Advancing</p>
+              </div>
+              <div className="bg-red-50 p-3 rounded-lg text-center">
+                <p className="text-2xl font-bold text-red-600">{eliminated.length}</p>
+                <p className="text-xs text-red-700 font-semibold">Eliminated</p>
+              </div>
+              <div className="bg-orange-50 p-3 rounded-lg text-center">
+                <p className="text-2xl font-bold text-orange-600">{ties.length}</p>
+                <p className="text-xs text-orange-700 font-semibold">Tied</p>
+              </div>
+            </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 border-b border-slate-200">
-          {(['advancing', 'eliminated', 'ties'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setSelectedTab(tab)}
-              className={`px-3 py-2 text-xs font-semibold transition-all border-b-2 ${
-                selectedTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {tab === 'advancing' ? `Advancing (${advancing.length})` : tab === 'eliminated' ? `Eliminated (${eliminated.length})` : `Tied (${ties.length})`}
-            </button>
-          ))}
-        </div>
+            {/* Tabs */}
+            <div className="flex gap-2 border-b border-slate-200">
+              {(['advancing', 'eliminated', 'ties'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setSelectedTab(tab)}
+                  className={`px-3 py-2 text-xs font-semibold transition-all border-b-2 ${
+                    selectedTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {tab === 'advancing' ? `Advancing (${advancing.length})` : tab === 'eliminated' ? `Eliminated (${eliminated.length})` : `Tied (${ties.length})`}
+                </button>
+              ))}
+            </div>
 
-        {/* Content */}
-        <div className="space-y-2">
-          <AnimatePresence mode="wait">
-            {selectedTab === 'advancing' && advancing.map((p) => <ParticipantRow key={p.submissionId} p={p} status="advancing" />)}
-            {selectedTab === 'eliminated' && eliminated.map((p) => <ParticipantRow key={p.submissionId} p={p} status="eliminated" />)}
-            {selectedTab === 'ties' && ties.map((p) => <ParticipantRow key={p.submissionId} p={p} status="tied" />)}
-          </AnimatePresence>
-        </div>
-
-
+            {/* Content */}
+            <div className="space-y-2">
+              <AnimatePresence mode="wait">
+                {selectedTab === 'advancing' && advancing.map((p) => <ParticipantRow key={p.submissionId} p={p} status="advancing" />)}
+                {selectedTab === 'eliminated' && eliminated.map((p) => <ParticipantRow key={p.submissionId} p={p} status="eliminated" />)}
+                {selectedTab === 'ties' && ties.map((p) => <ParticipantRow key={p.submissionId} p={p} status="tied" />)}
+              </AnimatePresence>
+            </div>
+          </>
+        )}
 
         {/* Actions */}
         <div className="sticky bottom-0 bg-white border-t border-slate-200 pt-4 flex gap-2">

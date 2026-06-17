@@ -127,6 +127,8 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
           next.evaluationLogic = 'voting';
         } else if (valLower === 'nomination' || valLower === 'announce') {
           next.evaluationLogic = 'none';
+          next.shortlistConfig = { ...next.shortlistConfig, enabled: false };
+          next.advancementCriteria = { type: 'all_pass' };
         } else if (prev.evaluationLogic === 'none') {
           next.evaluationLogic = 'scoring';
         }
