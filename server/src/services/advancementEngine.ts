@@ -537,8 +537,8 @@ export async function executeAdvancement(
               carried_score: participant.score,
             });
 
-            // Deterministic branching: first matching edge by sort_order wins.
-            break;
+            // Route to all matching edges in parallel.
+            matchedTargetRoundId = edge.target_round_id;
           }
 
           if (!matchedTargetRoundId) {

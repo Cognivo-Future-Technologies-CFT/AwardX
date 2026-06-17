@@ -262,6 +262,13 @@ export function validateRoundTransitions(
 
       for (let j = i + 1; j < group.length; j++) {
         const edgeB = group[j];
+        // Skip overlap check if they originate from different output ports/handles or target different rounds
+        const handleA = edgeA.sourceHandle || 'output-0';
+        const handleB = edgeB.sourceHandle || 'output-0';
+        const targetA = edgeA.targetRoundId || edgeA.target_round_id;
+        const targetB = edgeB.targetRoundId || edgeB.target_round_id;
+        if (handleA !== handleB || targetA !== targetB) continue;
+
         const nameB = roundMap.get(edgeB.targetRoundId) || edgeB.targetRoundId;
         const condB = edgeB.condition;
         const rangeB = getConditionRange(condB);

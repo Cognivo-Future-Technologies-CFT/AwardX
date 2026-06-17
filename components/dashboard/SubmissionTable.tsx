@@ -1176,6 +1176,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
          </div>
 
          {/* Premium Floating Actions */}
+         {/* 
          <AnimatePresence>
             {selectedIds.length > 0 && (
                <motion.div
@@ -1232,6 +1233,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                </motion.div>
             )}
          </AnimatePresence>
+         */}
 
          {/* Add Submission Modal — dynamic form fields from the active program form */}
          <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setNewSub({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} }); }} title="Add Submission" size="lg">
