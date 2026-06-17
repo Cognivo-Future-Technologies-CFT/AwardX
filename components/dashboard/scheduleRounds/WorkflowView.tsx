@@ -458,6 +458,10 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        isValidConnection={(connection) => {
+          const targetRound = rounds.find(r => r.id === connection.target);
+          return targetRound?.type !== 'Nomination';
+        }}
         onNodeClick={(_, node) => {
           if (node.type === 'roundNode') {
             onRoundSelect(node.id as string);
