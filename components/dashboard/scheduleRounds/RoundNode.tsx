@@ -140,7 +140,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
       `}
     >
       {/* Multiple Input Handles - Using named ports from metadata */}
-      {inputPorts.map((port, index) => {
+      {round.type !== 'Nomination' && inputPorts.map((port, index) => {
         const handleId = port.id;
         const isUsed = usedInputHandles.has(handleId);
         return (

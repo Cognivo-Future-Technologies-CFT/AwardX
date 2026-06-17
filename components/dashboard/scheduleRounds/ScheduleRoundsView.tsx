@@ -73,21 +73,26 @@ type AdvancementModalState = {
 
 function normalizeEdgesCondition(edges: RoundEdge[], rounds: Round[]): RoundEdge[] {
   const roundsMap = new Map(rounds.map(r => [r.id, r]));
-  return edges.map(edge => {
-    const sourceRound = roundsMap.get(edge.sourceRoundId);
-    if (sourceRound) {
-      if (sourceRound.type === 'Nomination') {
-        if (edge.condition && edge.condition.type !== 'always') {
-          return { ...edge, condition: { type: 'always' } };
-        }
-      } else {
-        if (!edge.condition || edge.condition.type === 'always') {
-          return { ...edge, condition: { type: 'if_shortlisted' } };
+  return edges
+    .filter(edge => {
+      const targetRound = roundsMap.get(edge.targetRoundId);
+      return targetRound?.type !== 'Nomination';
+    })
+    .map(edge => {
+      const sourceRound = roundsMap.get(edge.sourceRoundId);
+      if (sourceRound) {
+        if (sourceRound.type === 'Nomination') {
+          if (edge.condition && edge.condition.type !== 'always') {
+            return { ...edge, condition: { type: 'always' } };
+          }
+        } else {
+          if (!edge.condition || edge.condition.type === 'always') {
+            return { ...edge, condition: { type: 'if_shortlisted' } };
+          }
         }
       }
-    }
-    return edge;
-  });
+      return edge;
+    });
 }
 
 export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
@@ -301,7 +306,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       updateRepresentation(storedRepresentation || inferRepresentation(normalizedRounds, normalizedEdges));
 
       // Persist migrated edges if they changed from loaded edges
-      const edgesChanged = normalizedEdges.some((edge, idx) => {
+      const edgesChanged = normalizedEdges.length !== loadedEdges.length || normalizedEdges.some((edge, idx) => {
         const loadedEdge = loadedEdges[idx];
         return !loadedEdge || JSON.stringify(edge.condition) !== JSON.stringify(loadedEdge.condition);
       });
@@ -444,9 +449,14 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       const repositioned = layoutRoundsOnCanvas(normalized);
       setRounds(repositioned);
 
-      const nextEdges = activeEvent
-        ? buildLinearEdges(activeEvent.id, repositioned)
-        : [];
+      let nextEdges: RoundEdge[];
+      if (representation === 'workflow') {
+        nextEdges = roundEdges.filter(
+          (edge) => edge.sourceRoundId !== roundId && edge.targetRoundId !== roundId
+        );
+      } else {
+        nextEdges = activeEvent ? buildLinearEdges(activeEvent.id, repositioned) : [];
+      }
       setRoundEdges(nextEdges);
 
       try {
@@ -468,7 +478,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
     },
-    [activeEvent, persistWorkflowEdges, rounds, enforceNominationFirst],
+    [activeEvent, persistWorkflowEdges, rounds, roundEdges, representation, enforceNominationFirst],
   );
 
   const handleRoundReorder = useCallback(
@@ -513,7 +523,13 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         const updatedRounds = [...rounds.filter((r) => r.id !== newRound.id), updatedRound];
         const normalized = await enforceNominationFirst(updatedRounds);
         const repositioned = layoutRoundsOnCanvas(normalized);
-        const newEdges = buildLinearEdges(activeEvent.id, repositioned);
+        
+        let newEdges: RoundEdge[];
+        if (representation === 'workflow') {
+          newEdges = [...roundEdges];
+        } else {
+          newEdges = buildLinearEdges(activeEvent.id, repositioned);
+        }
         
         await Promise.all(
           repositioned.map((round) =>
@@ -537,7 +553,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         setIsCreatingRound(false);
       }
     },
-    [activeEvent, rounds, handleRoundUpdate, enforceNominationFirst, persistWorkflowEdges],
+    [activeEvent, rounds, roundEdges, representation, handleRoundUpdate, enforceNominationFirst, persistWorkflowEdges],
   );
 
   const openConversionDialog = useCallback(
