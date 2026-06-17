@@ -352,7 +352,7 @@ export async function previewAdvancement(
       ? 'voting'
       : (round.type?.toLowerCase() === 'nomination' ? 'none' : 'scoring')
   );
-  const isJudgingRound = evalLogic === 'scoring';
+  const isJudgingRound = !isNomination && evalLogic === 'scoring';
   const hasEmptyScores = isJudgingRound && ranked.every(r => r.score === 0);
 
 

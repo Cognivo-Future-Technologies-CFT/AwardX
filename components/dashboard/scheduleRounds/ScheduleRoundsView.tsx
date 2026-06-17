@@ -620,10 +620,10 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);
     const preview = await previewAdvancement(round.id, criteriaOverride);
 
-    // Only enforce scoring guards if the round uses scoring logic.
-    const isJudgingRound = round.evaluationLogic
+    // Only enforce scoring guards if the round uses scoring logic and is not a Nomination round.
+    const isJudgingRound = round.type?.toLowerCase() !== 'nomination' && (round.evaluationLogic
       ? round.evaluationLogic === 'scoring'
-      : !['public voting', 'public rating', 'public', 'nomination'].includes(round.type?.toLowerCase());
+      : !['public voting', 'public rating', 'public'].includes(round.type?.toLowerCase()));
 
     if (preview.hasEmptyScores && isJudgingRound) {
       toast.error('No scores yet — judges must score submissions before shortlisting.');
