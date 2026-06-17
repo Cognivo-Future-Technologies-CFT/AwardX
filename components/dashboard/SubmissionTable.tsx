@@ -529,7 +529,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const judges = judgesQuery.data || [];
    const total = submissionsQuery.data?.total || 0;
    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-   const tableColumnCount = 8 + responseColumns.length;
+   const tableColumnCount = 5 + responseColumns.length;
    const isLoading = submissionsQuery.isLoading || judgesQuery.isLoading;
    const isSearching = debouncedSearch.length > 0;
 
@@ -795,7 +795,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                   <div className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-slate-100 text-sm font-black text-slate-700">{total}</div>
                   <div className="leading-tight">
                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total</div>
-                     <div className="text-xs font-semibold text-slate-700">{selectedIds.length} selected</div>
+                     <div className="text-xs font-semibold text-slate-700">Submissions</div>
                   </div>
                </div>
                <button
@@ -871,12 +871,6 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                   <div key={sub.id} className="p-4 space-y-3">
                      <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
-                           <input
-                              type="checkbox"
-                              className="mt-1 w-4.5 h-4.5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
-                              checked={selectedIds.includes(sub.id)}
-                              onChange={() => toggleSelection(sub.id)}
-                           />
                            <div className="min-w-0">
                               <button
                                  onClick={() => handleView(sub)}
@@ -934,17 +928,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                <table className="min-w-max w-full border-collapse text-left">
                   <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/70">
                      <tr className="border-b border-slate-100 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                        <th className="p-5 w-16 text-center sticky left-0 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur">
-                           <div className="flex justify-center">
-                              <input
-                                 type="checkbox"
-                                 className="w-4.5 h-4.5 cursor-pointer rounded-md border-slate-300 text-indigo-600 accent-indigo-600 focus:ring-indigo-500"
-                                 checked={selectedIds.length === submissions.length && submissions.length > 0}
-                                 onChange={toggleSelectAll}
-                              />
-                           </div>
-                        </th>
-                        <th className="p-5 sticky left-16 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur whitespace-nowrap min-w-[240px] border-r border-slate-100/80">Submission</th>
+                        <th className="p-5 sticky left-0 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur whitespace-nowrap min-w-[240px] border-r border-slate-100/80">Submission</th>
                         {responseColumns.map((column) => (
                            <th key={column.id} className="p-5 whitespace-nowrap min-w-[160px]">
                               <span className="flex items-center gap-1.5">
@@ -979,17 +963,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                            data-demo-target={rowIndex === 0 ? 'demo-submission-row-1' : undefined}
                            className={`group border-b border-slate-50 transition-all hover:bg-slate-50/70 ${selected ? 'bg-indigo-50/50' : ''}`}
                         >
-                           <td className={`p-5 text-center sticky left-0 z-10 ${rowBg} group-hover:bg-slate-50/95`}>
-                              <div className="flex justify-center">
-                                 <input
-                                    type="checkbox"
-                                    className="w-4.5 h-4.5 cursor-pointer rounded-md border-slate-300 text-indigo-600 accent-indigo-600 focus:ring-indigo-500"
-                                    checked={selected}
-                                    onChange={() => toggleSelection(sub.id)}
-                                 />
-                              </div>
-                           </td>
-                           <td className={`p-5 sticky left-16 z-10 min-w-[240px] border-r border-slate-100/80 ${rowBg} group-hover:bg-slate-50/95`}>
+                           <td className={`p-5 sticky left-0 z-10 min-w-[240px] border-r border-slate-100/80 ${rowBg} group-hover:bg-slate-50/95`}>
                               <div className="flex items-center gap-4">
                                  <div className="relative group/image shrink-0">
                                     {sub.image ? (
