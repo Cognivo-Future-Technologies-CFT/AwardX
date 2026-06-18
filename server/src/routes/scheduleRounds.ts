@@ -331,6 +331,8 @@ router.post('/:programId/rounds', requireAuth, async (req: AuthenticatedRequest,
         status: payload.status || 'draft',
         sort_order: payload.sort_order ?? 0,
         settings: payload.settings || {},
+        ...(payload.advancement_criteria !== undefined && { advancement_criteria: payload.advancement_criteria }),
+        ...(payload.advancement_trigger !== undefined && { advancement_trigger: payload.advancement_trigger }),
       })
       .select()
       .single();
@@ -403,6 +405,8 @@ router.put('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedReque
       status: payload.status,
       sort_order: payload.sort_order,
       settings: payload.settings,
+      advancement_criteria: payload.advancement_criteria,
+      advancement_trigger: payload.advancement_trigger,
     };
 
     const filteredUpdates = Object.fromEntries(

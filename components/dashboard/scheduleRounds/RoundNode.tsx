@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import RoundType, { Round, RoundEdge, OutputPort } from '../../../types/scheduleRounds';
+import { formatRoundTypeWithAudience } from '../../../lib/roundScheduleUtils';
 import { Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, MoreVertical, Sparkles } from 'lucide-react';
 
 interface RoundNodeData {
@@ -183,7 +184,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
               <h3 className={`font-bold text-sm truncate transition-colors ${isSelected ? 'text-indigo-900' : 'text-slate-800'}`}>
                 {round.name}
               </h3>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{round.type} Round</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{formatRoundTypeWithAudience(round.type)}</p>
             </div>
           </div>
 

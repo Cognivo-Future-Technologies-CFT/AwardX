@@ -22,6 +22,7 @@ import {
     Settings2,
     Sparkles,
 } from 'lucide-react';
+import { todayDateString } from '../../lib/utils';
 
 interface ProgramDetailsViewProps {
     activeEvent: Program | null;
@@ -471,6 +472,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                             <input
                                                 type="date"
                                                 value={formData.deadline || ''}
+                                                min={todayDateString()}
                                                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                                                 className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                                             />

@@ -1633,6 +1633,21 @@ class DatabaseService {
         applicant: created.applicant,
       },
     });
+
+    try {
+      await fetchBackendJson<{ ok: boolean }>(
+        `/api/execution/programs/${encodeURIComponent(programId)}/enroll-submission`,
+        {
+          method: 'POST',
+          requireAuth: true,
+          body: { submissionId: created.id },
+          errorPrefix: 'Round API',
+        },
+      );
+    } catch (enrollErr) {
+      console.warn('[pipeline] Failed to auto-enroll submission in nomination round:', enrollErr);
+    }
+
     return created;
   }
 
@@ -2761,7 +2776,15 @@ class DatabaseService {
     // Auto-enroll submission in the first round of the pipeline
     const submissionId = (data as any).id;
     try {
-      await this.enrollSubmissionInFirstRound(form.program_id, submissionId);
+      await fetchBackendJson<{ ok: boolean }>(
+        `/api/execution/programs/${encodeURIComponent(form.program_id)}/enroll-submission`,
+        {
+          method: 'POST',
+          requireAuth: true,
+          body: { submissionId },
+          errorPrefix: 'Round API',
+        },
+      );
     } catch (e) {
       console.warn('[pipeline] Failed to auto-enroll submission in first round:', e);
     }

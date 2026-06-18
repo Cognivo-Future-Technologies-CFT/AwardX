@@ -6,6 +6,7 @@ import { Program, PaymentConfig } from '../../services/models';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
+import { todayDateString } from '../../lib/utils';
 
 export const ProgramsList: React.FC = () => {
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -185,6 +186,7 @@ export const ProgramsList: React.FC = () => {
               <AppDatePicker
                 label="Deadline"
                 value={newProgram.deadline || null}
+                minDate={todayDateString()}
                 onChange={(deadline) => setNewProgram({ ...newProgram, deadline: deadline || '' })}
               />
             </div>

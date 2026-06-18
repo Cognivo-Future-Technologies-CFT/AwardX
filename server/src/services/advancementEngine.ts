@@ -355,6 +355,49 @@ async function hasJudgeScorecards(roundId: string, submissionIds: string[]): Pro
   });
 }
 
+async function publishWinnerAnnouncements(
+  programId: string,
+  advancingParticipants: ParticipantScore[],
+  options?: { announcedBy?: string | null },
+): Promise<void> {
+  if (advancingParticipants.length === 0) return;
+
+  const supabase = getSupabaseAdmin();
+  const sorted = [...advancingParticipants].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.rank - b.rank;
+  });
+
+  const rows = sorted.map((participant, idx) => ({
+    program_id: programId,
+    submission_id: participant.submissionId,
+    rank: participant.rank || idx + 1,
+    tier: idx === 0 ? 'Winner' : idx === 1 ? 'Runner-up' : idx === 2 ? 'Third place' : 'Finalist',
+    final_score: participant.score,
+    judge_score: participant.score,
+    public_votes: participant.voteCount || 0,
+    is_published: true,
+    announced_at: new Date().toISOString(),
+    ...(options?.announcedBy ? { announced_by: options.announcedBy } : {}),
+  }));
+
+  const submissionIds = rows.map((r) => r.submission_id);
+  await supabase
+    .from('winner_announcements')
+    .delete()
+    .eq('program_id', programId)
+    .in('submission_id', submissionIds);
+
+  const { error } = await supabase.from('winner_announcements').insert(rows);
+  if (error) {
+    console.error('[announcements] Failed to publish winners:', error.message);
+  }
+}
+
+function roundIsAnnounceType(type?: string | null): boolean {
+  return String(type || '').toLowerCase() === 'announce';
+}
+
 // ---- Public API ----
 
 /**
@@ -393,60 +436,7 @@ export async function previewAdvancement(
     };
   }
 
-  const supabase = getSupabaseAdmin();
-  const successors = await getSuccessorRounds(roundId, round.program_id);
-  const successorById = new Map((successors || []).map((row: any) => [row.id, row]));
-
-  const { data: outgoingEdges } = await supabase
-    .from('round_edges')
-    .select('target_round_id, condition, sort_order')
-    .eq('program_id', round.program_id)
-    .eq('source_round_id', roundId)
-    .order('sort_order', { ascending: true });
-
-  const edges = (outgoingEdges || [])
-    .filter((edge: any) => edge?.target_round_id && successorById.has(edge.target_round_id));
-
-  let advancing: ParticipantScore[] = [];
-  let eliminated: ParticipantScore[] = [];
-  let ties: ParticipantScore[] = [];
-
-  if (edges.length > 0) {
-    const shortlistedIds = new Set<string>();
-    const { data: shortlistedRows } = await supabase
-      .from('submissions')
-      .select('id, status, submission_data')
-      .in('id', submissionIds);
-
-    for (const row of shortlistedRows || []) {
-      const status = String(row.status || '').toLowerCase();
-      const dataStatus = String((row as any).submission_data?.status || '').toLowerCase();
-      const dataFlag = (row as any).submission_data?.shortlisted === true;
-      if (status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag) {
-        shortlistedIds.add(row.id);
-      }
-    }
-
-    for (const participant of ranked) {
-      let matched = false;
-      for (const edge of edges) {
-        if (await evaluateEdgeCondition(edge.condition, participant, shortlistedIds)) {
-          matched = true;
-          break;
-        }
-      }
-      if (matched) {
-        advancing.push(participant);
-      } else {
-        eliminated.push(participant);
-      }
-    }
-  } else {
-    const result = applyCriteria(ranked, criteria);
-    advancing = result.advancing;
-    eliminated = result.eliminated;
-    ties = result.ties;
-  }
+  const { advancing, eliminated, ties } = applyCriteria(ranked, criteria);
 
   if (ties.length > 0) {
     return {
@@ -767,6 +757,23 @@ export async function executeAdvancement(
           }
         }
       }
+    }
+
+    const advancingParticipants = Array.from(advancingSet)
+      .map((submissionId) => scoreMap.get(submissionId))
+      .filter(Boolean) as ParticipantScore[];
+
+    const enrolledInAnnounceRound = [...enrollmentsByRound.keys()].some((targetId) =>
+      roundIsAnnounceType((successorById.get(targetId) as any)?.type),
+    );
+
+    if (
+      advancingParticipants.length > 0
+      && (roundIsAnnounceType(round.type) || enrolledInAnnounceRound)
+    ) {
+      await publishWinnerAnnouncements(round.program_id, advancingParticipants, {
+        announcedBy: executedBy,
+      });
     }
 
     return {

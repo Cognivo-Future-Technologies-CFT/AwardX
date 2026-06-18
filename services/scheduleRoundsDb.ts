@@ -35,7 +35,9 @@ export function dbRoundToScheduleRound(dbRound: any): Round {
     blindEvaluation: settings.blindEvaluation ?? false,
     startCondition: settings.startCondition || { type: 'manual_trigger' },
     endCondition: settings.endCondition || { type: 'manual_close' },
-    shortlistConfig: settings.shortlistConfig || criteriaToShortlistConfig(dbRound.advancement_criteria),
+    shortlistConfig: dbRound.advancement_criteria
+      ? criteriaToShortlistConfig(dbRound.advancement_criteria as AdvancementCriteria)
+      : (settings.shortlistConfig || criteriaToShortlistConfig(null)),
     advancementCriteria: (dbRound.advancement_criteria as AdvancementCriteria) || shortlistConfigToCriteria(
       settings.shortlistConfig || criteriaToShortlistConfig(null),
       settings.type || dbRound.type,

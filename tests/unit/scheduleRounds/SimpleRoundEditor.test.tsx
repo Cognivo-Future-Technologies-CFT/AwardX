@@ -75,7 +75,8 @@ describe('SimpleRoundEditor', () => {
     const typeSelect = screen.getByRole('combobox');
     expect(typeSelect).not.toBeDisabled();
     expect(screen.queryByRole('option', { name: 'Nomination' })).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Shortlisting' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Shortlisting — Judging' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Public Voting — Public' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Announce' })).toBeInTheDocument();
   });
 

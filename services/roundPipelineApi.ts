@@ -85,3 +85,22 @@ export async function executeAdvancement(
 export async function resetPipeline(programId: string) {
   return postRoundAction(`/api/execution/programs/${encodeURIComponent(programId)}/reset-pipeline`);
 }
+
+export async function syncProgramEnrollments(programId: string) {
+  return fetchBackendJson<{ ok: boolean; enrolled?: number; error?: string }>(
+    `/api/execution/programs/${encodeURIComponent(programId)}/sync-enrollments`,
+    { method: 'POST', requireAuth: true, errorPrefix: 'Round API' },
+  );
+}
+
+export async function enrollSubmissionInPipeline(programId: string, submissionId: string) {
+  return fetchBackendJson<{ ok: boolean; enrolled?: number; error?: string }>(
+    `/api/execution/programs/${encodeURIComponent(programId)}/enroll-submission`,
+    {
+      method: 'POST',
+      requireAuth: true,
+      body: { submissionId },
+      errorPrefix: 'Round API',
+    },
+  );
+}

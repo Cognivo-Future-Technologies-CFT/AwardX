@@ -154,6 +154,13 @@ export default async function handler(req: any, res: any) {
           completed_at,
           assigned_at,
           submission_id,
+          round_id,
+          rounds (
+            id,
+            title,
+            type,
+            status
+          ),
           submissions (
             id,
             title,
@@ -254,6 +261,12 @@ export default async function handler(req: any, res: any) {
         submissionJudgeId: row.id,
         status: row.status,
         completedAt: row.completed_at,
+        round: row.rounds ? {
+          id: row.rounds.id,
+          name: row.rounds.title,
+          type: row.rounds.type,
+          status: row.rounds.status,
+        } : null,
         submission: row.submissions ? {
           id: row.submissions.id,
           title: row.submissions.title,

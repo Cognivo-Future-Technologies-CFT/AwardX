@@ -24,6 +24,7 @@ const JudgePortalPage = lazy(() => import('./components/pages/JudgePortalPage').
 const TeamInvitePage = lazy(() => import('./components/pages/TeamInvitePage').then((m) => ({ default: m.TeamInvitePage })));
 const MySubmissionsPage = lazy(() => import('./components/pages/MySubmissionsPage').then((m) => ({ default: m.MySubmissionsPage })));
 const PublicVotingPage = lazy(() => import('./components/pages/PublicVotingPage').then((m) => ({ default: m.PublicVotingPage })));
+const PublicAnnouncementsPage = lazy(() => import('./components/pages/PublicAnnouncementsPage').then((m) => ({ default: m.PublicAnnouncementsPage })));
 
 const RouteLoader: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -266,6 +267,8 @@ const App: React.FC = () => {
             <Route path="/program/:slug" element={<PublicProgramPage />} />
             <Route path="/vote/:slug" element={<PublicVotingPage />} />
             <Route path="/voting/:roundId" element={<PublicVotingPage />} />
+            <Route path="/announce/:programId" element={<PublicAnnouncementsPage />} />
+            <Route path="/winners/:programId" element={<PublicAnnouncementsPage />} />
             <Route
               path="/my-submissions"
               element={

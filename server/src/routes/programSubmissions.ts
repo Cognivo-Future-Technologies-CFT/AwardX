@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ensureCanManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
+import { enrollSubmissionsInRootRound } from '../services/roundEngine.js';
 
 const router = Router();
 
@@ -223,6 +224,14 @@ router.post('/:programId/submissions', requireAuth, async (req: AuthenticatedReq
     }
 
     const row = data as Record<string, unknown> & { categories?: { title?: string } | null };
+    const submissionId = String(row.id);
+
+    try {
+      await enrollSubmissionsInRootRound(programId, [submissionId]);
+    } catch (enrollErr) {
+      console.warn('[pipeline] Failed to auto-enroll submission in nomination round:', enrollErr);
+    }
+
     return res.status(201).json({
       data: mapSubmissionRow(row, row.categories?.title ?? null),
     });

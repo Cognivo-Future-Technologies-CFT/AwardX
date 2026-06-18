@@ -12,6 +12,7 @@ import { sendTeamInviteEmail } from '../../services/email';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
+import { todayDateString } from '../../lib/utils';
 import { Logo, LogoTitle } from '../Logo';
 
 interface UserData {
@@ -1135,6 +1136,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                   <AppDatePicker
                      label="Submission Deadline"
                      value={newEvent.deadline || null}
+                     minDate={todayDateString()}
                      onChange={(deadline) => setNewEvent({ ...newEvent, deadline: deadline || '' })}
                   />
                </div>
@@ -1204,6 +1206,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                   <AppDatePicker
                      label="Submission Deadline"
                      value={editingEvent.deadline || null}
+                     minDate={todayDateString()}
                      onChange={(deadline) => setEditingEvent({ ...editingEvent, deadline: deadline || '' })}
                   />
                </div>

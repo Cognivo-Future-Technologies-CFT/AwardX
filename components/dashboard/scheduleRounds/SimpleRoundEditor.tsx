@@ -3,7 +3,9 @@ import { X } from 'lucide-react';
 import type { Round } from '../../../types/scheduleRounds';
 import {
   SCHEDULER_ROUND_TYPES,
+  isVotingRoundType,
   shortlistConfigToCriteria,
+  shortlistRuleSummary,
   roundUsesShortlist,
 } from '../../../lib/roundScheduleUtils';
 import { AppDateTimePicker } from '../../ui/AppDateFields';
@@ -34,7 +36,12 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
     form.startCondition.type === 'fixed_datetime' ? form.startCondition.datetime : '';
   const endIso = form.endCondition.type === 'fixed_datetime' ? form.endCondition.datetime : '';
 
-  const showShortlist = form.type !== 'Nomination' && (roundUsesShortlist(form) || form.type === 'Shortlisting');
+  const showShortlist =
+    form.type !== 'Nomination'
+    && form.type !== 'Announce'
+    && (roundUsesShortlist(form) || form.type === 'Shortlisting' || isVotingRoundType(form.type));
+
+  const isVoting = isVotingRoundType(form.type);
 
   const handleSave = async () => {
     const trimmedName = form.name.trim();
@@ -108,11 +115,11 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
             disabled={form.order === 0}
             onChange={(e) => {
               const type = e.target.value as Round['type'];
-              const enabled = type === 'Shortlisting';
+              const enabled = type === 'Shortlisting' || isVotingRoundType(type);
               let evalLogic = form.evaluationLogic;
               if (type === 'Nomination' || type === 'Announce') {
                 evalLogic = 'none';
-              } else if (type === 'Public Voting' || type === 'Public Rating' || type === 'public') {
+              } else if (isVotingRoundType(type)) {
                 evalLogic = 'voting';
               } else if (evalLogic === 'none') {
                 evalLogic = 'scoring';
@@ -121,7 +128,14 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
                 ...form,
                 type,
                 evaluationLogic: evalLogic,
-                shortlistConfig: { ...form.shortlistConfig, enabled: enabled || form.shortlistConfig.enabled },
+                shortlistConfig: {
+                  ...form.shortlistConfig,
+                  enabled: enabled || form.shortlistConfig.enabled,
+                },
+                advancementCriteria: shortlistConfigToCriteria(
+                  { ...form.shortlistConfig, enabled: enabled || form.shortlistConfig.enabled },
+                  type,
+                ),
               });
             }}
           >
@@ -130,7 +144,7 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
             ) : (
               SCHEDULER_ROUND_TYPES.filter((t) => t !== 'Nomination').map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {t === 'Shortlisting' ? 'Shortlisting — Judging' : t === 'Public Voting' ? 'Public Voting — Public' : t}
                 </option>
               ))
             )}
@@ -169,11 +183,29 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
 
         {showShortlist && (
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
-            <p className="text-sm font-semibold text-indigo-900">Shortlist rule</p>
+            <p className="text-sm font-semibold text-indigo-900">Advancement rule</p>
             <p className="text-xs text-indigo-700/80">
-              When you run shortlist, participants are ranked by score (or votes) and only the top entries advance to the next round.
+              {isVoting
+                ? 'Choose how public votes determine who moves to the next round.'
+                : 'Choose how judge scores determine who moves to the next round.'}
             </p>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    shortlistConfig: { ...form.shortlistConfig, enabled: true, method: 'score_match' },
+                  })
+                }
+                className={`flex-1 py-2 rounded-lg text-xs font-bold border ${
+                  form.shortlistConfig.method === 'score_match'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white border-slate-200 text-slate-600'
+                }`}
+              >
+                Score match
+              </button>
               <button
                 type="button"
                 onClick={() =>
@@ -188,42 +220,34 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({
                     : 'bg-white border-slate-200 text-slate-600'
                 }`}
               >
-                Top %
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setForm({
-                    ...form,
-                    shortlistConfig: { ...form.shortlistConfig, enabled: true, method: 'fixed_count' },
-                  })
-                }
-                className={`flex-1 py-2 rounded-lg text-xs font-bold border ${
-                  form.shortlistConfig.method === 'fixed_count'
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white border-slate-200 text-slate-600'
-                }`}
-              >
-                Top N
+                Percentage
               </button>
             </div>
-            <input
-              type="number"
-              min={1}
-              max={form.shortlistConfig.method === 'percentage' ? 100 : 9999}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={form.shortlistConfig.value}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  shortlistConfig: {
-                    ...form.shortlistConfig,
-                    enabled: true,
-                    value: Number(e.target.value) || 1,
-                  },
-                })
-              }
-            />
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-indigo-800/80">
+                {form.shortlistConfig.method === 'score_match' ? 'Match value' : 'Percentage'}
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={form.shortlistConfig.method === 'percentage' ? 100 : undefined}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={form.shortlistConfig.value}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    shortlistConfig: {
+                      ...form.shortlistConfig,
+                      enabled: true,
+                      value: Number(e.target.value) || 0,
+                    },
+                  })
+                }
+              />
+            </div>
+            <p className="text-[11px] text-indigo-700/70">
+              {shortlistRuleSummary(form.shortlistConfig, form.type)}
+            </p>
           </div>
         )}
 

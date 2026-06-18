@@ -10,8 +10,11 @@ import {
   getRoundStatus,
   getPipelineStatus,
   resetPipeline,
+  syncProgramNominationEnrollments,
+  enrollSubmissionsInRootRound,
 } from '../services/roundEngine.js';
 import { canManageProgram } from '../middleware/programManagement.js';
+import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
 const router = Router();
@@ -159,6 +162,59 @@ router.post('/programs/:programId/reset-pipeline', requireAuth, async (req: Auth
     await invalidateRound(programId);
 
     return res.json({ ok: true });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.post('/programs/:programId/sync-enrollments', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId } = req.params;
+  try {
+    const permitted = await canManageProgram(req.userId || '', programId);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
+    const result = await syncProgramNominationEnrollments(programId);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    await invalidateRound(programId);
+
+    return res.json({ ok: true, enrolled: result.enrolled });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.post('/programs/:programId/enroll-submission', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId } = req.params;
+  const submissionId = typeof req.body?.submissionId === 'string' ? req.body.submissionId : '';
+  if (!submissionId) {
+    return res.status(400).json({ error: 'submissionId is required' });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: submission } = await supabase
+      .from('submissions')
+      .select('id, program_id, applicant_id')
+      .eq('id', submissionId)
+      .maybeSingle();
+
+    if (!submission || submission.program_id !== programId) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    const isOwner = submission.applicant_id && submission.applicant_id === req.userId;
+    const canManage = await canManageProgram(req.userId || '', programId);
+    if (!isOwner && !canManage) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const result = await enrollSubmissionsInRootRound(programId, [submissionId]);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    await invalidateRound(programId);
+
+    return res.json({ ok: true, enrolled: result.enrolled });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }

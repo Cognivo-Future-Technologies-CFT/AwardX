@@ -99,6 +99,85 @@ async function getSuccessorRounds(roundId: string, programId: string): Promise<R
   return rounds || [];
 }
 
+async function findRootNominationRoundId(programId: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  const [{ data: rounds }, { data: edges }] = await Promise.all([
+    supabase.from('rounds').select('id, type, sort_order, start_date').eq('program_id', programId),
+    supabase.from('round_edges').select('target_round_id').eq('program_id', programId),
+  ]);
+
+  if (!rounds || rounds.length === 0) return null;
+
+  const targetIds = new Set((edges || []).map((e) => e.target_round_id));
+  const rootRounds = rounds.filter((r) => !targetIds.has(r.id));
+  if (rootRounds.length === 0) return null;
+
+  const sortedRoots = [...rootRounds].sort((a, b) => {
+    const aSort = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER);
+    const bSort = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER);
+    if (aSort !== bSort) return aSort - bSort;
+    return String(a.start_date || '').localeCompare(String(b.start_date || ''));
+  });
+
+  const nominatedRoot = sortedRoots.find((r) => {
+    const t = String(r.type || '').toLowerCase();
+    return t === 'nomination' || t === 'submission';
+  });
+
+  return (nominatedRoot || sortedRoots[0]).id;
+}
+
+/** Enroll submissions into the program's root nomination round (skips already-enrolled). */
+export async function enrollSubmissionsInRootRound(
+  programId: string,
+  submissionIds?: string[],
+): Promise<{ ok: boolean; enrolled: number; error?: string }> {
+  const supabase = getSupabaseAdmin();
+  const rootRoundId = await findRootNominationRoundId(programId);
+  if (!rootRoundId) {
+    return { ok: true, enrolled: 0 };
+  }
+
+  let subsQuery = supabase.from('submissions').select('id').eq('program_id', programId);
+  if (submissionIds && submissionIds.length > 0) {
+    subsQuery = subsQuery.in('id', submissionIds);
+  }
+
+  const { data: subs, error: subsError } = await subsQuery;
+  if (subsError) return { ok: false, enrolled: 0, error: subsError.message };
+  if (!subs || subs.length === 0) return { ok: true, enrolled: 0 };
+
+  const { data: existing } = await supabase
+    .from('round_submissions')
+    .select('submission_id')
+    .eq('round_id', rootRoundId)
+    .in('submission_id', subs.map((s) => s.id));
+
+  const existingIds = new Set((existing || []).map((r) => r.submission_id));
+  const toEnroll = subs.filter((s) => !existingIds.has(s.id));
+  if (toEnroll.length === 0) return { ok: true, enrolled: 0 };
+
+  const rows = toEnroll.map((s) => ({
+    round_id: rootRoundId,
+    submission_id: s.id,
+    status: 'active',
+  }));
+
+  const { error: enrollError } = await supabase
+    .from('round_submissions')
+    .upsert(rows, { onConflict: 'round_id,submission_id' });
+
+  if (enrollError) return { ok: false, enrolled: 0, error: enrollError.message };
+  return { ok: true, enrolled: toEnroll.length };
+}
+
+/** Backfill any program submissions missing from the root nomination round. */
+export async function syncProgramNominationEnrollments(
+  programId: string,
+): Promise<{ ok: boolean; enrolled: number; error?: string }> {
+  return enrollSubmissionsInRootRound(programId);
+}
+
 // ---- Public API ----
 
 export async function activateRound(roundId: string, triggeredBy: string = 'admin'): Promise<{ ok: boolean; error?: string }> {
@@ -124,17 +203,10 @@ export async function activateRound(roundId: string, triggeredBy: string = 'admi
 
   // Guard: must have enrolled submissions (auto-enroll for Nomination/root rounds)
   let enrolledCount = await getEnrolledCount(roundId);
-  if (enrolledCount === 0 && round.type === 'Nomination' && predecessors.length === 0) {
-    const supabase = getSupabaseAdmin();
-    const { data: subs } = await supabase
-      .from('submissions')
-      .select('id')
-      .eq('program_id', round.program_id);
-    if (subs && subs.length > 0) {
-      const rows = subs.map(s => ({ round_id: roundId, submission_id: s.id, status: 'active' }));
-      await supabase.from('round_submissions').upsert(rows, { onConflict: 'round_id,submission_id' });
-      enrolledCount = subs.length;
-    }
+  const roundType = String(round.type || '').toLowerCase();
+  if (enrolledCount === 0 && (roundType === 'nomination' || roundType === 'submission') && predecessors.length === 0) {
+    await enrollSubmissionsInRootRound(round.program_id);
+    enrolledCount = await getEnrolledCount(roundId);
   }
   if (enrolledCount === 0) {
     return { ok: false, error: 'Cannot activate round with 0 enrolled submissions.' };
@@ -427,54 +499,8 @@ export async function resetPipeline(programId: string, triggeredBy: string = 'ad
   if (resetSubmissionsError) return { ok: false, error: resetSubmissionsError.message };
 
   // 9. Re-enroll active submissions in the root round
-  const { data: edges } = await supabase
-    .from('round_edges')
-    .select('target_round_id')
-    .eq('program_id', programId);
-
-  const targetIds = new Set((edges || []).map(e => e.target_round_id));
-  const rootRounds = rounds.filter(r => !targetIds.has(r.id));
-
-  if (rootRounds.length > 0) {
-    const { data: fullRounds } = await supabase
-      .from('rounds')
-      .select('id, type, sort_order, start_date')
-      .in('id', rootRounds.map(r => r.id));
-
-    if (fullRounds && fullRounds.length > 0) {
-      const sortedRoots = [...fullRounds].sort((a: any, b: any) => {
-        const aSort = Number(a.sort_order ?? Number.MAX_SAFE_INTEGER);
-        const bSort = Number(b.sort_order ?? Number.MAX_SAFE_INTEGER);
-        if (aSort !== bSort) return aSort - bSort;
-        return String(a.start_date || '').localeCompare(String(b.start_date || ''));
-      });
-
-      const nominatedRoot = sortedRoots.find((r: any) => {
-        const t = String(r.type || '').toLowerCase();
-        return t === 'nomination' || t === 'submission';
-      });
-
-      const selectedRoot = nominatedRoot || sortedRoots[0];
-
-      const { data: subs } = await supabase
-        .from('submissions')
-        .select('id')
-        .eq('program_id', programId);
-
-      if (subs && subs.length > 0) {
-        const rows = subs.map(s => ({
-          round_id: selectedRoot.id,
-          submission_id: s.id,
-          status: 'active'
-        }));
-        const { error: enrollError } = await supabase
-          .from('round_submissions')
-          .upsert(rows, { onConflict: 'round_id,submission_id' });
-        
-        if (enrollError) return { ok: false, error: enrollError.message };
-      }
-    }
-  }
+  const enrollResult = await enrollSubmissionsInRootRound(programId);
+  if (!enrollResult.ok) return { ok: false, error: enrollResult.error };
 
   // 10. Log transition logs
   for (const r of rounds) {

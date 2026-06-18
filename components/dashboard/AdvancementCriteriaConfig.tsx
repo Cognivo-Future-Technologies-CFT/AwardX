@@ -27,7 +27,7 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
     all_pass: 'All participants advance to the next round.',
     top_n: 'Top N participants by score/votes advance.',
     top_percent: 'Top N% of participants by score/votes advance.',
-    score_threshold: 'Participants meeting or exceeding a score threshold advance.',
+    score_threshold: 'Only participants at or above the score match value advance.',
     manual: 'Admin manually selects who advances.',
   };
 
@@ -65,7 +65,13 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span>{type.replace('_', ' ').toUpperCase()}</span>
+                  <span>
+                    {type === 'score_threshold'
+                      ? 'SCORE MATCH'
+                      : type === 'top_percent'
+                        ? 'PERCENTAGE'
+                        : type.replace('_', ' ').toUpperCase()}
+                  </span>
                   {selectedType === type && <div className="w-2 h-2 bg-indigo-600 rounded-full" />}
                 </div>
               </button>
@@ -113,7 +119,7 @@ export const AdvancementCriteriaConfig: React.FC<AdvancementCriteriaConfigProps>
           {selectedType === 'score_threshold' && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
               <div className="space-y-2">
-                <label className="block text-[11px] font-bold text-slate-400">Minimum Score</label>
+                <label className="block text-[11px] font-bold text-slate-400">Score match value</label>
                 <input
                   type="number"
                   min="0"

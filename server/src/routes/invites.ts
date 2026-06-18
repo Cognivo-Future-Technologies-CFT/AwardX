@@ -490,12 +490,12 @@ async function handleVerifyJudge(req: any, res: any) {
 				submissionJudgeId: row.id,
 				status: row.status,
 				completedAt: row.completed_at,
-				round: row.round_info || (row.rounds ? {
+				round: (row.rounds ? {
 					id: row.rounds.id,
 					name: row.rounds.title,
 					type: row.rounds.type,
 					status: row.rounds.status,
-				} : null),
+				} : null) || row.round_info,
 				submission: row.submissions ? {
 					id: row.submissions.id,
 					title: row.submissions.title,

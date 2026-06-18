@@ -15,17 +15,35 @@ export const SCHEDULER_ROUND_TYPES = [
 
 export type SchedulerRoundType = (typeof SCHEDULER_ROUND_TYPES)[number];
 
+export function isVotingRoundType(type: Round['type']): boolean {
+  return type === 'Public Voting' || type === 'Public Rating' || type === 'public';
+}
+
+export function isJudgingRoundType(type: Round['type']): boolean {
+  return type === 'Shortlisting' || type === 'jury' || type === 'hybrid';
+}
+
 export function shortlistConfigToCriteria(
   config: ShortlistConfig,
   roundType: Round['type'],
 ): AdvancementCriteria {
-  const usesShortlist = roundType === 'Shortlisting' || config.enabled;
+  const usesShortlist =
+    roundType === 'Shortlisting'
+    || isVotingRoundType(roundType)
+    || config.enabled;
   if (!usesShortlist) {
     return { type: 'all_pass' };
   }
 
   if (config.method === 'fixed_count') {
     return { type: 'top_n', value: Math.max(1, Math.round(config.value || 1)) };
+  }
+
+  if (config.method === 'score_match') {
+    return {
+      type: 'score_threshold',
+      value: Math.min(100, Math.max(0, Math.round(config.value || 0))),
+    };
   }
 
   return {
@@ -47,7 +65,27 @@ export function criteriaToShortlistConfig(criteria: AdvancementCriteria | null |
     return { enabled: true, method: 'percentage', value: criteria.value, visibility: ['admin'] };
   }
 
+  if (criteria.type === 'score_threshold') {
+    return { enabled: true, method: 'score_match', value: criteria.value, visibility: ['admin'] };
+  }
+
   return { enabled: true, method: 'percentage', value: 50, visibility: ['admin'] };
+}
+
+export function shortlistRuleSummary(config: ShortlistConfig, roundType?: Round['type']): string {
+  if (!config.enabled && roundType !== 'Shortlisting' && roundType !== 'Public Voting') {
+    return '';
+  }
+  const isVoting = roundType ? isVotingRoundType(roundType) : false;
+  if (config.method === 'score_match') {
+    return isVoting
+      ? `Score match ${config.value} — entries with ${config.value}+ votes advance`
+      : `Score match ${config.value} — entries scored ${config.value}+ advance`;
+  }
+  if (config.method === 'fixed_count') {
+    return `Top ${config.value} entries advance`;
+  }
+  return `Top ${config.value}% of entries advance`;
 }
 
 export function createDefaultRound(
@@ -58,30 +96,39 @@ export function createDefaultRound(
 ): Round {
   const start = new Date();
   const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const roundType = type as Round['type'];
+  const votingRound = isVotingRoundType(roundType);
+
+  const shortlistConfig: ShortlistConfig = {
+    enabled: type !== 'Nomination' && type !== 'Announce' && order > 0,
+    method: votingRound ? 'percentage' : 'score_match',
+    value: 50,
+    visibility: ['admin'],
+  };
 
   return {
     id: `round-${Date.now()}`,
     programId,
     name,
     type,
-    evaluationLogic: type === 'Nomination' || type === 'Announce' ? 'none' : 'scoring',
+    evaluationLogic:
+      type === 'Nomination' || type === 'Announce'
+        ? 'none'
+        : votingRound
+          ? 'voting'
+          : 'scoring',
     evaluatorStrategy: 'all_judges',
     blindEvaluation: false,
     startCondition: { type: 'fixed_datetime', datetime: start.toISOString() },
     endCondition: { type: 'fixed_datetime', datetime: end.toISOString() },
-    shortlistConfig: {
-      enabled: type !== 'Nomination' && type !== 'Announce' && order > 0,
-      method: 'percentage',
-      value: 50,
-      visibility: ['admin'],
-    },
+    shortlistConfig,
     order,
     status: 'draft',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     version: 1,
     advancementTrigger: 'manual',
-    advancementCriteria: order > 0 ? { type: 'top_percent', value: 50 } : { type: 'all_pass' },
+    advancementCriteria: shortlistConfigToCriteria(shortlistConfig, roundType),
     ...(order === 0 && { inputPorts: [], outputPorts: [{ id: 'output-0', name: 'Submissions', dataStreams: ['all'] }] }),
   };
 }
@@ -110,7 +157,11 @@ export function buildLinearEdges(programId: string, orderedRounds: Round[]): Rou
 
 export function roundUsesShortlist(round: Round): boolean {
   if (round.type === 'Nomination' || round.type === 'Announce') return false;
-  return round.type === 'Shortlisting' || round.shortlistConfig.enabled;
+  return (
+    round.type === 'Shortlisting'
+    || isVotingRoundType(round.type)
+    || round.shortlistConfig.enabled
+  );
 }
 
 export function formatRoundDates(round: Round): string {
@@ -128,6 +179,41 @@ export function formatRoundDates(round: Round): string {
   };
 
   return `${fmt(start)} → ${fmt(end)}`;
+}
+
+/** User-facing round type label for judge/voting portals. */
+export function formatRoundTypeLabel(type?: string | null): string {
+  if (!type) return 'Judging';
+  switch (type) {
+    case 'Nomination':
+      return 'Shortlisting';
+    case 'Shortlisting':
+    case 'jury':
+    case 'hybrid':
+      return 'Shortlisting — Judging';
+    case 'Public Voting':
+    case 'Public Rating':
+    case 'public':
+      return 'Public Voting — Public';
+    case 'Announce':
+      return 'Announcement';
+    default:
+      return type;
+  }
+}
+
+/** Schedule UI: round type with audience qualifier (Judging / Public). */
+export function formatRoundTypeWithAudience(type?: string | null): string {
+  const normalized = String(type || '').toLowerCase();
+  if (normalized === 'shortlisting' || normalized === 'jury' || normalized === 'hybrid') {
+    return 'Shortlisting — Judging';
+  }
+  if (normalized === 'public voting' || normalized === 'public rating' || normalized === 'public') {
+    return 'Public Voting — Public';
+  }
+  if (normalized === 'nomination') return 'Nomination';
+  if (normalized === 'announce') return 'Announce';
+  return type || 'Round';
 }
 
 export function primaryActionLabel(round: Round, hasNextRound: boolean): string | null {

@@ -30,13 +30,19 @@ import {
   executeAdvancement,
   previewAdvancement,
   resetPipeline,
+  syncProgramEnrollments,
   type AdvancementPreview,
 } from '../../../services/roundPipelineApi';
-import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges } from '../../../lib/roundScheduleUtils';
+import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges, isVotingRoundType } from '../../../lib/roundScheduleUtils';
+import {
+  fetchJudgeScoresBySubmission,
+  fetchVoteCountsBySubmission,
+} from '../../../lib/roundInsightUtils';
 import type { AdvancementCriteria } from '../../../types/scheduleRounds';
 import { AddRoundSheet } from './AddRoundSheet';
 import { validateRoundTransitions } from '../../../lib/flowValidation';
 import { Modal } from '../../Modal';
+import { fireCelebrationConfetti } from '../../../lib/confetti';
 
 interface RoundCardInsight {
   participantTotal: number;
@@ -209,18 +215,45 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
           }
 
           const participantAdvanced = data.filter((row: any) => row.status === 'advanced').length;
+          const submissionIds = data
+            .map((row: any) => row.submission_id || row.submissions?.id)
+            .filter(Boolean) as string[];
+
+          const votingRound = isVotingRoundType(round.type);
+          const voteCounts = votingRound && supabase
+            ? await fetchVoteCountsBySubmission(supabase, round.id)
+            : new Map<string, number>();
+          const judgeScores = !votingRound && supabase && activeEvent
+            ? await fetchJudgeScoresBySubmission(supabase, round.id, activeEvent.id, submissionIds)
+            : new Map<string, number>();
 
           const participants = data.map((row: any) => {
             const sub = row.submissions;
+            const submissionId = sub?.id || row.submission_id || row.id;
             const status: 'active' | 'advanced' | 'eliminated' =
               row.status === 'advanced' ? 'advanced' : row.status === 'eliminated' ? 'eliminated' : 'active';
+
+            if (votingRound) {
+              return {
+                id: submissionId,
+                name: sub?.applicant_name || sub?.title || 'Unknown',
+                avatarUrl: sub?.cover_image_url || undefined,
+                status,
+                votes: voteCounts.get(submissionId) ?? 0,
+              };
+            }
+
+            const roundScore =
+              row.carried_score ??
+              judgeScores.get(submissionId) ??
+              (typeof sub?.average_score === 'number' ? sub.average_score : null);
+
             return {
-              id: sub?.id || row.submission_id || row.id,
+              id: submissionId,
               name: sub?.applicant_name || sub?.title || 'Unknown',
               avatarUrl: sub?.cover_image_url || undefined,
               status,
-              score: sub?.average_score ?? null,
-              votes: sub?.votes_count ?? undefined,
+              score: roundScore,
             };
           });
 
@@ -327,6 +360,14 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       } else if (!customDetected) {
         customEdgeWarningShown.current = false;
       }
+
+      // Auto-enroll any submissions missing from the nomination round
+      try {
+        await syncProgramEnrollments(activeEvent.id);
+        await loadRoundInsights(normalizedRounds, { silent: true });
+      } catch (syncErr) {
+        console.warn('[pipeline] Failed to sync nomination enrollments:', syncErr);
+      }
     } catch (error) {
       console.error('Failed to load workflow:', error);
       setRounds([]);
@@ -336,7 +377,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       hasLoadedOnceRef.current = true;
       setIsLoading(false);
     }
-  }, [activeEvent, enforceNominationFirst, updateRepresentation, persistWorkflowEdges]);
+  }, [activeEvent, enforceNominationFirst, updateRepresentation, persistWorkflowEdges, loadRoundInsights]);
 
   const insightsLoadedOnceRef = useRef(false);
 
@@ -762,11 +803,15 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
       const finalTargetRoundId = targetRoundId || rounds[rounds.findIndex((r) => r.id === advancementModal.roundId) + 1]?.id;
       const targetRound = rounds.find((r) => r.id === finalTargetRoundId);
+      const isFinalRound = !targetRound;
       if (targetRound && (targetRound.status === 'draft' || targetRound.status === 'scheduled')) {
         await activateRound(targetRound.id);
         toast.success(`Advanced participants into "${targetRound.name}"`);
       } else {
         toast.success('Round shortlist completed');
+        if (isFinalRound) {
+          fireCelebrationConfetti();
+        }
       }
 
       setAdvancementModal(null);

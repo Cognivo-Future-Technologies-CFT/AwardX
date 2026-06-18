@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Round } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
 import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar, Play } from 'lucide-react';
-import { primaryActionLabel } from '../../../lib/roundScheduleUtils';
+import { primaryActionLabel, formatRoundTypeWithAudience, shortlistRuleSummary } from '../../../lib/roundScheduleUtils';
+import { participantMetricLabel, participantPillLabel } from '../../../lib/roundInsightUtils';
+import { RoundCardShareLinks } from './RoundCardShareLinks';
 import { Button } from '../../Button';
 import { Reorder } from 'framer-motion';
 import { Modal } from '../../Modal';
@@ -219,9 +221,8 @@ export const TileView: React.FC<TileViewProps> = ({
                         </div>
                         <div className="min-w-0 flex-1">
                           <h4 className="font-bold text-slate-900 text-lg mb-1">{round.name}</h4>
-                          <p className="text-sm text-slate-500 capitalize">
-                            {round.type}
-                            {round.evaluationLogic && round.evaluationLogic !== 'none' && ` • ${round.evaluationLogic}`}
+                          <p className="text-sm text-slate-500">
+                            {formatRoundTypeWithAudience(round.type)}
                           </p>
                         </div>
                       </div>
@@ -250,11 +251,7 @@ export const TileView: React.FC<TileViewProps> = ({
                             )}
                           </div>
                           <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                            {insightsLoading
-                              ? 'Participants...'
-                              : (roundInsights?.[round.id]?.participantTotal || 0) > 0
-                                ? `${roundInsights[round.id].participantTotal} nominations`
-                                : 'Enroll submissions'}
+                            {participantPillLabel(round, roundInsights?.[round.id]?.participantTotal || 0, insightsLoading)}
                           </span>
                           {!insightsLoading && (roundInsights?.[round.id]?.participantAdvanced || 0) > 0 && (
                             <span className="text-[11px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
@@ -328,15 +325,15 @@ export const TileView: React.FC<TileViewProps> = ({
                       )}
                     </div>
 
-                    {round.shortlistConfig.enabled && (
+                    {(round.shortlistConfig.enabled || round.type === 'Shortlisting' || round.type === 'Public Voting') && (
                       <div className="mt-3 pt-3 border-t border-slate-100">
                         <span className="text-xs text-indigo-600 font-medium">
-                          Shortlist: {round.shortlistConfig.method === 'percentage'
-                            ? `${round.shortlistConfig.value}%`
-                            : `${round.shortlistConfig.value} entries`}
+                          {shortlistRuleSummary(round.shortlistConfig, round.type)}
                         </span>
                       </div>
                     )}
+
+                    <RoundCardShareLinks round={round} programId={programId} />
 
                     {pipelineAction && !round.isFinalized && onAdvanceRound && (
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
@@ -406,7 +403,9 @@ export const TileView: React.FC<TileViewProps> = ({
           <div className="text-sm text-slate-500">No participants enrolled in this round yet.</div>
         ) : (
           <div className="space-y-2">
-            {(participantsListRound ? (roundInsights?.[participantsListRound.id]?.participants || []) : []).map(participant => (
+            {(participantsListRound ? (roundInsights?.[participantsListRound.id]?.participants || []) : []).map(participant => {
+              const metric = participantsListRound ? participantMetricLabel(participantsListRound) : 'score';
+              return (
               <div key={participant.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="w-10 h-10 border border-slate-200">
@@ -418,14 +417,20 @@ export const TileView: React.FC<TileViewProps> = ({
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-900 truncate">{participant.name}</p>
                     <div className="text-xs text-slate-500 flex items-center gap-2">
-                      {typeof participant.score === 'number' && <span>Score {participant.score.toFixed(1)}</span>}
-                      {typeof participant.votes === 'number' && <span>Votes {participant.votes}</span>}
+                      {metric === 'votes' ? (
+                        <span>Votes {participant.votes ?? 0}</span>
+                      ) : typeof participant.score === 'number' ? (
+                        <span>Score {participant.score.toFixed(1)}</span>
+                      ) : (
+                        <span>No score yet</span>
+                      )}
                     </div>
                   </div>
                 </div>
                 {getParticipantStatusBadge(participant.status)}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </Modal>

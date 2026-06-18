@@ -15,6 +15,12 @@ import {
 import { supabase } from '../../../services/supabase';
 import { db } from '../../../services/database';
 import { queryKeys } from '../../../services/queryKeys';
+import {
+  isVotingRoundType,
+  roundUsesShortlist,
+  shortlistConfigToCriteria,
+  shortlistRuleSummary,
+} from '../../../lib/roundScheduleUtils';
 
 interface RoundConfigurationPanelProps {
   round: Round;
@@ -123,7 +129,11 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
       const next = { ...prev, [field]: value };
       if (field === 'type') {
         const valLower = value?.toLowerCase();
-        if (['public voting', 'public rating', 'public'].includes(valLower)) {
+        const votingRound = isVotingRoundType(value as Round['type']);
+        const inherentAdvancement =
+          valLower === 'shortlisting' || votingRound;
+
+        if (votingRound) {
           next.evaluationLogic = 'voting';
         } else if (valLower === 'nomination' || valLower === 'announce') {
           next.evaluationLogic = 'none';
@@ -131,6 +141,14 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
           next.advancementCriteria = { type: 'all_pass' };
         } else if (prev.evaluationLogic === 'none') {
           next.evaluationLogic = 'scoring';
+        }
+
+        if (inherentAdvancement) {
+          next.shortlistConfig = {
+            ...next.shortlistConfig,
+            enabled: true,
+          };
+          next.advancementCriteria = shortlistConfigToCriteria(next.shortlistConfig, value);
         }
       }
       return next;
@@ -147,7 +165,21 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   };
 
   const handleShortlistConfigChange = (config: Partial<ShortlistConfig>) => {
-    handleChange('shortlistConfig', { ...formData.shortlistConfig, ...config });
+    setFormData((prev) => {
+      const inherentAdvancement =
+        prev.type === 'Shortlisting' || isVotingRoundType(prev.type);
+      const nextShortlist = {
+        ...prev.shortlistConfig,
+        ...config,
+        enabled: inherentAdvancement ? true : (config.enabled ?? prev.shortlistConfig.enabled),
+      };
+      return {
+        ...prev,
+        shortlistConfig: nextShortlist,
+        advancementCriteria: shortlistConfigToCriteria(nextShortlist, prev.type),
+      };
+    });
+    setHasChanges(true);
   };
 
   const handleOutputPortSave = (port: OutputPort) => {
@@ -212,9 +244,13 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
     try {
       const isAnnounce = formData.type?.toLowerCase() === 'announce';
       const isNomination = formData.type?.toLowerCase() === 'nomination';
+      const inherentAdvancement =
+        formData.type === 'Shortlisting' || isVotingRoundType(formData.type);
       const normalizedShortlist = (isNomination || isAnnounce)
         ? { ...formData.shortlistConfig, enabled: false }
-        : formData.shortlistConfig;
+        : inherentAdvancement
+          ? { ...formData.shortlistConfig, enabled: true }
+          : formData.shortlistConfig;
 
       const roundToSave = {
         ...formData,
@@ -222,7 +258,7 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
         shortlistConfig: normalizedShortlist,
         advancementCriteria: (isNomination || isAnnounce)
           ? { type: 'all_pass' as const }
-          : formData.advancementCriteria,
+          : shortlistConfigToCriteria(normalizedShortlist, formData.type),
         updatedAt: new Date().toISOString(),
         version: formData.version + 1,
       };
@@ -523,77 +559,49 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
             </div>
           </section>
 
-          {/* Shortlist Configuration — not used for nomination or announce rounds */}
-          {formData.type?.toLowerCase() !== 'nomination' && formData.type?.toLowerCase() !== 'announce' && (
+          {/* Advancement rule — Shortlisting (Judging) and Public Voting (Public) */}
+          {formData.type?.toLowerCase() !== 'nomination'
+            && formData.type?.toLowerCase() !== 'announce'
+            && (formData.type === 'Shortlisting' || isPublicVotingRound || roundUsesShortlist(formData)) && (
             <section className="space-y-4">
-              <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Pipeline Output</h4>
+              <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Advancement Rule</h4>
               <div className="space-y-5 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">
-                <button
-                  onClick={() => handleShortlistConfigChange({ enabled: !formData.shortlistConfig.enabled })}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${formData.shortlistConfig.enabled ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200/60 text-slate-600'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Plus className={`w-4 h-4 transition-transform duration-500 ${formData.shortlistConfig.enabled ? 'rotate-45' : ''}`} />
-                    <span className="text-sm font-bold">Announce Result</span>
-                  </div>
-                  <div className={`w-10 h-5 rounded-full relative transition-colors ${formData.shortlistConfig.enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}>
-                    <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all shadow-md ${formData.shortlistConfig.enabled ? 'left-[23px]' : 'left-1'}`} />
-                  </div>
-                </button>
-
-                <AnimatePresence>
-                  {formData.shortlistConfig.enabled && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="space-y-5 overflow-hidden"
+                <p className="text-xs text-slate-500 px-1">
+                  {isPublicVotingRound
+                    ? 'Choose how public votes determine who moves to the next round.'
+                    : 'Choose how judge scores determine who moves to the next round.'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { id: 'score_match' as const, label: 'Score match' },
+                    { id: 'percentage' as const, label: 'Percentage' },
+                  ]).map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleShortlistConfigChange({ method: id })}
+                      className={`px-4 py-3 rounded-xl text-[10px] font-black tracking-tighter uppercase transition-all border ${formData.shortlistConfig.method === id ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-200/50'}`}
                     >
-                      <div className="grid grid-cols-2 gap-3">
-                        {['percentage', 'fixed_count'].map((method) => (
-                          <button
-                            key={method}
-                            onClick={() => handleShortlistConfigChange({ method: method as 'percentage' | 'fixed_count' })}
-                            className={`px-4 py-3 rounded-xl text-[10px] font-black tracking-tighter uppercase transition-all border ${formData.shortlistConfig.method === method ? 'bg-white border-indigo-200 text-indigo-600 shadow-sm' : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-200/50'}`}
-                          >
-                            {method.replace('_', ' ')}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-[11px] font-bold text-slate-400 ml-1">Threshold</label>
-                        <input
-                          type="number"
-                          value={formData.shortlistConfig.value}
-                          onChange={(e) => handleShortlistConfigChange({ value: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-                          className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-black transition-all"
-                          min={0}
-                          max={formData.shortlistConfig.method === 'percentage' ? 100 : undefined}
-                        />
-                      </div>
-                      <div className="space-y-3">
-                        <label className="block text-[11px] font-bold text-slate-400 ml-1">Audience Scope</label>
-                        <div className="flex flex-wrap gap-2">
-                          {(['admin', 'judges', 'public'] as const).map((visibility) => (
-                            <button
-                              key={visibility}
-                              onClick={() => {
-                                const current = formData.shortlistConfig.visibility;
-                                const updated = current.includes(visibility)
-                                  ? current.filter(v => v !== visibility)
-                                  : [...current, visibility];
-                                handleShortlistConfigChange({ visibility: updated });
-                              }}
-                              className={`px-4 py-2 rounded-full text-[10px] font-bold transition-all border capitalize ${formData.shortlistConfig.visibility.includes(visibility) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                            >
-                              {visibility}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-400 ml-1">
+                    {formData.shortlistConfig.method === 'score_match' ? 'Match value' : 'Percentage'}
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.shortlistConfig.value}
+                    onChange={(e) => handleShortlistConfigChange({ value: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                    className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-black transition-all"
+                    min={0}
+                    max={formData.shortlistConfig.method === 'percentage' ? 100 : undefined}
+                  />
+                </div>
+                <p className="text-[11px] text-indigo-700/70 px-1">
+                  {shortlistRuleSummary(formData.shortlistConfig, formData.type)}
+                </p>
               </div>
             </section>
           )}

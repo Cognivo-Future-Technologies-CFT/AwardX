@@ -43,8 +43,9 @@ export type ShortlistVisibility = 'admin' | 'judges' | 'public';
 
 export interface ShortlistConfig {
   enabled: boolean;
-  method: 'percentage' | 'fixed_count';
-  value: number; // percentage (0-100) or count
+  /** score_match = minimum score/votes to advance; percentage = top N% by rank */
+  method: 'score_match' | 'percentage' | 'fixed_count';
+  value: number;
   visibility: ShortlistVisibility[];
 }
 
