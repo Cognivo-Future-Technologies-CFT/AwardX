@@ -117,7 +117,7 @@ export const AddRoundSheet: React.FC<AddRoundSheetProps> = ({
                     disabled={isFirstRound}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50"
                   >
-                    {SCHEDULER_ROUND_TYPES.map((t) => (
+                    {SCHEDULER_ROUND_TYPES.filter(t => isFirstRound || t !== 'Nomination').map((t) => (
                       <option key={t} value={t}>
                         {t}
                       </option>

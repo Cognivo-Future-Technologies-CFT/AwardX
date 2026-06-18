@@ -25,12 +25,12 @@ async function getProgram(programId: string): Promise<ProgramRow | null> {
   return data || null;
 }
 
-async function canManageOrganizationProgram(userId: string, organizationId: string): Promise<boolean> {
+async function canManageOrganizationProgram(userId: string, organizationId: string, programId?: string): Promise<boolean> {
   const supabase = getSupabaseAdmin();
 
   const { data: memberships, error: membershipError } = await supabase
     .from('organization_members')
-    .select('status, roles(name, permissions)')
+    .select('status, program_id, roles(name, permissions)')
     .eq('organization_id', organizationId)
     .eq('user_id', userId)
     .eq('status', 'active');
@@ -40,11 +40,21 @@ async function canManageOrganizationProgram(userId: string, organizationId: stri
   }
 
   return (memberships || []).some((membership: any) => {
-    const roleName = String(membership.roles?.name || '').toLowerCase().trim();
-    const rolePermissions = Array.isArray(membership.roles?.permissions)
-      ? membership.roles.permissions.map((value: unknown) => String(value).toLowerCase().trim())
-      : [];
-    return ALLOWED_ROLE_NAMES.has(roleName) || rolePermissions.some((permission: string) => ALLOWED_PERMISSION_KEYS.has(permission));
+    // Org-wide membership (not scoped to a specific program) holds management rights over all programs.
+    if (membership.program_id === null) {
+      return true;
+    }
+
+    // Program-specific membership is allowed if it matches the current programId
+    if (programId && membership.program_id === programId) {
+      const roleName = String(membership.roles?.name || '').toLowerCase().trim();
+      const rolePermissions = Array.isArray(membership.roles?.permissions)
+        ? membership.roles.permissions.map((value: unknown) => String(value).toLowerCase().trim())
+        : [];
+      return ALLOWED_ROLE_NAMES.has(roleName) || rolePermissions.some((permission: string) => ALLOWED_PERMISSION_KEYS.has(permission));
+    }
+
+    return false;
   });
 }
 
@@ -58,7 +68,7 @@ export async function canManageProgram(userId: string, programId: string): Promi
     return false;
   }
 
-  return canManageOrganizationProgram(userId, program.organization_id);
+  return canManageOrganizationProgram(userId, program.organization_id, programId);
 }
 
 export async function ensureCanManageProgram(userId: string, programId: string): Promise<{
@@ -74,7 +84,7 @@ export async function ensureCanManageProgram(userId: string, programId: string):
     return { ok: false, status: 404, error: 'Program not found' };
   }
 
-  const permitted = await canManageOrganizationProgram(userId, program.organization_id);
+  const permitted = await canManageOrganizationProgram(userId, program.organization_id, programId);
   if (!permitted) {
     return { ok: false, status: 403, error: 'Insufficient permissions' };
   }

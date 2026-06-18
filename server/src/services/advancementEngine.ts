@@ -393,7 +393,60 @@ export async function previewAdvancement(
     };
   }
 
-  const { advancing, eliminated, ties } = applyCriteria(ranked, criteria);
+  const supabase = getSupabaseAdmin();
+  const successors = await getSuccessorRounds(roundId, round.program_id);
+  const successorById = new Map((successors || []).map((row: any) => [row.id, row]));
+
+  const { data: outgoingEdges } = await supabase
+    .from('round_edges')
+    .select('target_round_id, condition, sort_order')
+    .eq('program_id', round.program_id)
+    .eq('source_round_id', roundId)
+    .order('sort_order', { ascending: true });
+
+  const edges = (outgoingEdges || [])
+    .filter((edge: any) => edge?.target_round_id && successorById.has(edge.target_round_id));
+
+  let advancing: ParticipantScore[] = [];
+  let eliminated: ParticipantScore[] = [];
+  let ties: ParticipantScore[] = [];
+
+  if (edges.length > 0) {
+    const shortlistedIds = new Set<string>();
+    const { data: shortlistedRows } = await supabase
+      .from('submissions')
+      .select('id, status, submission_data')
+      .in('id', submissionIds);
+
+    for (const row of shortlistedRows || []) {
+      const status = String(row.status || '').toLowerCase();
+      const dataStatus = String((row as any).submission_data?.status || '').toLowerCase();
+      const dataFlag = (row as any).submission_data?.shortlisted === true;
+      if (status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag) {
+        shortlistedIds.add(row.id);
+      }
+    }
+
+    for (const participant of ranked) {
+      let matched = false;
+      for (const edge of edges) {
+        if (await evaluateEdgeCondition(edge.condition, participant, shortlistedIds)) {
+          matched = true;
+          break;
+        }
+      }
+      if (matched) {
+        advancing.push(participant);
+      } else {
+        eliminated.push(participant);
+      }
+    }
+  } else {
+    const result = applyCriteria(ranked, criteria);
+    advancing = result.advancing;
+    eliminated = result.eliminated;
+    ties = result.ties;
+  }
 
   if (ties.length > 0) {
     return {
@@ -439,11 +492,18 @@ export async function executeAdvancement(
   }
 
   try {
+    const normalizedOverrides = (overrides || []).map((o) => {
+      let action = o.action as string;
+      if (action === 'advance') action = 'force_advance';
+      if (action === 'eliminate') action = 'force_eliminate';
+      return { ...o, action } as AdvancementOverride;
+    });
+
     // Get preview
     const preview = await previewAdvancement(roundId, criteriaOverride);
 
     // Handle empty scores — skip for Nomination rounds (they don't need scores)
-    if (preview.hasEmptyScores && !overrides?.length && round.type?.toLowerCase() !== 'nomination') {
+    if (preview.hasEmptyScores && !normalizedOverrides.length && round.type?.toLowerCase() !== 'nomination') {
       return { ok: false, paused: true, reason: 'no_scores', error: 'No scores submitted. Cannot auto-advance with empty data.' };
     }
 
@@ -452,7 +512,7 @@ export async function executeAdvancement(
     const eliminatedSet = new Set(preview.eliminated.map(p => p.submissionId));
 
     // Handle ties — auto-eliminate if no resolutions provided
-    if (preview.ties.length > 0 && !tieResolutions?.length && !overrides?.length) {
+    if (preview.ties.length > 0 && !tieResolutions?.length && !normalizedOverrides.length) {
       for (const tie of preview.ties) {
         eliminatedSet.add(tie.submissionId);
       }
@@ -465,7 +525,7 @@ export async function executeAdvancement(
     }
 
     // Apply overrides
-    for (const override of (overrides || [])) {
+    for (const override of normalizedOverrides) {
       if (override.action === 'force_advance') {
         advancingSet.add(override.submissionId);
         eliminatedSet.delete(override.submissionId);
@@ -540,13 +600,20 @@ export async function executeAdvancement(
           }
         }
 
+        const forceAdvancedIds = new Set(
+          normalizedOverrides
+            .filter((o) => o.action === 'force_advance')
+            .map((o) => o.submissionId)
+        );
+
         const unroutedSubmissionIds: string[] = [];
 
         for (const participant of advancingParticipants) {
           let matchedTargetRoundId: string | null = null;
 
           for (const edge of edges) {
-            const allowed = await evaluateEdgeCondition(edge.condition, participant, shortlistedIds);
+            const isForceAdvanced = forceAdvancedIds.has(participant.submissionId);
+            const allowed = isForceAdvanced || await evaluateEdgeCondition(edge.condition, participant, shortlistedIds);
             if (!allowed) continue;
 
             matchedTargetRoundId = edge.target_round_id;
@@ -600,10 +667,10 @@ export async function executeAdvancement(
 
     const advancingDetails = Array.from(advancingSet).map((subId) => {
       const participant = scoreMap.get(subId);
-      const override = overrides?.find((o) => o.submissionId === subId);
+      const override = normalizedOverrides.find((o) => o.submissionId === subId);
       return {
         submission_id: subId,
-        outcome: override ? 'override_advanced' : 'advanced',
+        outcome: override ? 'override' : 'advanced',
         rank: participant?.rank || null,
         score: participant?.score || null,
         vote_count: participant?.voteCount || null,
@@ -614,10 +681,10 @@ export async function executeAdvancement(
 
     const eliminatedDetails = Array.from(eliminatedSet).map((subId) => {
       const participant = scoreMap.get(subId);
-      const override = overrides?.find((o) => o.submissionId === subId);
+      const override = normalizedOverrides.find((o) => o.submissionId === subId);
       return {
         submission_id: subId,
-        outcome: override ? 'override_eliminated' : 'eliminated',
+        outcome: override ? 'override' : 'eliminated',
         rank: participant?.rank || null,
         score: participant?.score || null,
         vote_count: participant?.voteCount || null,

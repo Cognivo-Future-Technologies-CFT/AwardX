@@ -220,6 +220,7 @@ CREATE TABLE public.judges (
   program_id uuid,
   invite_token uuid DEFAULT uuid_generate_v4() UNIQUE,
   invite_token_used_at timestamp with time zone,
+  role character varying,
   CONSTRAINT judges_pkey PRIMARY KEY (id),
   CONSTRAINT judges_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT judges_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
@@ -882,6 +883,8 @@ CREATE TABLE public.advancement_events (
   executed_by uuid,
   executed_at timestamp with time zone NOT NULL DEFAULT now(),
   status character varying DEFAULT 'completed'::character varying,
+  total_participants integer DEFAULT 0,
+  tie_resolution jsonb,
   CONSTRAINT advancement_events_pkey PRIMARY KEY (id),
   CONSTRAINT advancement_events_round_id_fkey FOREIGN KEY (round_id) REFERENCES public.rounds(id),
   CONSTRAINT advancement_events_target_round_id_fkey FOREIGN KEY (target_round_id) REFERENCES public.rounds(id),
@@ -897,6 +900,7 @@ CREATE TABLE public.advancement_details (
   score numeric,
   was_at_cutoff_boundary boolean DEFAULT false,
   override_reason text,
+  vote_count integer DEFAULT 0,
   CONSTRAINT advancement_details_pkey PRIMARY KEY (id),
   CONSTRAINT advancement_details_advancement_event_id_fkey FOREIGN KEY (advancement_event_id) REFERENCES public.advancement_events(id),
   CONSTRAINT advancement_details_submission_id_fkey FOREIGN KEY (submission_id) REFERENCES public.submissions(id)
@@ -909,6 +913,7 @@ CREATE TABLE public.judge_groups (
   color character varying DEFAULT '#6366f1'::character varying,
   sort_order integer DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  description text,
   CONSTRAINT judge_groups_pkey PRIMARY KEY (id),
   CONSTRAINT judge_groups_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
@@ -994,4 +999,13 @@ CREATE TABLE public.kyc_verifications (
   CONSTRAINT kyc_verifications_pkey PRIMARY KEY (id),
   CONSTRAINT kyc_verifications_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
   CONSTRAINT kyc_verifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.judge_category_assignments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  judge_id uuid NOT NULL,
+  category_id uuid NOT NULL,
+  assigned_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT judge_category_assignments_pkey PRIMARY KEY (id),
+  CONSTRAINT judge_category_assignments_judge_id_fkey FOREIGN KEY (judge_id) REFERENCES public.judges(id),
+  CONSTRAINT judge_category_assignments_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id)
 );

@@ -9,7 +9,6 @@ import type {
 export const SCHEDULER_ROUND_TYPES = [
   'Nomination',
   'Shortlisting',
-  'jury',
   'Public Voting',
   'Announce',
 ] as const;
