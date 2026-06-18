@@ -24,12 +24,8 @@ describe('votingEngine vote count consistency', () => {
     vi.clearAllMocks();
   });
 
-  it('rolls back inserted vote when atomic increment RPC fails', async () => {
-    const deleteEq = vi.fn(async () => ({ error: null }));
-    const rpc = vi.fn(async () => ({ error: { message: 'rpc missing' } }));
-
+  it('returns insert error when public_votes insert fails', async () => {
     mocks.getSupabaseAdmin.mockReturnValue({
-      rpc,
       from: (table: string) => {
         if (table === 'rounds') {
           return {
@@ -81,11 +77,8 @@ describe('votingEngine vote count consistency', () => {
             select: () => promiseQuery({ data: [], count: 0 }),
             insert: () => ({
               select: () => ({
-                single: async () => ({ data: { id: 'vote-1' }, error: null }),
+                single: async () => ({ data: null, error: { message: 'insert failed' } }),
               }),
-            }),
-            delete: () => ({
-              eq: deleteEq,
             }),
           };
         }
@@ -97,16 +90,11 @@ describe('votingEngine vote count consistency', () => {
     const result = await castVote('round-1', 'submission-1', { userId: 'user-1' });
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('rpc missing');
-    expect(deleteEq).toHaveBeenCalledWith('id', 'vote-1');
+    expect(result.error).toContain('insert failed');
   });
 
-  it('keeps inserted vote when increment RPC succeeds', async () => {
-    const deleteEq = vi.fn(async () => ({ error: null }));
-    const rpc = vi.fn(async () => ({ error: null }));
-
+  it('succeeds when public_votes insert succeeds (DB triggers update votes_count)', async () => {
     mocks.getSupabaseAdmin.mockReturnValue({
-      rpc,
       from: (table: string) => {
         if (table === 'rounds') {
           return {
@@ -161,9 +149,6 @@ describe('votingEngine vote count consistency', () => {
                 single: async () => ({ data: { id: 'vote-2' }, error: null }),
               }),
             }),
-            delete: () => ({
-              eq: deleteEq,
-            }),
           };
         }
 
@@ -174,6 +159,5 @@ describe('votingEngine vote count consistency', () => {
     const result = await castVote('round-1', 'submission-1', { userId: 'user-2' });
 
     expect(result.ok).toBe(true);
-    expect(deleteEq).not.toHaveBeenCalled();
   });
 });

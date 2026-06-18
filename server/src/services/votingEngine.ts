@@ -276,10 +276,20 @@ export async function getVotingRoundPublic(roundIdOrSlug: string) {
     .from('round_submissions')
     .select(`
       submission_id,
-      submissions(id, title, description, cover_image_url, applicant_name, votes_count, category_id, categories(title))
+      submissions(id, title, description, cover_image_url, applicant_name, category_id, categories(title))
     `)
     .eq('round_id', roundId)
     .eq('status', 'active');
+
+  const { data: votes } = await supabase
+    .from('public_votes')
+    .select('submission_id')
+    .eq('round_id', roundId);
+
+  const voteCounts: Record<string, number> = {};
+  for (const vote of votes || []) {
+    voteCounts[vote.submission_id] = (voteCounts[vote.submission_id] || 0) + 1;
+  }
 
   const submissions = (enrollments || []).map((e: any) => ({
     id: e.submissions?.id,
@@ -287,7 +297,7 @@ export async function getVotingRoundPublic(roundIdOrSlug: string) {
     description: e.submissions?.description,
     cover_image_url: e.submissions?.cover_image_url,
     applicant_name: e.submissions?.applicant_name,
-    votes_count: config?.show_results_publicly ? (e.submissions?.votes_count || 0) : undefined,
+    votes_count: config?.show_results_publicly ? (voteCounts[e.submission_id] || 0) : undefined,
     category: e.submissions?.categories?.title,
   }));
 
@@ -400,21 +410,17 @@ export async function castVote(
 
   if (insertError) return { ok: false, error: insertError.message };
 
-  const { error: rpcError } = await supabase.rpc('increment_submission_votes', {
-    submission_id: submissionId,
-  });
-  if (rpcError) {
-    if (insertedVote?.id) {
-      await supabase.from('public_votes').delete().eq('id', insertedVote.id);
-    }
-    return { ok: false, error: rpcError.message || 'Failed to record vote count' };
-  }
-
   return { ok: true };
 }
 
 export async function getVotingResults(roundId: string): Promise<VotingResults> {
   const supabase = getSupabaseAdmin();
+
+  const { data: enrollments } = await supabase
+    .from('round_submissions')
+    .select('submission_id, submissions(id, title, applicant_name)')
+    .eq('round_id', roundId)
+    .eq('status', 'active');
 
   const { data: votes } = await supabase
     .from('public_votes')
@@ -428,20 +434,12 @@ export async function getVotingResults(roundId: string): Promise<VotingResults> 
     totalVotes++;
   }
 
-  const submissionIds = Object.keys(voteCounts);
-  if (submissionIds.length === 0) return { submissions: [], totalVotes: 0 };
-
-  const { data: subs } = await supabase
-    .from('submissions')
-    .select('id, title, applicant_name')
-    .in('id', submissionIds);
-
-  const results = (subs || [])
-    .map((s) => ({
-      submission_id: s.id,
-      title: s.title,
-      applicant_name: s.applicant_name,
-      vote_count: voteCounts[s.id] || 0,
+  const results = (enrollments || [])
+    .map((enrollment: any) => ({
+      submission_id: enrollment.submission_id,
+      title: enrollment.submissions?.title || 'Untitled',
+      applicant_name: enrollment.submissions?.applicant_name || null,
+      vote_count: voteCounts[enrollment.submission_id] || 0,
       rank: 0,
     }))
     .sort((a, b) => b.vote_count - a.vote_count);

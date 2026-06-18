@@ -502,6 +502,10 @@ export const PublicVotingPage: React.FC = () => {
 
             {!leaderboardData ? (
               <p className="px-6 py-8 text-center text-sm text-slate-400">Loading leaderboard…</p>
+            ) : (leaderboardData.data?.submissions || []).length === 0 ? (
+              <p className="px-6 py-8 text-center text-sm text-slate-400">
+                No submissions enrolled in this round yet.
+              </p>
             ) : (
               <div className="divide-y divide-slate-100">
                 <div className="flex items-center gap-3 bg-slate-50 px-6 py-2 text-xs font-semibold text-slate-500">
