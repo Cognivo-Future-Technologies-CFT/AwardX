@@ -61,18 +61,12 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res) => {
 				query = query.eq('organization_id', orgId);
 			} else {
 				const supabaseForOrgs = getSupabaseAdmin();
-				const { data: profile } = await supabaseForOrgs
-					.from('profiles')
-					.select('organization_id')
-					.eq('id', userId)
-					.maybeSingle();
 				const { data: memberships } = await supabaseForOrgs
 					.from('organization_members')
 					.select('organization_id')
 					.eq('user_id', userId)
-					.in('status', ['active', 'pending']);
+					.eq('status', 'active');
 				const orgIds = new Set<string>();
-				if (profile?.organization_id) orgIds.add(profile.organization_id);
 				for (const row of memberships || []) {
 					if (row.organization_id) orgIds.add(row.organization_id);
 				}

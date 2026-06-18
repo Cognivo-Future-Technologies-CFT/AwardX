@@ -46,7 +46,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   currentView: string;
   activeEvent: Program | null;
-  onChangeView: (view: string) => void;
+  onChangeView: (view: string, options?: { settingsTab?: string }) => void;
   onSelectProgram: (program: Program) => void;
   onLogout: () => void;
   onSwitchEvent: () => void;
@@ -233,7 +233,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const shouldLoadSearchCorpus = isSearchOpen || deferredSearchQuery.trim().length > 0;
+  const shouldLoadSearchCorpus = true;
 
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -322,13 +322,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const notifications = notificationsQuery.data || [];
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const searchIsLoading = deferredSearchQuery.trim().length > 0 && (
+    allProgramsQuery.isLoading
+    || allSubmissionsQuery.isLoading
+    || allTeamMembersQuery.isLoading
+    || allRolesQuery.isLoading
+    || allLogsQuery.isLoading
+    || allNotificationsQuery.isLoading
+    || activeCategoriesQuery.isLoading
+    || activeFormsQuery.isLoading
+  );
 
-  const openSettingsTab = (tab: 'profile' | 'billing' | 'notifications' | 'security' | 'domain' | 'shortcuts') => {
-    const params = new URLSearchParams(window.location.search);
-    params.set('view', 'settings');
-    params.set('tab', tab);
-    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-    onChangeView('settings');
+  const openSettingsTab = (tab: 'profile' | 'billing' | 'notifications' | 'security' | 'domain' | 'shortcuts' | 'integrations') => {
+    onChangeView('settings', { settingsTab: tab });
   };
 
   const openView = (view: string) => {
@@ -372,6 +378,70 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         onSelect: () => openView('overview'),
       },
       {
+        id: 'action-schedule',
+        title: 'Schedule & Rounds',
+        description: 'Configure rounds, links, and advancement flow.',
+        meta: 'Navigation',
+        icon: <CalendarClock />,
+        onSelect: () => openView('schedule-rounds'),
+      },
+      {
+        id: 'action-submissions',
+        title: 'Submissions',
+        description: 'Review and manage program entries.',
+        meta: 'Navigation',
+        icon: <FileText />,
+        onSelect: () => openView('submissions'),
+      },
+      {
+        id: 'action-judging',
+        title: 'Judging',
+        description: 'Open judging panels and scorecards.',
+        meta: 'Navigation',
+        icon: <Gavel />,
+        onSelect: () => openView('judging'),
+      },
+      {
+        id: 'action-awards',
+        title: 'Awards',
+        description: 'Manage categories and award structure.',
+        meta: 'Navigation',
+        icon: <Trophy />,
+        onSelect: () => openView('awards'),
+      },
+      {
+        id: 'action-analytics',
+        title: 'Analytics',
+        description: 'View program performance and insights.',
+        meta: 'Navigation',
+        icon: <BarChart3 />,
+        onSelect: () => openView('analytics'),
+      },
+      {
+        id: 'action-teams',
+        title: 'Teams & Roles',
+        description: 'Manage team members and permissions.',
+        meta: 'Navigation',
+        icon: <Users />,
+        onSelect: () => openView('teams'),
+      },
+      {
+        id: 'action-logs',
+        title: 'Audit Logs',
+        description: 'Review recent activity across the program.',
+        meta: 'Navigation',
+        icon: <Activity />,
+        onSelect: () => openView('logs'),
+      },
+      {
+        id: 'action-forms',
+        title: 'Form Builder',
+        description: 'Edit the submission form and fields.',
+        meta: 'Navigation',
+        icon: <LayoutTemplate />,
+        onSelect: () => openView('templates'),
+      },
+      {
         id: 'action-settings',
         title: 'Open Settings',
         description: 'Browse profile, billing, and shortcut guide.',
@@ -387,40 +457,34 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         icon: <Command />,
         onSelect: () => openSettingsTab('shortcuts'),
       },
-      {
-        id: 'action-teams',
-        title: 'Teams & Roles',
-        description: 'Manage team members and permissions.',
-        meta: 'Navigation',
-        icon: <Users />,
-        onSelect: () => openView('teams'),
-      },
-      {
-        id: 'action-forms',
-        title: 'Form Builder',
-        description: 'Edit the submission form and fields.',
-        meta: 'Navigation',
-        icon: <LayoutTemplate />,
-        onSelect: () => openView('templates'),
-      },
     ];
 
     if (!query) {
       return quickActions;
     }
 
+    const queryTokens = query.split(/\s+/).filter(Boolean);
     const scored: Array<UniversalSearchResult & { score: number }> = [];
 
-    const addResult = (result: UniversalSearchResult, haystack: string) => {
+    const matchesQuery = (haystack: string) => {
       const normalized = haystack.toLowerCase();
-      if (!normalized.includes(query)) return;
+      return queryTokens.every((token) => normalized.includes(token));
+    };
+
+    const addResult = (result: UniversalSearchResult, haystack: string) => {
+      if (!matchesQuery(haystack)) return;
       let score = 1;
-      if (result.title.toLowerCase() === query) score += 50;
-      if (result.title.toLowerCase().startsWith(query)) score += 25;
-      if (normalized.startsWith(query)) score += 10;
-      if (normalized.includes(`${query} `)) score += 5;
+      const title = result.title.toLowerCase();
+      if (title === query) score += 50;
+      if (title.startsWith(query)) score += 25;
+      if (queryTokens.every((token) => title.includes(token))) score += 15;
+      if (haystack.toLowerCase().startsWith(query)) score += 10;
       scored.push({ ...result, score });
     };
+
+    quickActions.forEach((action) => {
+      addResult(action, [action.title, action.description, action.meta].filter(Boolean).join(' '));
+    });
 
     programs.forEach((program) => {
       addResult(
@@ -542,7 +606,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return scored
       .sort((a, b) => b.score - a.score)
       .map(({ score, ...result }) => result)
-      .slice(0, 12);
+      .slice(0, 20);
   }, [
     activeEvent?.id,
     allLogsQuery.data,
@@ -1484,8 +1548,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         isOpen={isSearchOpen}
         query={searchQuery}
         results={searchResults}
+        isLoading={searchIsLoading}
         onQueryChange={setSearchQuery}
-        onClose={() => setIsSearchOpen(false)}
+        onClose={() => {
+          setIsSearchOpen(false);
+          setSearchQuery('');
+        }}
       />
 
       <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title={parentForModal ? "Add Subcategory" : "Create New Award"}>

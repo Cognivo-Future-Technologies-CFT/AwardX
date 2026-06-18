@@ -16,6 +16,7 @@ import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
 import { sendTeamInviteEmail, resendTeamInvite, type EmailApiRequestTrace } from '../../services/email';
 import { queryKeys } from '../../services/queryKeys';
+import { isPersistedUuid } from '../../lib/ids';
 import { TableSkeleton } from '../SkeletonLoader';
 
 const PERMISSION_GROUPS = [
@@ -215,6 +216,7 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
                 roleId: vars.roleId,
                 roleName,
                 programTitle: eventTitle,
+                organizationId: orgId || undefined,
                 programId: vars.scope === 'program' ? eventId : undefined,
             }, { onTrace: appendRequestTrace });
             return result || { ok: true, emailSent: true };
@@ -302,15 +304,21 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
     const handleCreateRole = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingRole.name) return;
+        const roleId = editingRole.id;
+        const isExistingRole = isPersistedUuid(roleId);
         try {
-            if (editingRole.id) {
+            if (isExistingRole) {
                 await db.updateRole({
-                    id: editingRole.id,
+                    id: roleId,
                     name: editingRole.name,
                     color: editingRole.color,
                     permissions: editingRole.permissions || [],
                 });
             } else {
+                if (!isPersistedUuid(eventId)) {
+                    toast.error('Program is still loading. Wait a moment and try again.');
+                    return;
+                }
                 await db.createRole({
                     name: editingRole.name,
                     permissions: editingRole.permissions || [],
@@ -1150,7 +1158,7 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
             </Modal>
 
             {/* Role Editor Modal */}
-            <Modal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} title={editingRole.id ? "Edit Role" : "Create New Role"}>
+            <Modal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} title={isPersistedUuid(editingRole.id) ? "Edit Role" : "Create New Role"}>
                 <form onSubmit={handleCreateRole} className="space-y-6">
                     <div>
   <label className="block text-sm font-semibold text-slate-700 mb-3">

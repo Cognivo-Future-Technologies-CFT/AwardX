@@ -8,20 +8,12 @@ export async function canAccessOrganization(userId: string, organizationId: stri
 
   const supabase = getSupabaseAdmin();
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (profile?.organization_id === organizationId) return true;
-
   const { data: memberships } = await supabase
     .from('organization_members')
     .select('status')
     .eq('organization_id', organizationId)
     .eq('user_id', userId)
-    .in('status', ['active', 'pending']);
+    .eq('status', 'active');
 
   return (memberships || []).length > 0;
 }

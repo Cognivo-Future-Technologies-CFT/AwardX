@@ -175,16 +175,10 @@ async function checkVoterAccess(
       .select('id')
       .eq('organization_id', orgId)
       .eq('user_id', voterInfo.userId)
+      .eq('status', 'active')
       .maybeSingle();
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', voterInfo.userId)
-      .maybeSingle();
-
-    const inOrg =
-      !!membership || (profile?.organization_id && profile.organization_id === orgId);
+    const inOrg = !!membership;
 
     if (!inOrg) {
       return { ok: false, error: 'Only members of the hosting organization can vote in this round.' };

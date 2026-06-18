@@ -289,7 +289,7 @@ export const PublicVotingRoundSection: React.FC<PublicVotingRoundSectionProps> =
                 {!diditConnected && (
                   <p className="text-xs text-violet-800">
                     Connect DIDIT in{' '}
-                    <a href="/dashboard?view=settings&tab=integrations" className="font-semibold underline">
+                    <a href={`/dashboard/events/${programId}/settings/integrations`} className="font-semibold underline">
                       Settings → Integrations
                     </a>{' '}
                     to finalize setup.

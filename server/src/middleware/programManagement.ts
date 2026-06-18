@@ -28,20 +28,6 @@ async function getProgram(programId: string): Promise<ProgramRow | null> {
 async function canManageOrganizationProgram(userId: string, organizationId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin();
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (profileError) {
-    throw new Error(profileError.message || 'Failed to load profile');
-  }
-
-  if (profile?.organization_id === organizationId) {
-    return true;
-  }
-
   const { data: memberships, error: membershipError } = await supabase
     .from('organization_members')
     .select('status, roles(name, permissions)')

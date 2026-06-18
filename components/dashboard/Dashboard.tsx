@@ -1,6 +1,6 @@
 
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
@@ -21,6 +21,11 @@ import { motion } from 'framer-motion';
 import { Program, Organization } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
 import { resolveAllowedDashboardView } from '../../lib/dashboardViews';
+import {
+  buildDashboardPath,
+  legacyDashboardQueryToPath,
+  parseDashboardPath,
+} from '../../lib/dashboardRoutes';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { PublishedLockBanner } from './PublishedLockBanner';
 import { ProgramTileHub } from './ProgramTileHub';
@@ -55,9 +60,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [scheduleRepresentation, setScheduleRepresentation] = useState<ScheduleRepresentation>('tiles');
   const [isInitializing, setIsInitializing] = useState(true);
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const persistTimerRef = useRef<number | null>(null);
   const lastPersistKeyRef = useRef<string>('');
+
+  const handleChangeView = useCallback((view: string, options?: { settingsTab?: string }) => {
+    const allowed = resolveAllowedDashboardView(view, (p) => databaseService.hasPermission(p));
+    setCurrentView(allowed);
+    if (activeEvent?.id) {
+      navigate(
+        buildDashboardPath({
+          eventId: activeEvent.id,
+          view: allowed,
+          settingsTab: allowed === 'settings' ? options?.settingsTab : null,
+        }),
+      );
+    }
+  }, [activeEvent?.id, navigate]);
+
+  const handleSelectEvent = useCallback((event: Program) => {
+    setActiveEvent(event);
+    navigate(buildDashboardPath({ eventId: event.id, view: 'overview' }));
+  }, [navigate]);
+
+  const handleSwitchEvent = useCallback(() => {
+    setActiveEvent(null);
+    navigate('/dashboard');
+  }, [navigate]);
+
+  const handleDeleteEvent = useCallback(() => {
+    setActiveEvent(null);
+    navigate('/dashboard');
+  }, [navigate]);
+
+  const handleSwitchOrganization = useCallback(() => {
+    setActiveEvent(null);
+    setActiveOrganization(null);
+    navigate('/dashboard');
+  }, [navigate]);
 
   // Sync URL → state once auth is ready
   useEffect(() => {
@@ -72,16 +112,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const initializeDashboard = async () => {
           await databaseService.initialize();
 
-          const urlView = searchParams.get('view');
-          const urlTab = searchParams.get('tab');
-          const urlProgram = searchParams.get('program');
+          const legacyPath = legacyDashboardQueryToPath(location.search);
+          const parsedRoute = parseDashboardPath(legacyPath || location.pathname);
 
-          if (!cancelled && (urlView === 'settings' || urlTab === 'billing' || urlTab === 'integrations')) {
-            if (databaseService.hasPermission('manage_settings')) {
-              setCurrentView('settings');
-            }
-          } else if (!cancelled && urlView) {
-            setCurrentView(resolveAllowedDashboardView(urlView, (p) => databaseService.hasPermission(p)));
+          if (!cancelled && parsedRoute.view) {
+            setCurrentView(
+              resolveAllowedDashboardView(parsedRoute.view, (p) => databaseService.hasPermission(p)),
+            );
           }
 
           const currentUser = user;
@@ -103,17 +140,38 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
           const programs = selectedOrg ? await databaseService.getPrograms() : [];
 
-          if (urlProgram) {
-            const fromUrl = programs.find((p) => p.id === urlProgram);
-            if (!cancelled && fromUrl) setActiveEvent(fromUrl);
+          if (parsedRoute.eventId) {
+            const fromUrl = programs.find((p) => p.id === parsedRoute.eventId);
+            if (!cancelled && fromUrl) {
+              setActiveEvent(fromUrl);
+            } else if (!cancelled) {
+              navigate('/dashboard', { replace: true });
+            }
           } else if (ws) {
-            if (!cancelled && ws.current_view && !urlView) {
-              setCurrentView(resolveAllowedDashboardView(ws.current_view, (p) => databaseService.hasPermission(p)));
+            if (!cancelled && ws.current_view && !parsedRoute.view) {
+              setCurrentView(
+                resolveAllowedDashboardView(ws.current_view, (p) => databaseService.hasPermission(p)),
+              );
             }
             if (ws.active_program_id) {
               const restored = programs.find((p) => p.id === ws.active_program_id);
-              if (!cancelled && restored) setActiveEvent(restored);
+              if (!cancelled && restored) {
+                setActiveEvent(restored);
+                if (!parsedRoute.eventId && !legacyPath) {
+                  navigate(
+                    buildDashboardPath({
+                      eventId: restored.id,
+                      view: ws.current_view || 'overview',
+                    }),
+                    { replace: true },
+                  );
+                }
+              }
             }
+          }
+
+          if (!cancelled && legacyPath && legacyPath !== location.pathname) {
+            navigate(legacyPath, { replace: true });
           }
         };
 
@@ -136,7 +194,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return () => {
       cancelled = true;
     };
-  }, [isAuthLoading, searchParams, user]);
+  }, [isAuthLoading, navigate, user]);
+
+  // Keep view/event in sync when the URL changes (browser controls, deep links, legacy query URLs).
+  useEffect(() => {
+    if (isInitializing || isAuthLoading) return;
+
+    const legacyPath = legacyDashboardQueryToPath(location.search);
+    if (legacyPath) {
+      navigate(legacyPath, { replace: true });
+      return;
+    }
+
+    const parsed = parseDashboardPath(location.pathname);
+
+    if (parsed.view) {
+      const allowed = resolveAllowedDashboardView(parsed.view, (p) => databaseService.hasPermission(p));
+      setCurrentView((prev) => (prev === allowed ? prev : allowed));
+    } else if (location.pathname === '/dashboard') {
+      setCurrentView((prev) => (prev === 'overview' ? prev : 'overview'));
+    }
+
+    if (!parsed.eventId) {
+      if (location.pathname === '/dashboard') {
+        setActiveEvent((prev) => (prev ? null : prev));
+      }
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const programs = await databaseService.getPrograms();
+      if (cancelled) return;
+
+      const match = programs.find((program) => program.id === parsed.eventId);
+      if (match) {
+        setActiveEvent((prev) => (prev?.id === match.id ? prev : match));
+      } else if (location.pathname !== '/dashboard') {
+        navigate('/dashboard', { replace: true });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isInitializing, isAuthLoading, location.pathname, location.search, navigate]);
 
   // Sync active program + persist (view changes should not reload permissions)
   useEffect(() => {
@@ -144,20 +246,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   }, [activeEvent?.id]);
 
   useEffect(() => {
-    // Update URL to reflect current state
-    const params = new URLSearchParams();
-    if (activeEvent?.id) params.set('program', activeEvent.id);
-    if (currentView && currentView !== 'overview') params.set('view', currentView);
-    if (currentView === 'settings') {
-      const existingTab = new URLSearchParams(window.location.search).get('tab');
-      if (existingTab) params.set('tab', existingTab);
-    }
-    const newSearch = params.toString();
-    const currentSearch = window.location.search.replace(/^\?/, '');
-    if (newSearch !== currentSearch) {
-      navigate({ search: newSearch ? `?${newSearch}` : '' }, { replace: true });
-    }
-
     if (persistTimerRef.current != null) {
       window.clearTimeout(persistTimerRef.current);
     }
@@ -188,7 +276,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         window.clearTimeout(persistTimerRef.current);
       }
     };
-  }, [activeEvent, currentView, navigate, user]);
+  }, [activeEvent?.id, currentView, user]);
 
   useEffect(() => {
     if (activeEvent?.id) {
@@ -215,12 +303,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return (
           <ProgramTileHub
             activeEvent={activeEvent}
-            onNavigate={setCurrentView}
-            onDeleteEvent={() => setActiveEvent(null)}
+            onNavigate={handleChangeView}
+            onDeleteEvent={handleDeleteEvent}
           />
         );
       case 'overview':
-        return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
+        return <DashboardOverview activeEvent={activeEvent} onNavigate={handleChangeView} />;
 
       case 'builder':
       case 'program-details':
@@ -252,7 +340,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           ? <PublishedLockBanner program={activeEvent} sectionName="Form Builder" />
           : <FormBuilderView activeEvent={activeEvent} />;
       case 'submissions':
-        return <SubmissionTable activeEvent={activeEvent} onNavigate={setCurrentView} />;
+        return <SubmissionTable activeEvent={activeEvent} onNavigate={handleChangeView} />;
 
       case 'judging':
         return <JudgingView activeEvent={activeEvent} />;
@@ -278,13 +366,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return (
           <SettingsView
             activeEvent={activeEvent}
-            onDeleteEvent={() => setActiveEvent(null)}
+            onDeleteEvent={handleDeleteEvent}
           />
         );
       default:
         return activeEvent
-          ? <ProgramTileHub activeEvent={activeEvent} onNavigate={setCurrentView} />
-          : <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
+          ? <ProgramTileHub activeEvent={activeEvent} onNavigate={handleChangeView} />
+          : <DashboardOverview activeEvent={activeEvent} onNavigate={handleChangeView} />;
     }
   };
 
@@ -325,11 +413,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       >
         <EventSelectionView
           activeOrganization={activeOrganization}
-          onSelectEvent={setActiveEvent}
-          onSwitchOrganization={() => {
-            setActiveEvent(null);
-            setActiveOrganization(null);
-          }}
+          onSelectEvent={handleSelectEvent}
+          onSwitchOrganization={handleSwitchOrganization}
           onLogout={onLogout}
         />
       </motion.div>
@@ -340,10 +425,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     <DashboardLayout
       currentView={currentView}
       activeEvent={activeEvent}
-      onChangeView={setCurrentView}
-      onSelectProgram={setActiveEvent}
+      onChangeView={handleChangeView}
+      onSelectProgram={handleSelectEvent}
       onLogout={onLogout}
-      onSwitchEvent={() => setActiveEvent(null)}
+      onSwitchEvent={handleSwitchEvent}
       noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'schedule-rounds' || currentView === 'submissions' || currentView === 'voting' || currentView === 'program-details' || currentView === 'builder'}
       awardsViewMode={awardsViewMode}
       onAwardsViewModeChange={setAwardsViewMode}

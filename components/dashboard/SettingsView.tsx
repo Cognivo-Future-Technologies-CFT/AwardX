@@ -1,5 +1,6 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../Button';
 import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard, Plug, AlertTriangle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -7,6 +8,11 @@ import { IntegrationsPanel } from './IntegrationsPanel';
 import { db } from '../../services/database';
 import { auth, storage } from '../../services/supabase';
 import { Program } from '../../services/models';
+import {
+  buildDashboardPath,
+  isValidSettingsTab,
+  parseDashboardPath,
+} from '../../lib/dashboardRoutes';
 
 const GMT_OFFSETS = [
   { value: 'GMT-12:00', label: 'GMT-12:00 (Baker Island)' },
@@ -88,6 +94,8 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDeleteEvent }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState<any>(null);
   const [org, setOrg] = useState<any>(null);
@@ -132,16 +140,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
     []
   );
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tab = params.get('tab');
-    if (tab === 'billing') {
-      setActiveTab('billing');
-    }
-    if (tab === 'integrations') {
-      setActiveTab('integrations');
+  const resolvedTab = useMemo(() => {
+    const parsed = parseDashboardPath(location.pathname);
+    if (parsed.settingsTab && isValidSettingsTab(parsed.settingsTab)) {
+      return parsed.settingsTab;
     }
 
+    const legacyTab = new URLSearchParams(location.search).get('tab');
+    if (legacyTab && isValidSettingsTab(legacyTab)) {
+      return legacyTab;
+    }
+
+    return 'profile';
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    setActiveTab(resolvedTab);
+  }, [resolvedTab]);
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    if (!activeEvent?.id) return;
+    navigate(buildDashboardPath({
+      eventId: activeEvent.id,
+      view: 'settings',
+      settingsTab: tabId,
+    }));
+  };
+
+  useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -466,7 +493,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
              {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors mb-1 ${
                      activeTab === tab.id 
                      ? 'bg-white text-indigo-600 shadow-sm border border-slate-100' 

@@ -550,12 +550,28 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       setIsAddingMember(true);
       try {
          await databaseService.addTeamMemberByEmail(email, newMemberRoleId);
-         // Also send invite email so the person gets notified
+         // Also send invite email so the person gets notified. The member is already added,
+         // so a failed email should warn (not fail) and never falsely claim success.
          const roleName = orgRoles.find(r => r.id === newMemberRoleId)?.name;
-         sendTeamInviteEmail({ email, roleId: newMemberRoleId, roleName, programTitle: activeOrganization.name }).catch(() => {});
+         let emailFailed = false;
+         try {
+            const result: any = await sendTeamInviteEmail({
+               email,
+               roleId: newMemberRoleId,
+               roleName,
+               programTitle: activeOrganization.name,
+               organizationId: activeOrganization.id,
+            });
+            if (result && result.emailSent === false) emailFailed = true;
+         } catch {
+            emailFailed = true;
+         }
          await loadPrograms(false);
          setNewMemberEmail('');
          setIsAddMemberModalOpen(false);
+         if (emailFailed) {
+            alert(`${email} was added to the organization, but the invite email could not be sent. You can resend it from Team Management → Pending Invitations.`);
+         }
       } catch (error: any) {
          alert(error?.message || 'Failed to add member. Please try again.');
       } finally {

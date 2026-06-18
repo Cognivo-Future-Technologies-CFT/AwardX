@@ -1,5 +1,4 @@
 import React, { useSyncExternalStore } from 'react';
-import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { getSupabaseLoadingSnapshot, subscribeSupabaseLoading } from '../services/supabaseLoading';
 
 export const SupabaseNetworkLoader: React.FC = () => {
@@ -9,11 +8,7 @@ export const SupabaseNetworkLoader: React.FC = () => {
     () => false,
   );
 
-  const activeQueryCount = useIsFetching();
-  const activeMutationCount = useIsMutating();
-  const isLoading = isSupabaseLoading || activeQueryCount > 0 || activeMutationCount > 0;
-
-  if (!isLoading) {
+  if (!isSupabaseLoading) {
     return null;
   }
 

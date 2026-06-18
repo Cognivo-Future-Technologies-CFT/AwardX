@@ -71,7 +71,7 @@ export function createDefaultRound(
     startCondition: { type: 'fixed_datetime', datetime: start.toISOString() },
     endCondition: { type: 'fixed_datetime', datetime: end.toISOString() },
     shortlistConfig: {
-      enabled: order > 0,
+      enabled: type !== 'Nomination' && type !== 'Announce' && order > 0,
       method: 'percentage',
       value: 50,
       visibility: ['admin'],
@@ -110,6 +110,7 @@ export function buildLinearEdges(programId: string, orderedRounds: Round[]): Rou
 }
 
 export function roundUsesShortlist(round: Round): boolean {
+  if (round.type === 'Nomination' || round.type === 'Announce') return false;
   return round.type === 'Shortlisting' || round.shortlistConfig.enabled;
 }
 

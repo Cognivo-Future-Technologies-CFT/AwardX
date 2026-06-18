@@ -124,6 +124,8 @@ export default function NavigationMenuFour({
   onMarkAllRead,
   onMarkRead,
 }: NavigationMenuFourProps) {
+  const hasNavigationLinks = navigationLinks.length > 0;
+
   return (
     <header className="border-b bg-white px-4 md:px-6">
       <div className="flex h-16 items-center justify-between gap-4">
@@ -227,6 +229,7 @@ export default function NavigationMenuFour({
             </Popover>
           )}
 
+          {hasNavigationLinks && (
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -240,60 +243,61 @@ export default function NavigationMenuFour({
             </PopoverTrigger>
             <PopoverContent align="start" className="w-64 p-1">
               <NavigationMenu className="max-w-none *:w-full">
-                <NavigationMenuList className="flex-col items-start gap-0 md:gap-2">
-                  {navigationLinks.map((link, index) => (
-                    <NavigationMenuItem key={`compact-${index}`} className="w-full">
-                      {!isTopLevelLink(link) ? (
-                        <>
-                          <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
-                            {link.label}
-                          </div>
-                          <ul>
-                            {link.items.map((item, itemIndex) => (
-                              <li key={itemIndex}>
-                                <NavigationMenuLink asChild>
-                                  <a
-                                    href={item.href || "#"}
-                                    className="py-1.5"
-                                    onClick={(event) => runLinkAction(event, item.onSelect)}
-                                  >
-                                    {item.label}
-                                  </a>
-                                </NavigationMenuLink>
-                              </li>
-                            ))}
-                          </ul>
-                        </>
-                      ) : (
-                        <NavigationMenuLink asChild>
-                          <a
-                            href={link.href || "#"}
-                            className="py-1.5"
-                            onClick={(event) => runLinkAction(event, link.onSelect)}
-                          >
-                            {link.label}
-                          </a>
-                        </NavigationMenuLink>
-                      )}
-                      {index < navigationLinks.length - 1 &&
-                        ((!link.submenu && navigationLinks[index + 1].submenu) ||
-                          (link.submenu && !navigationLinks[index + 1].submenu) ||
-                          (link.submenu &&
-                            navigationLinks[index + 1].submenu &&
-                            getNavigationLinkType(link) !==
-                              getNavigationLinkType(navigationLinks[index + 1]))) && (
-                          <div
-                            role="separator"
-                            aria-orientation="horizontal"
-                            className="bg-border -mx-1 my-1 h-px w-full"
-                          />
+                  <NavigationMenuList className="flex-col items-start gap-0 md:gap-2">
+                    {navigationLinks.map((link, index) => (
+                      <NavigationMenuItem key={`compact-${index}`} className="w-full">
+                        {!isTopLevelLink(link) ? (
+                          <>
+                            <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
+                              {link.label}
+                            </div>
+                            <ul>
+                              {link.items.map((item, itemIndex) => (
+                                <li key={itemIndex}>
+                                  <NavigationMenuLink asChild>
+                                    <a
+                                      href={item.href || "#"}
+                                      className="py-1.5"
+                                      onClick={(event) => runLinkAction(event, item.onSelect)}
+                                    >
+                                      {item.label}
+                                    </a>
+                                  </NavigationMenuLink>
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        ) : (
+                          <NavigationMenuLink asChild>
+                            <a
+                              href={link.href || "#"}
+                              className="py-1.5"
+                              onClick={(event) => runLinkAction(event, link.onSelect)}
+                            >
+                              {link.label}
+                            </a>
+                          </NavigationMenuLink>
                         )}
-                    </NavigationMenuItem>
-                  ))}
-                </NavigationMenuList>
-              </NavigationMenu>
+                        {index < navigationLinks.length - 1 &&
+                          ((!link.submenu && navigationLinks[index + 1].submenu) ||
+                            (link.submenu && !navigationLinks[index + 1].submenu) ||
+                            (link.submenu &&
+                              navigationLinks[index + 1].submenu &&
+                              getNavigationLinkType(link) !==
+                                getNavigationLinkType(navigationLinks[index + 1]))) && (
+                            <div
+                              role="separator"
+                              aria-orientation="horizontal"
+                              className="bg-border -mx-1 my-1 h-px w-full"
+                            />
+                          )}
+                      </NavigationMenuItem>
+                    ))}
+                  </NavigationMenuList>
+                </NavigationMenu>
             </PopoverContent>
           </Popover>
+          )}
 
           <div className="flex min-w-0 items-center gap-4 lg:gap-6">
             {!compact && (
@@ -309,10 +313,11 @@ export default function NavigationMenuFour({
               <span className="text-sm font-semibold text-foreground">{eventTitle}</span>
               <span className="text-xs capitalize text-muted-foreground">{currentView}</span>
             </div>
-            <div className="hidden 2xl:block">
-              <NavigationMenu>
-                <NavigationMenuList>
-                  {navigationLinks.map((link, index) => (
+            {hasNavigationLinks && (
+              <div className="hidden 2xl:block">
+                <NavigationMenu>
+                  <NavigationMenuList>
+                    {navigationLinks.map((link, index) => (
                     <NavigationMenuItem key={index}>
                       {!isTopLevelLink(link) ? (
                         <>
@@ -399,10 +404,11 @@ export default function NavigationMenuFour({
                       )}
                     </NavigationMenuItem>
                   ))}
-                </NavigationMenuList>
-                <NavigationMenuViewport />
-              </NavigationMenu>
-            </div>
+                  </NavigationMenuList>
+                  <NavigationMenuViewport />
+                </NavigationMenu>
+              </div>
+            )}
           </div>
         </div>
 

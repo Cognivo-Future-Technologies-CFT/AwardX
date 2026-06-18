@@ -5,6 +5,7 @@ import {
 	RESEND_NOT_CONFIGURED_MESSAGE,
 	getOrgResendMailer,
 } from '../services/orgResend.js';
+import { canManageOrganizationInvites } from '../lib/orgAccess.js';
 
 const router = Router();
 
@@ -133,34 +134,7 @@ async function updateEmailLog(
 }
 
 async function canManage(supabase: any, userId: string, organizationId: string): Promise<boolean> {
-	// First, check if the user is the organization owner (defined by profiles table)
-	const { data: profile } = await supabase
-		.from('profiles')
-		.select('organization_id')
-		.eq('id', userId)
-		.maybeSingle();
-
-	if (profile && profile.organization_id === organizationId) {
-		return true;
-	}
-
-	const { data: memberships } = await supabase
-		.from('organization_members')
-		.select('status, roles(name, permissions)')
-		.eq('organization_id', organizationId)
-		.eq('user_id', userId)
-		.eq('status', 'active');
-
-	if (!memberships || memberships.length === 0) return false;
-	const ALLOWED_ROLES = new Set(['admin', 'program manager', 'owner', 'superadmin']);
-	const ALLOWED_PERMS = new Set(['manage_teams', 'manage_programs']);
-	return memberships.some((m: any) => {
-		const name = String(m.roles?.name || '').toLowerCase().trim();
-		const perms: string[] = Array.isArray(m.roles?.permissions)
-			? m.roles.permissions.map((p: unknown) => String(p).toLowerCase().trim())
-			: [];
-		return ALLOWED_ROLES.has(name) || perms.some((p) => ALLOWED_PERMS.has(p));
-	});
+	return canManageOrganizationInvites(supabase, userId, organizationId);
 }
 
 // ── POST /api/invites/team ─────────────────────────────────────────────────

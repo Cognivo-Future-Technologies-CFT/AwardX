@@ -153,6 +153,20 @@ export async function completeRound(roundId: string, triggeredBy: string = 'admi
     return { ok: false, error: `Cannot complete round with status '${round.status}'. Must be active.` };
   }
 
+  const { previewAdvancement } = await import('./advancementEngine.js');
+  const preview = await previewAdvancement(roundId);
+  const isJudgingRound = !['nomination', 'announce'].includes(round.type?.toLowerCase() || '')
+    && (round.settings?.evaluationLogic === 'scoring'
+      || (!round.settings?.evaluationLogic
+        && !['public voting', 'public rating', 'public'].includes(round.type?.toLowerCase() || '')));
+
+  if (isJudgingRound && preview.hasEmptyScores) {
+    return {
+      ok: false,
+      error: 'No judge scores submitted yet. Judges must complete scoring before this round can end.',
+    };
+  }
+
   await updateRoundStatus(roundId, 'completed');
   await logTransition(roundId, 'active', 'completed', triggeredBy);
   return { ok: true };

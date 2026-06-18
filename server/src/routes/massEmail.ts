@@ -40,21 +40,12 @@ async function canSendMassEmail(userId: string, programId: string): Promise<bool
 
   if (!program?.organization_id) return false;
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', userId)
-    .maybeSingle();
-
-  // Org owner always allowed
-  if (profile?.organization_id === program.organization_id) return true;
-
   const { data: memberships } = await supabase
     .from('organization_members')
     .select('status, roles ( name, permissions )')
     .eq('organization_id', program.organization_id)
     .eq('user_id', userId)
-    .in('status', ['active', 'pending']);
+    .eq('status', 'active');
 
   return (memberships || []).some((m: any) => {
     const roleName = String(m.roles?.name || '').toLowerCase().trim();

@@ -40,14 +40,43 @@ router.get('/current/info', requireAuth, async (req: AuthenticatedRequest, res) 
 			return res.status(500).json({ error: profileError.message || 'Failed to fetch profile' });
 		}
 
-		if (!profile?.organization_id) {
+		let organizationId = profile?.organization_id || null;
+
+		if (organizationId) {
+			const { data: membership } = await supabase
+				.from('organization_members')
+				.select('organization_id')
+				.eq('user_id', userId)
+				.eq('organization_id', organizationId)
+				.eq('status', 'active')
+				.maybeSingle();
+
+			if (!membership) {
+				organizationId = null;
+			}
+		}
+
+		if (!organizationId) {
+			const { data: membership } = await supabase
+				.from('organization_members')
+				.select('organization_id')
+				.eq('user_id', userId)
+				.eq('status', 'active')
+				.order('joined_at', { ascending: false })
+				.limit(1)
+				.maybeSingle();
+
+			organizationId = membership?.organization_id || null;
+		}
+
+		if (!organizationId) {
 			return res.json({ data: null });
 		}
 
 		const { data: organization, error: orgError } = await supabase
 			.from('organizations')
 			.select(ORG_SELECT)
-			.eq('id', profile.organization_id)
+			.eq('id', organizationId)
 			.maybeSingle();
 
 		if (orgError) {

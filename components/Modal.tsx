@@ -117,7 +117,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <div className="p-5 overflow-hidden">
+              <div className="p-5 overflow-y-auto overscroll-contain min-h-0 flex-1">
                 {children}
               </div>
             </div>

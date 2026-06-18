@@ -2,7 +2,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useConfirm } from '../ConfirmDialog';
-import { Filter, Download, Eye, ImageIcon, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles, LayoutTemplate, AlertCircle, ExternalLink } from 'lucide-react';
+import { Filter, Download, Eye, ImageIcon, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles, LayoutTemplate, AlertCircle, ExternalLink, ArrowUpCircle } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import { db } from '../../services/database';
 import { Program, Submission } from '../../services/models';
@@ -427,6 +433,10 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const [debouncedSearch, setDebouncedSearch] = useState('');
    const [page, setPage] = useState(1);
    const pageSize = 15;
+   const [promoteTarget, setPromoteTarget] = useState<Submission | null>(null);
+   const [promoteRoundId, setPromoteRoundId] = useState('');
+   const [isPromoting, setIsPromoting] = useState(false);
+   const [deletingSubmissionId, setDeletingSubmissionId] = useState<string | null>(null);
 
    useEffect(() => {
       const timer = window.setTimeout(() => {
@@ -484,6 +494,15 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
          }));
    }, [formFieldsQuery.data]);
 
+   const roundsQuery = useQuery({
+      queryKey: queryKeys.rounds.all(activeEvent?.id ?? ''),
+      queryFn: () => db.getRounds(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+
+   const programRounds = roundsQuery.data || [];
+
    const submissionsQuery = useQuery({
       queryKey: queryKeys.submissions.paginated(activeEvent?.id ?? 'all', page, debouncedSearch),
       queryFn: () => db.getSubmissionsPaginated({
@@ -530,7 +549,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const total = submissionsQuery.data?.total || 0;
    const totalPages = Math.max(1, Math.ceil(total / pageSize));
    const tableColumnCount = 5 + responseColumns.length;
-   const isLoading = submissionsQuery.isLoading || judgesQuery.isLoading;
+   const isInitialLoading = (submissionsQuery.isLoading && !submissionsQuery.data)
+    || (judgesQuery.isLoading && !judgesQuery.data);
    const isSearching = debouncedSearch.length > 0;
 
    const visiblePageNumbers = useMemo(() => {
@@ -652,6 +672,60 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const handleView = (submission: Submission) => {
       setSelectedSubmission(submission);
       setIsDetailModalOpen(true);
+   };
+
+   const handleDeleteSubmission = async (submission: Submission) => {
+      if (!activeEvent?.id) {
+         toast.error('Select a program before deleting submissions');
+         return;
+      }
+
+      const ok = await confirm({
+         title: 'Delete submission?',
+         description: `Remove "${submission.applicant}" from this program? This cannot be undone.`,
+         confirmLabel: 'Delete submission',
+      });
+      if (!ok) return;
+
+      setDeletingSubmissionId(submission.id);
+      try {
+         await db.deleteSubmissions([submission.id], activeEvent.id);
+         await refreshSubmissions();
+         toast.success('Submission deleted');
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Failed to delete submission';
+         toast.error(message);
+      } finally {
+         setDeletingSubmissionId(null);
+      }
+   };
+
+   const openSuperPromote = (submission: Submission) => {
+      if (programRounds.length === 0) {
+         toast.error('No rounds configured. Add rounds in Schedule & Rounds first.');
+         return;
+      }
+      setPromoteTarget(submission);
+      setPromoteRoundId(programRounds[0]?.id || '');
+   };
+
+   const handleSuperPromote = async () => {
+      if (!promoteTarget || !promoteRoundId || !activeEvent?.id) return;
+
+      setIsPromoting(true);
+      try {
+         await db.superPromoteSubmission(promoteTarget.id, promoteRoundId, activeEvent.id);
+         await refreshSubmissions();
+         const roundTitle = programRounds.find((round) => round.id === promoteRoundId)?.title || 'selected round';
+         toast.success(`"${promoteTarget.applicant}" promoted to ${roundTitle}`);
+         setPromoteTarget(null);
+         setPromoteRoundId('');
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Failed to super promote submission';
+         toast.error(message);
+      } finally {
+         setIsPromoting(false);
+      }
    };
 
    const toggleSelection = (id: string) => {
@@ -862,12 +936,12 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
 
             {/* Mobile Card List */}
             <div className="min-h-0 flex-1 overflow-y-auto md:hidden divide-y divide-slate-100">
-               {isLoading && (
+               {isInitialLoading && (
                   <div className="p-4">
                      <TableSkeleton rows={4} columns={1} />
                   </div>
                )}
-               {!isLoading && submissions.map((sub) => (
+               {!isInitialLoading && submissions.map((sub) => (
                   <div key={sub.id} className="p-4 space-y-3">
                      <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 min-w-0">
@@ -908,7 +982,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                      </div>
                   </div>
                ))}
-               {!isLoading && submissions.length === 0 && (
+               {!isInitialLoading && submissions.length === 0 && (
                   <div className="p-10 text-center">
                      <div className="text-lg font-extrabold text-slate-900">
                         {isSearching ? 'No matching entries' : 'No entries found'}
@@ -946,14 +1020,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                     {isLoading && (
+                     {isInitialLoading && (
                         <tr>
                            <td colSpan={tableColumnCount}>
                               <TableSkeleton rows={6} columns={tableColumnCount} />
                            </td>
                         </tr>
                      )}
-                     {!isLoading && submissions.map((sub, rowIndex) => {
+                     {!isInitialLoading && submissions.map((sub, rowIndex) => {
                         const responses = getSubmissionResponses(sub);
                         const selected = selectedIds.includes(sub.id);
                         const rowBg = selected ? 'bg-indigo-50/60' : 'bg-white';
@@ -1072,18 +1146,40 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                  >
                                     <Eye className="w-4.5 h-4.5" />
                                  </button>
-                                 <button
-                                    className="rounded-xl border border-transparent p-2 text-slate-400 transition-all hover:border-slate-200 hover:bg-white hover:text-slate-900 hover:shadow-sm"
-                                    title="More Actions"
-                                 >
-                                    <MoreVertical className="w-4.5 h-4.5" />
-                                 </button>
+                                 <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                       <button
+                                          type="button"
+                                          className="rounded-xl border border-transparent p-2 text-slate-400 transition-all hover:border-slate-200 hover:bg-white hover:text-slate-900 hover:shadow-sm"
+                                          title="More Actions"
+                                          disabled={deletingSubmissionId === sub.id}
+                                       >
+                                          <MoreVertical className="w-4.5 h-4.5" />
+                                       </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                       <DropdownMenuItem
+                                          className="cursor-pointer"
+                                          onClick={() => openSuperPromote(sub)}
+                                       >
+                                          <ArrowUpCircle className="mr-2 h-4 w-4 text-indigo-600" />
+                                          Super promote
+                                       </DropdownMenuItem>
+                                       <DropdownMenuItem
+                                          className="cursor-pointer text-rose-600 focus:text-rose-600"
+                                          onClick={() => void handleDeleteSubmission(sub)}
+                                       >
+                                          <Trash2 className="mr-2 h-4 w-4" />
+                                          Delete
+                                       </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                 </DropdownMenu>
                               </div>
                            </td>
                         </tr>
                         );
                      })}
-                     {!isLoading && submissions.length === 0 && (
+                     {!isInitialLoading && submissions.length === 0 && (
                         <tr>
                            <td colSpan={tableColumnCount} className="p-20 text-center">
                               <div className="max-w-xs mx-auto space-y-4">
@@ -1378,6 +1474,66 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                   </button>
                </div>
             </div>
+         </Modal>
+
+         <Modal
+            isOpen={!!promoteTarget}
+            onClose={() => {
+               if (isPromoting) return;
+               setPromoteTarget(null);
+               setPromoteRoundId('');
+            }}
+            title="Super promote submission"
+            size="md"
+         >
+            {promoteTarget && (
+               <div className="space-y-5">
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-sm text-indigo-950">
+                     <p className="font-semibold">Bypass normal advancement rules</p>
+                     <p className="mt-1 text-indigo-900/80">
+                        Enroll <span className="font-semibold">{promoteTarget.applicant}</span> directly into a round.
+                     </p>
+                  </div>
+
+                  <div>
+                     <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Target round
+                     </label>
+                     <select
+                        value={promoteRoundId}
+                        onChange={(e) => setPromoteRoundId(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                     >
+                        {programRounds.map((round) => (
+                           <option key={round.id} value={round.id}>
+                              {round.title} ({round.type})
+                           </option>
+                        ))}
+                     </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                     <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                           setPromoteTarget(null);
+                           setPromoteRoundId('');
+                        }}
+                        disabled={isPromoting}
+                     >
+                        Cancel
+                     </Button>
+                     <Button
+                        type="button"
+                        onClick={() => void handleSuperPromote()}
+                        disabled={!promoteRoundId || isPromoting}
+                     >
+                        {isPromoting ? 'Promoting…' : 'Super promote'}
+                     </Button>
+                  </div>
+               </div>
+            )}
          </Modal>
 
          <SubmissionReviewSheet

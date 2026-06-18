@@ -210,9 +210,19 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
     setIsSaving(true);
     setError(null);
     try {
+      const isAnnounce = formData.type?.toLowerCase() === 'announce';
+      const isNomination = formData.type?.toLowerCase() === 'nomination';
+      const normalizedShortlist = (isNomination || isAnnounce)
+        ? { ...formData.shortlistConfig, enabled: false }
+        : formData.shortlistConfig;
+
       const roundToSave = {
         ...formData,
         name: trimmedName,
+        shortlistConfig: normalizedShortlist,
+        advancementCriteria: (isNomination || isAnnounce)
+          ? { type: 'all_pass' as const }
+          : formData.advancementCriteria,
         updatedAt: new Date().toISOString(),
         version: formData.version + 1,
       };
@@ -513,8 +523,8 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
             </div>
           </section>
 
-          {/* Shortlist Configuration */}
-          {formData.type?.toLowerCase() !== 'nomination' && (
+          {/* Shortlist Configuration — not used for nomination or announce rounds */}
+          {formData.type?.toLowerCase() !== 'nomination' && formData.type?.toLowerCase() !== 'announce' && (
             <section className="space-y-4">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-1">Pipeline Output</h4>
               <div className="space-y-5 bg-slate-50/50 p-4 rounded-[20px] border border-slate-100/50">

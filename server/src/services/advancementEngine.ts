@@ -117,16 +117,18 @@ async function computeParticipantScores(roundId: string, roundType: string): Pro
     return results;
   }
 
-  // Judging round — compute average score per submission
+  // Judging round — compute average score per submission.
+  // Include assignments without round_id for enrolled submissions (legacy/general judge assignments).
   const { data: assignments } = await supabase
     .from('submission_judges')
     .select(`
       submission_id,
       status,
+      round_id,
       scores(score, criterion_id, judging_criteria(weight, max_score))
     `)
-    .eq('round_id', roundId)
-    .in('submission_id', submissionIds);
+    .in('submission_id', submissionIds)
+    .or(`round_id.eq.${roundId},round_id.is.null`);
 
   // Fetch the round to get the program_id
   const { data: roundData } = await supabase
@@ -151,11 +153,12 @@ async function computeParticipantScores(roundId: string, roundType: string): Pro
   const scoreMap: Record<string, { totalPercentageSum: number; judgeCount: number }> = {};
 
   for (const assignment of (assignments || [])) {
-    if (assignment.status !== 'completed') continue;
+    const scores = (assignment as any).scores || [];
+    if (scores.length === 0) continue;
+
     const subId = assignment.submission_id;
     if (!scoreMap[subId]) scoreMap[subId] = { totalPercentageSum: 0, judgeCount: 0 };
 
-    const scores = (assignment as any).scores || [];
     let judgeWeightedSum = 0;
 
     for (const s of scores) {
@@ -327,6 +330,31 @@ async function evaluateEdgeCondition(
   return false;
 }
 
+function roundUsesScoringEvaluation(roundType: string, settings?: { evaluationLogic?: string } | null): boolean {
+  const normalizedType = roundType?.toLowerCase() || '';
+  if (normalizedType === 'nomination' || normalizedType === 'announce') return false;
+  const evalLogic = settings?.evaluationLogic || (
+    ['public voting', 'public rating', 'public'].includes(normalizedType) ? 'voting' : 'scoring'
+  );
+  return evalLogic === 'scoring';
+}
+
+async function hasJudgeScorecards(roundId: string, submissionIds: string[]): Promise<boolean> {
+  if (submissionIds.length === 0) return false;
+
+  const supabase = getSupabaseAdmin();
+  const { data: assignments } = await supabase
+    .from('submission_judges')
+    .select('id, status, scores(id)')
+    .in('submission_id', submissionIds)
+    .or(`round_id.eq.${roundId},round_id.is.null`);
+
+  return (assignments || []).some((assignment: any) => {
+    const scoreRows = assignment.scores || [];
+    return scoreRows.length > 0;
+  });
+}
+
 // ---- Public API ----
 
 /**
@@ -344,16 +372,13 @@ export async function previewAdvancement(
     ? { type: 'all_pass' }
     : (criteriaOverride || round.advancement_criteria as AdvancementCriteria || { type: 'all_pass' });
   const ranked = await computeParticipantScores(roundId, round.type);
+  const submissionIds = ranked.map((participant) => participant.submissionId);
 
-  // Check for empty scores
-  // Only check scores for rounds that are configured to use 'scoring' or are jury/judging rounds.
-  const evalLogic = round.settings?.evaluationLogic || (
-    ['public voting', 'public rating', 'public'].includes(round.type?.toLowerCase())
-      ? 'voting'
-      : (round.type?.toLowerCase() === 'nomination' ? 'none' : 'scoring')
-  );
-  const isJudgingRound = !isNomination && evalLogic === 'scoring';
-  const hasEmptyScores = isJudgingRound && ranked.every(r => r.score === 0);
+  const isJudgingRound = roundUsesScoringEvaluation(round.type, round.settings);
+  const hasJudgeScores = isJudgingRound
+    ? await hasJudgeScorecards(roundId, submissionIds)
+    : true;
+  const hasEmptyScores = isJudgingRound && ranked.length > 0 && !hasJudgeScores;
 
 
   if (hasEmptyScores && ranked.length > 0) {
@@ -498,21 +523,22 @@ export async function executeAdvancement(
           });
         }
       } else if (edges.length > 0) {
+        const advancingIds = advancingParticipants.map((participant) => participant.submissionId);
+        const shortlistedIds = new Set(advancingIds);
+
         const { data: shortlistedRows } = await supabase
           .from('submissions')
           .select('id, status, submission_data')
-          .in('id', advancingParticipants.map((p) => p.submissionId));
+          .in('id', advancingIds);
 
-        const shortlistedIds = new Set(
-          (shortlistedRows || [])
-            .filter((row: any) => {
-              const status = String(row.status || '').toLowerCase();
-              const dataStatus = String(row.submission_data?.status || '').toLowerCase();
-              const dataFlag = row.submission_data?.shortlisted === true;
-              return status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag;
-            })
-            .map((row: any) => row.id)
-        );
+        for (const row of shortlistedRows || []) {
+          const status = String(row.status || '').toLowerCase();
+          const dataStatus = String((row as any).submission_data?.status || '').toLowerCase();
+          const dataFlag = (row as any).submission_data?.shortlisted === true;
+          if (status === 'shortlisted' || dataStatus === 'shortlisted' || dataFlag) {
+            shortlistedIds.add(row.id);
+          }
+        }
 
         const unroutedSubmissionIds: string[] = [];
 
@@ -603,6 +629,14 @@ export async function executeAdvancement(
 
     const enrollmentRows = Array.from(enrollmentsByRound.values()).flat();
     const criteria = criteriaOverride || round.advancement_criteria || { type: 'all_pass' };
+
+    if (advancingSet.size > 0 && criteria.type !== 'all_pass') {
+      await supabase
+        .from('submissions')
+        .update({ status: 'shortlisted' })
+        .in('id', Array.from(advancingSet));
+    }
+
     const txEnabled = process.env.ROUND_ADVANCEMENT_TX_ENABLED !== 'false';
     if (!txEnabled) {
       return { ok: false, error: 'Transactional advancement is disabled by ROUND_ADVANCEMENT_TX_ENABLED=false.' };

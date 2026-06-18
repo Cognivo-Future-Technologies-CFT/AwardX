@@ -646,10 +646,20 @@ class DatabaseService {
       .maybeSingle();
 
     if (profile?.organization_id === this.currentOrgId) {
-      this.cachedRoleName = 'owner';
-      this.cachedPermissions = new Set(['all']);
-      this.permissionsLoaded = true;
-      return;
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', this.currentOrgId)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (membership) {
+        this.cachedRoleName = 'owner';
+        this.cachedPermissions = new Set(['all']);
+        this.permissionsLoaded = true;
+        return;
+      }
     }
 
     // Prefer event-scoped membership, fall back to org-wide (program_id IS NULL).
@@ -2143,6 +2153,9 @@ class DatabaseService {
   }
 
   async createRole(role: { name: string; permissions: string[]; color?: string; programId?: string }) {
+    if (role.programId?.startsWith('temp-')) {
+      throw new Error('Program is still loading. Wait a moment and try again.');
+    }
     const { data, error } = await roles.create(role);
     if (error) {
       const msg = error.message || '';
@@ -3674,6 +3687,50 @@ class DatabaseService {
       resourceType: 'program',
       resourceId: programId,
       metadata: { patch },
+    });
+  }
+
+  async superPromoteSubmission(submissionId: string, roundId: string, programId: string) {
+    if (!programId) {
+      throw new Error('programId is required to super promote a submission');
+    }
+
+    if (!supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    const { data: round, error: roundError } = await supabase
+      .from('rounds')
+      .select('id, program_id, title, type')
+      .eq('id', roundId)
+      .maybeSingle();
+
+    if (roundError || !round) {
+      throw new Error('Round not found');
+    }
+
+    if (round.program_id !== programId) {
+      throw new Error('Round does not belong to this program');
+    }
+
+    const { error: enrollError } = await roundSubmissions.enroll(roundId, submissionId);
+    if (enrollError) {
+      throw new Error(enrollError.message || 'Failed to enroll submission in round');
+    }
+
+    try {
+      await this.bulkUpdateSubmissions([submissionId], { status: 'Shortlisted' } as any, programId);
+    } catch {
+      // Enrollment succeeded; status update is best-effort for pipeline visibility.
+    }
+
+    await this.safeAuditLog({
+      action: 'Super promoted submission',
+      actionType: 'update',
+      resourceType: 'submission',
+      resourceId: submissionId,
+      details: `Enrolled in round: ${round.title}`,
+      metadata: { submissionId, roundId, programId, roundTitle: round.title },
     });
   }
 

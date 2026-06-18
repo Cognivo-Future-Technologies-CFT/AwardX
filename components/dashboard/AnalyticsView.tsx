@@ -37,12 +37,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ activeEvent }) => 
   });
 
   useEffect(() => {
-    const loadAnalytics = async () => {
-      setIsLoading(true);
+    let cancelled = false;
+
+    const loadAnalytics = async (showSpinner: boolean) => {
+      if (showSpinner) setIsLoading(true);
       try {
         const baseStats = await databaseService.getStats(activeEvent?.id) as any;
-        
-        // Also compute status breakdown from submissions
+
         const submissions = await databaseService.getSubmissions(activeEvent?.id);
         const statusCounts: Record<string, number> = {};
         submissions.forEach((s: any) => {
@@ -53,18 +54,25 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ activeEvent }) => 
           .map(([name, value]) => ({ name, value }))
           .sort((a, b) => b.value - a.value);
 
-        setStats({ ...baseStats, statusSplit });
+        if (!cancelled) {
+          setStats({ ...baseStats, statusSplit });
+        }
       } catch (error) {
         console.error('Failed to load analytics:', error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled && showSpinner) {
+          setIsLoading(false);
+        }
       }
     };
 
-    loadAnalytics();
-    const interval = setInterval(loadAnalytics, 10000);
-    return () => clearInterval(interval);
-  }, [activeEvent]);
+    void loadAnalytics(true);
+    const interval = setInterval(() => { void loadAnalytics(false); }, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeEvent?.id]);
 
   if (isLoading) {
     return (

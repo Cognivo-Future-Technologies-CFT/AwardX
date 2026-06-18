@@ -5,7 +5,7 @@ import { FormBuilder, FormField, FormPage, FormTheme, FormBuilderRef } from './F
 import { db } from '../../services/database';
 import { Program } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
-import { Save, CheckCircle2, XCircle, X, Link2, Copy, Check, Layout, Settings } from 'lucide-react';
+import { Save, CheckCircle2, XCircle, X, Link2, Copy, Check, Layout, Settings, AlertTriangle } from 'lucide-react';
 import { FloatingPanelToggle } from './formBuilder/FloatingPanelToggle';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
@@ -24,6 +24,16 @@ interface SavedForm {
   isActive: boolean;
   createdAt: string;
 }
+
+type PendingFormSave = {
+  fields: FormField[];
+  pages: FormPage[];
+  theme: FormTheme;
+  intent: 'update' | 'create' | 'publish';
+};
+
+const hasAwardSelectorField = (fields: FormField[]) =>
+  fields.some((field) => field.type === 'award_selector');
 
 const syncAwardSelectorOptions = (
   fields: FormField[],
@@ -102,6 +112,8 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(false);
   const [activeFormId, setActiveFormId] = useState<string | null>(null);
   const [isLoadingForms, setIsLoadingForms] = useState(true);
+  const [awardSelectorWarningOpen, setAwardSelectorWarningOpen] = useState(false);
+  const [pendingSave, setPendingSave] = useState<PendingFormSave | null>(null);
 
   useEffect(() => {
     if (!activeEvent?.id) {
@@ -197,51 +209,39 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     }
   };
 
-  const handleSave = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
-    // Prevent duplicate saves
-    if (isSaving) return;
+  const persistExistingForm = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+    if (!selectedFormId) return;
 
     const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
     setCurrentForm(normalizedFields);
     setCurrentPages(pages);
     setCurrentTheme(theme);
 
-    if (selectedFormId) {
-      // Update existing form
-      setIsSaving(true);
-      setSaveMessage(null);
-      try {
-        await db.updateForm(selectedFormId, { pages, theme });
-        await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
-        await loadSavedForms(true);
-        setSaveMessage({ type: 'success', text: 'Form saved successfully!' });
-        setTimeout(() => setSaveMessage(null), 5000);
-      } catch (error: any) {
-        setSaveMessage({ type: 'error', text: error?.message || 'Failed to save form. Please try again.' });
-        setTimeout(() => setSaveMessage(null), 5000);
-      } finally {
-        setIsSaving(false);
-      }
-    } else {
-      // New form - open modal to get name
-      setIsSaveModalOpen(true);
+    setIsSaving(true);
+    setSaveMessage(null);
+    try {
+      await db.updateForm(selectedFormId, { pages, theme });
+      await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
+      await loadSavedForms(true);
+      setSaveMessage({ type: 'success', text: 'Form saved successfully!' });
+      setTimeout(() => setSaveMessage(null), 5000);
+    } catch (error: any) {
+      setSaveMessage({ type: 'error', text: error?.message || 'Failed to save form. Please try again.' });
+      setTimeout(() => setSaveMessage(null), 5000);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handlePublishFromBuilder = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
-    if (!selectedFormId) {
-      // Save first if no form selected
-      handleSave(fields, pages, theme);
-      return;
-    }
+  const publishExistingForm = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+    if (!selectedFormId) return;
 
-    const targetForm = savedForms.find(f => f.id === selectedFormId);
+    const targetForm = savedForms.find((form) => form.id === selectedFormId);
     if (!targetForm) return;
 
+    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
     setSaveMessage(null);
     try {
-      // Save the form first
-      const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
       await db.updateForm(selectedFormId, { pages, theme, is_active: !targetForm.isActive });
       await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
       if (!targetForm.isActive && activeEvent?.id) {
@@ -252,13 +252,76 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       await loadSavedForms(true);
       setSaveMessage({
         type: 'success',
-        text: targetForm.isActive ? 'Form unpublished.' : 'Form saved and published!'
+        text: targetForm.isActive ? 'Form unpublished.' : 'Form saved and published!',
       });
       setTimeout(() => setSaveMessage(null), 5000);
     } catch (error: any) {
       setSaveMessage({ type: 'error', text: error?.message || 'Failed to publish form.' });
       setTimeout(() => setSaveMessage(null), 5000);
     }
+  };
+
+  const beginSaveFlow = (
+    fields: FormField[],
+    pages: FormPage[],
+    theme: FormTheme,
+    intent: PendingFormSave['intent'],
+  ) => {
+    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
+    setCurrentForm(normalizedFields);
+    setCurrentPages(pages);
+    setCurrentTheme(theme);
+
+    if (!hasAwardSelectorField(normalizedFields)) {
+      setPendingSave({ fields: normalizedFields, pages, theme, intent });
+      setAwardSelectorWarningOpen(true);
+      return;
+    }
+
+    if (intent === 'update') {
+      void persistExistingForm(normalizedFields, pages, theme);
+      return;
+    }
+    if (intent === 'create') {
+      setIsSaveModalOpen(true);
+      return;
+    }
+    void publishExistingForm(normalizedFields, pages, theme);
+  };
+
+  const handleAwardWarningContinue = () => {
+    if (!pendingSave) {
+      setAwardSelectorWarningOpen(false);
+      return;
+    }
+
+    const { fields, pages, theme, intent } = pendingSave;
+    setAwardSelectorWarningOpen(false);
+    setPendingSave(null);
+
+    if (intent === 'update') {
+      void persistExistingForm(fields, pages, theme);
+      return;
+    }
+    if (intent === 'create') {
+      setIsSaveModalOpen(true);
+      return;
+    }
+    void publishExistingForm(fields, pages, theme);
+  };
+
+  const handleSave = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+    if (isSaving) return;
+    beginSaveFlow(fields, pages, theme, selectedFormId ? 'update' : 'create');
+  };
+
+  const handlePublishFromBuilder = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
+    if (!selectedFormId) {
+      handleSave(fields, pages, theme);
+      return;
+    }
+
+    beginSaveFlow(fields, pages, theme, 'publish');
   };
 
   const handleSaveNewForm = async () => {
@@ -458,6 +521,42 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
             <Button onClick={handleSaveNewForm} disabled={!formName.trim() || isSaving}>
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? 'Saving...' : 'Save Form'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={awardSelectorWarningOpen}
+        onClose={() => {
+          setAwardSelectorWarningOpen(false);
+          setPendingSave(null);
+        }}
+        title="No award selector"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+            <div className="space-y-1 text-sm">
+              <p className="font-semibold">Applicants won&apos;t be able to choose an award category.</p>
+              <p className="text-amber-900/80">
+                This form does not include an Award Selector field. Submissions may be harder to
+                route to the right category unless you assign awards manually later.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAwardSelectorWarningOpen(false);
+                setPendingSave(null);
+              }}
+            >
+              Go back
+            </Button>
+            <Button onClick={handleAwardWarningContinue} disabled={isSaving}>
+              Continue anyway
             </Button>
           </div>
         </div>

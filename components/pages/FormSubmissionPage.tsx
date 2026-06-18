@@ -567,9 +567,28 @@ const fieldsByStep = useMemo(() => {
   return grouped;
 }, [formFields]);
 
-  const wizardStepCount = WIZARD_STEPS.length;
-  const wizardStepIndex = Math.min(currentFieldIdx, wizardStepCount - 1);
-  const currentWizardStep = WIZARD_STEPS[wizardStepIndex];
+  const activeWizardSteps = useMemo(() => {
+    const steps: WizardStepDef[] = [];
+
+    if (fieldsByStep.profile.length > 0) {
+      steps.push(WIZARD_STEPS.find((step) => step.id === 'profile')!);
+    }
+    if (fieldsByStep.award.length > 0) {
+      steps.push(WIZARD_STEPS.find((step) => step.id === 'award')!);
+    }
+    if (fieldsByStep.media.length > 0) {
+      steps.push(WIZARD_STEPS.find((step) => step.id === 'media')!);
+    }
+    if (formFields.length > 0) {
+      steps.push(WIZARD_STEPS.find((step) => step.id === 'review')!);
+    }
+
+    return steps;
+  }, [fieldsByStep, formFields.length]);
+
+  const wizardStepCount = activeWizardSteps.length;
+  const wizardStepIndex = Math.min(currentFieldIdx, Math.max(wizardStepCount - 1, 0));
+  const currentWizardStep = activeWizardSteps[wizardStepIndex] ?? WIZARD_STEPS[0];
   const isReviewStep = currentWizardStep.id === 'review';
   const isLastStep = wizardStepIndex >= wizardStepCount - 1;
   const accentColor = theme.primaryColor && theme.primaryColor !== '#6366f1'
@@ -577,13 +596,14 @@ const fieldsByStep = useMemo(() => {
     : ACCENT_GREEN;
 
   useEffect(() => {
-    setCurrentFieldIdx((prev) => Math.min(prev, wizardStepCount - 1));
-  }, [formFields.length, wizardStepCount]);
+    setCurrentFieldIdx((prev) => Math.min(prev, Math.max(activeWizardSteps.length - 1, 0)));
+  }, [activeWizardSteps.length]);
 
   const validateCurrentStep = () => {
     if (isReviewStep) return true;
     const stepId = currentWizardStep.id as Exclude<WizardStepId, 'review'>;
     const stepFields = fieldsByStep[stepId];
+    if (stepFields.length === 0) return true;
     for (const field of stepFields) {
       if (field.required && !hasFieldValue(formData[field.id])) {
         return false;
@@ -1116,11 +1136,7 @@ const fieldsByStep = useMemo(() => {
 
 const renderSectionFields = (fields: FormField[]) => {
   if (fields.length === 0) {
-    return (
-      <div className="rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-slate-500">
-        No fields in this section.
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -1385,25 +1401,25 @@ const renderSectionFields = (fields: FormField[]) => {
         Submission Progress
       </p>
       <p className="text-sm text-slate-500 mt-1">
-        {Math.round(((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100)}% Complete
+        {Math.round(((wizardStepIndex + 1) / Math.max(activeWizardSteps.length, 1)) * 100)}% Complete
       </p>
     </div>
 
     <div className="rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1">
       <span className="text-xs font-semibold text-emerald-700">
-        Step {wizardStepIndex + 1}/{WIZARD_STEPS.length}
+        Step {wizardStepIndex + 1}/{activeWizardSteps.length}
       </span>
     </div>
   </div>
 
   <div className="flex gap-2">
-    {WIZARD_STEPS.map((_, idx) => {
+    {activeWizardSteps.map((step, idx) => {
       const completed = idx < wizardStepIndex;
       const active = idx === wizardStepIndex;
 
       return (
         <motion.div
-          key={idx}
+          key={step.id}
           layout
           className={`
             h-2.5 flex-1 rounded-full transition-all duration-500

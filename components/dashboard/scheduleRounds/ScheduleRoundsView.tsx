@@ -123,6 +123,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   const [hasCustomEdges, setHasCustomEdges] = useState(false);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
   const [roundInsights, setRoundInsights] = useState<Record<string, RoundCardInsight>>({});
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [advancementModal, setAdvancementModal] = useState<AdvancementModalState | null>(null);
@@ -185,13 +186,15 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
 
 
-  const loadRoundInsights = useCallback(async (targetRounds: Round[]) => {
+  const loadRoundInsights = useCallback(async (targetRounds: Round[], options?: { silent?: boolean }) => {
     if (!activeEvent || targetRounds.length === 0) {
       setRoundInsights({});
       return;
     }
 
-    setIsInsightsLoading(true);
+    if (!options?.silent) {
+      setIsInsightsLoading(true);
+    }
     try {
       const insightsEntries = await Promise.all(
         targetRounds.map(async (round): Promise<[string, RoundCardInsight]> => {
@@ -273,9 +276,12 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     }
   }, [activeEvent]);
 
-  const loadWorkflow = useCallback(async () => {
+  const loadWorkflow = useCallback(async (options?: { silent?: boolean }) => {
     if (!activeEvent) return;
-    setIsLoading(true);
+    const silent = options?.silent ?? hasLoadedOnceRef.current;
+    if (!silent) {
+      setIsLoading(true);
+    }
     try {
       const [loadedRounds, loadedEdges] = await Promise.all([
         scheduleRoundsService.getRounds(activeEvent.id),
@@ -327,19 +333,25 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       setRoundEdges([]);
       setHasCustomEdges(false);
     } finally {
+      hasLoadedOnceRef.current = true;
       setIsLoading(false);
     }
-  }, [activeEvent, enforceNominationFirst, updateRepresentation]);
+  }, [activeEvent, enforceNominationFirst, updateRepresentation, persistWorkflowEdges]);
+
+  const insightsLoadedOnceRef = useRef(false);
 
   useEffect(() => {
-    void loadRoundInsights(rounds);
+    void loadRoundInsights(rounds, { silent: insightsLoadedOnceRef.current });
+    insightsLoadedOnceRef.current = true;
   }, [rounds, loadRoundInsights]);
 
   useEffect(() => {
     if (activeEvent) {
+      hasLoadedOnceRef.current = false;
+      insightsLoadedOnceRef.current = false;
       void loadWorkflow();
     }
-  }, [activeEvent, loadWorkflow]);
+  }, [activeEvent?.id, loadWorkflow]);
 
   const handleEdgeCreate = useCallback(
     async (edge: RoundEdge) => {
@@ -359,7 +371,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       } catch (error: any) {
         console.error('Failed to save workflow edge:', error);
         toast.error(error?.message || 'Could not save workflow connection');
-        await loadWorkflow(); // revert state
+        await loadWorkflow({ silent: true }); // revert state
       }
     },
     [roundEdges, rounds, persistWorkflowEdges, loadWorkflow],
@@ -383,7 +395,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       } catch (error: any) {
         console.error('Failed to update workflow edge:', error);
         toast.error(error?.message || 'Could not update workflow connection');
-        await loadWorkflow(); // revert state
+        await loadWorkflow({ silent: true }); // revert state
       }
     },
     [roundEdges, rounds, persistWorkflowEdges, loadWorkflow],
@@ -627,10 +639,16 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
     if (preview.hasEmptyScores && isJudgingRound) {
       toast.error('No scores yet — judges must score submissions before shortlisting.');
-      return;
+      return false;
+    }
+
+    if (preview.paused && preview.reason === 'no_scores' && isJudgingRound) {
+      toast.error('No scores yet — judges must score submissions before shortlisting.');
+      return false;
     }
 
     setAdvancementModal({ roundId: round.id, preview, criteriaOverride });
+    return true;
   }, []);
 
 
@@ -646,18 +664,31 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
             throw new Error(activated.error || 'Could not start round');
           }
           toast.success(`"${round.name}" is now active`);
-          await loadWorkflow();
+          await loadWorkflow({ silent: true });
           return;
         }
 
         if (round.status === 'active') {
+          const criteriaOverride = shortlistConfigToCriteria(round.shortlistConfig, round.type);
+          const isJudgingRound = round.type?.toLowerCase() !== 'nomination' && (round.evaluationLogic
+            ? round.evaluationLogic === 'scoring'
+            : !['public voting', 'public rating', 'public'].includes(round.type?.toLowerCase()));
+
+          if (isJudgingRound) {
+            const preview = await previewAdvancement(round.id, criteriaOverride);
+            if (preview.hasEmptyScores || (preview.paused && preview.reason === 'no_scores')) {
+              toast.error('No scores yet — judges must score submissions before shortlisting.');
+              return;
+            }
+          }
+
           const completed = await completeRound(roundId);
           if (!completed.ok) {
             throw new Error(completed.error || 'Could not end round');
           }
           const refreshed = { ...round, status: 'completed' as const };
           await openAdvancementPreview(refreshed);
-          await loadWorkflow();
+          await loadWorkflow({ silent: true });
           return;
         }
 
@@ -679,7 +710,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         const result = await promoteRound(roundId);
         if (!result.ok) throw new Error(result.error || 'Could not promote round');
         toast.success(`Promoted — ${result.enrolled || 0} submissions enrolled for new nomination cycle`);
-        await loadWorkflow();
+        await loadWorkflow({ silent: true });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Promote failed');
       }
@@ -694,7 +725,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       const result = await resetPipeline(activeEvent.id);
       if (!result.ok) throw new Error(result.error || 'Failed to reset participants');
       toast.success('All participants, evaluations, and rounds have been reset successfully.');
-      await loadWorkflow();
+      await loadWorkflow({ silent: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Reset failed');
     } finally {
@@ -739,7 +770,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       }
 
       setAdvancementModal(null);
-      await loadWorkflow();
+      await loadWorkflow({ silent: true });
     },
     [advancementModal, rounds, loadWorkflow],
   );

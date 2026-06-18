@@ -16,6 +16,7 @@ interface UniversalSearchPaletteProps {
   isOpen: boolean;
   query: string;
   results: UniversalSearchResult[];
+  isLoading?: boolean;
   onQueryChange: (value: string) => void;
   onClose: () => void;
 }
@@ -24,6 +25,7 @@ export const UniversalSearchPalette: React.FC<UniversalSearchPaletteProps> = ({
   isOpen,
   query,
   results,
+  isLoading = false,
   onQueryChange,
   onClose,
 }) => {
@@ -131,7 +133,7 @@ export const UniversalSearchPalette: React.FC<UniversalSearchPaletteProps> = ({
             {/* Detached Results Panel */}
             <div className="mt-4 overflow-hidden rounded-[28px] border border-white/30 bg-white/75 backdrop-blur-xl shadow-[0_32px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-white/10">
               <div ref={listRef} className="max-h-[50vh] overflow-y-auto overscroll-contain py-3 px-3 space-y-1">
-                {!hasQuery && (
+                {!hasQuery && results.length === 0 && !isLoading && (
                   <div className="px-5 py-10 text-center">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-50/60 to-purple-50/60 shadow-inner">
                       <Sparkles className="h-6.5 w-6.5 text-indigo-500" />
@@ -148,7 +150,13 @@ export const UniversalSearchPalette: React.FC<UniversalSearchPaletteProps> = ({
                   </div>
                 )}
 
-                {hasQuery && flatResults.length === 0 && (
+                {hasQuery && isLoading && (
+                  <div className="px-5 py-12 text-center">
+                    <p className="text-sm font-medium text-slate-500">Searching workspace...</p>
+                  </div>
+                )}
+
+                {hasQuery && !isLoading && flatResults.length === 0 && (
                   <div className="px-5 py-12 text-center">
                     <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50/40">
                       <Search className="h-7 w-7 text-slate-300" />
@@ -160,11 +168,13 @@ export const UniversalSearchPalette: React.FC<UniversalSearchPaletteProps> = ({
 
                 {Object.entries(grouped).map(([category, items]) => (
                   <div key={category} className="space-y-1">
-                    <div className="px-4 py-2 mt-3 first:mt-1">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                        {category}
-                      </span>
-                    </div>
+                    {(hasQuery || items.length > 1) && (
+                      <div className="px-4 py-2 mt-3 first:mt-1">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                          {category}
+                        </span>
+                      </div>
+                    )}
                     {items.map((result) => {
                       globalIndex++;
                       const idx = globalIndex;
@@ -209,7 +219,7 @@ export const UniversalSearchPalette: React.FC<UniversalSearchPaletteProps> = ({
               </div>
 
               {/* Footer */}
-              {hasQuery && flatResults.length > 0 && (
+              {flatResults.length > 0 && (
                 <div className="flex items-center justify-between border-t border-slate-200/30 bg-slate-50/30 px-5 py-3">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     {flatResults.length} result{flatResults.length !== 1 ? 's' : ''}

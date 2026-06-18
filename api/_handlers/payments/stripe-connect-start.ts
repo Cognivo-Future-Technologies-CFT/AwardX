@@ -104,8 +104,8 @@ export default async function handler(req: any, res: any) {
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       type: 'account_onboarding',
-      refresh_url: `${siteUrl}/dashboard?view=settings&tab=billing&programId=${programId}&stripe=refresh`,
-      return_url: `${siteUrl}/dashboard?view=settings&tab=billing&programId=${programId}&stripe=connected`,
+      refresh_url: `${siteUrl}/dashboard/events/${programId}/settings/billing?stripe=refresh`,
+      return_url: `${siteUrl}/dashboard/events/${programId}/settings/billing?stripe=connected`,
     });
 
     logInfo('payments.stripe_connect_start.created', { programId, accountId });

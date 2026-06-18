@@ -158,28 +158,40 @@ export const resolveUserContext = async (forceRefresh = false): Promise<CachedUs
     let orgId: string | null = activeOrganizationOverride;
 
     if (!orgId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data: memberships, error: membershipError } = await supabase
+        .from('organization_members')
+        .select('organization_id, joined_at')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('joined_at', { ascending: false });
 
-      if (!profileError && profile?.organization_id) {
-        orgId = profile.organization_id;
-      }
-
-      if (!orgId) {
-        const { data: membership } = await supabase
-          .from('organization_members')
-          .select('organization_id, joined_at')
-          .eq('user_id', userId)
-          .order('joined_at', { ascending: false })
-          .limit(1)
+      if (!membershipError && memberships && memberships.length > 0) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('organization_id')
+          .eq('id', userId)
           .maybeSingle();
-        orgId = membership?.organization_id || null;
 
-        if (orgId && (!profile || !profile.organization_id)) {
+        const profileOrgId = !profileError ? profile?.organization_id : null;
+        const hasActiveProfileOrg = profileOrgId
+          && memberships.some((membership) => membership.organization_id === profileOrgId);
+
+        orgId = hasActiveProfileOrg
+          ? profileOrgId!
+          : memberships[0].organization_id;
+
+        if (orgId && profileOrgId !== orgId) {
           void supabase.from('profiles').update({ organization_id: orgId }).eq('id', userId);
+        }
+      } else {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('organization_id')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (!profileError && profile?.organization_id) {
+          void supabase.from('profiles').update({ organization_id: null }).eq('id', userId);
         }
       }
     }

@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { isPersistedUuid } from '../lib/ids';
 import { resolveAuthCallbackUrl, resolveSiteUrl } from '../lib/siteUrl';
 import { fetchBackendJson } from './backendApi';
 import { supabase, supabaseUrl, isSupabaseReady } from './supabaseClient';
@@ -617,7 +618,8 @@ export const organizations = {
     const { data: memberships, error: membershipError } = await supabase
       .from('organization_members')
       .select('organization_id')
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('status', 'active');
 
     if (membershipError) {
       return { data: [], error: membershipError };
@@ -625,16 +627,6 @@ export const organizations = {
 
     for (const row of memberships || []) {
       if (row.organization_id) orgIds.add(row.organization_id);
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (profile?.organization_id) {
-      orgIds.add(profile.organization_id);
     }
 
     if (orgIds.size === 0) {
@@ -1907,13 +1899,14 @@ export const roles = {
 
   create: async (role: { name: string; color?: string; permissions: string[]; programId?: string }) => {
     const org = await organizations.getCurrent();
+    const programId = isPersistedUuid(role.programId) ? role.programId : null;
     const { data: newRole, error: roleError } = await supabase
       .from('roles')
       .insert({
         name: role.name,
         color: role.color,
         organization_id: org.data?.id,
-        program_id: role.programId || null,
+        program_id: programId,
       })
       .select()
       .single();
@@ -2333,12 +2326,50 @@ export const team = {
   removeMember: async (memberId: string) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { error: { message: 'Not authenticated' } };
+
+    const { data: member, error: lookupError } = await supabase
+      .from('organization_members')
+      .select('user_id')
+      .eq('id', memberId)
+      .eq('organization_id', orgId)
+      .maybeSingle();
+
+    if (lookupError) return { error: lookupError };
+    if (!member?.user_id) return { error: { message: 'Member not found' } };
+
+    const removedUserId = member.user_id;
+
     const { error } = await supabase
       .from('organization_members')
       .delete()
-      .eq('id', memberId)
+      .eq('user_id', removedUserId)
       .eq('organization_id', orgId);
-    return { error };
+
+    if (error) return { error };
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', removedUserId)
+      .maybeSingle();
+
+    if (profile?.organization_id === orgId) {
+      const { data: remainingMembership } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', removedUserId)
+        .eq('status', 'active')
+        .order('joined_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      await supabase
+        .from('profiles')
+        .update({ organization_id: remainingMembership?.organization_id || null })
+        .eq('id', removedUserId);
+    }
+
+    return { error: null };
   },
 };
 

@@ -187,7 +187,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
     staleTime: 30_000,
   });
 
-  const isLoading = statsQuery.isLoading;
+  const isInitialLoading = statsQuery.isLoading && statsQuery.data === undefined;
   const stats = (statsQuery.data as any) || emptyStats;
 
   return (
@@ -272,7 +272,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
 
         {/* Right column: charts */}
         <div className="lg:col-span-2 space-y-4">
-          {isLoading ? (
+          {isInitialLoading ? (
             <>
               <SkeletonLoader className="h-[260px]" />
               <SkeletonLoader className="h-[200px]" />
