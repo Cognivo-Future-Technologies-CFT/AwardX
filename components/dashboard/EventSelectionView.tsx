@@ -821,12 +821,32 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       </main>
 
       {/* Collapsible Right Sidebar Panel */}
-      <motion.aside
-         initial={{ x: '100%' }}
-         animate={{ x: isSidebarOpen ? 0 : '100%' }}
-         transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-         className="fixed right-0 top-20 bottom-0 w-[320px] bg-white border-l border-slate-200 shadow-2xl z-40 p-6 flex flex-col"
-      >
+<motion.aside
+  initial={{ x: '100%' }}
+  animate={{
+    x: isSidebarOpen ? 0 : '100%',
+    y: '-50%',
+  }}
+  transition={{
+    type: 'spring',
+    damping: 28,
+    stiffness: 220,
+  }}
+  className="
+    fixed
+    right-0
+    top-1/2
+    w-[320px]
+    max-h-[75vh]
+    bg-white
+    border border-slate-200
+    rounded-l-[28px]
+    shadow-2xl
+    z-40
+    p-6
+    flex flex-col
+  "
+>
          {/* Toggle Tab Button on Left Edge */}
          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
