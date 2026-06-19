@@ -14,7 +14,7 @@ import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
 import { todayDateString } from '../../lib/utils';
 import { Logo, LogoTitle } from '../Logo';
-
+import { toast } from 'sonner';
 interface UserData {
    name: string;
    avatar: string;
@@ -419,7 +419,27 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
 
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!newEvent.title || !newEvent.deadline || !selectedType || isCreating) return;
+      if (isCreating) return;
+
+if (!newEvent.title?.trim()) {
+   toast.error('Please enter a program title');
+   return;
+}
+
+if (!newEvent.category) {
+   toast.error('Please select a category');
+   return;
+}
+
+if (!selectedType) {
+   toast.error('Please select a program type');
+   return;
+}
+
+if (!newEvent.deadline) {
+   toast.error('Please select a deadline');
+   return;
+}
 
       setIsCreating(true);
 
@@ -442,7 +462,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
       // Add optimistic event immediately
       setEvents(prev => [optimisticEvent, ...prev]);
       setIsModalOpen(false);
-      setNewEvent({ title: '', category: 'General', deadline: '' });
+      setNewEvent({ title: '', category: '', deadline: '' });
 
       try {
          // Ensure database is initialized before creating
