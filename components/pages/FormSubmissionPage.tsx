@@ -855,34 +855,135 @@ const fieldsByStep = useMemo(() => {
             })}
           </div>
         );
-      case 'award_selector':
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {(field.options || []).map((opt, i) => {
-              const isSelected = value === opt;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => handleInputChange(field.id, opt)}
-                  className={`relative flex items-center gap-3 p-4 sm:p-5 rounded-[20px] border-2 text-left transition-all duration-200 ${isSelected ? 'border-emerald-500 bg-emerald-50/80 shadow-md ring-1 ring-emerald-500/20' : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'}`}
-                  style={{ fontFamily: theme.fontFamily }}
-                >
-                  <div className={`flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl ${isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                    <Award className="w-5 h-5" />
-                  </div>
-                  <span className={`text-[15px] font-semibold leading-snug ${isSelected ? 'text-emerald-900' : 'text-slate-700'}`}>{opt}</span>
-                  {isSelected && (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 absolute top-3 right-3" />
-                  )}
-                </button>
-              );
-            })}
-            {(!field.options || field.options.length === 0) && (
-              <div className="col-span-full text-sm text-slate-400 italic p-4">No award categories available.</div>
-            )}
+case 'award_selector': {
+  const options = field.options || [];
+
+  const groupedAwards = options.reduce((acc, option) => {
+    const [category, award] = option.split('->').map(v => v.trim());
+
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+
+    acc[category].push(award);
+
+    return acc;
+  }, {} as Record<string, string[]>);
+
+  return (
+    <div className="relative space-y-2 overflow-visible">
+      <details className="group relative overflow-visible">
+        <summary
+          className="
+            list-none
+            flex
+            items-center
+            justify-between
+            rounded-2xl
+            border
+            border-slate-200
+            bg-white
+            px-4
+            py-4
+            cursor-pointer
+            shadow-sm
+            transition-all
+            hover:border-emerald-300
+            hover:shadow-md
+          "
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+              <Award className="w-5 h-5 text-emerald-600" />
+            </div>
+
+            <div className="min-w-50">
+              <div
+                className={`truncate text-sm font-medium ${
+                  value ? 'text-slate-900' : 'text-slate-400'
+                }`}
+              >
+                {value || 'Select an Award'}
+              </div>
+            </div>
           </div>
-        );
+
+          <ChevronDown className="h-5 w-5 text-slate-400 transition-transform group-open:rotate-180" />
+        </summary>
+
+<div
+  className="
+    mt-3
+    w-full
+    overflow-hidden
+    rounded-2xl
+    border
+    border-slate-200
+    bg-white
+    shadow-lg
+    ring-1
+    ring-slate-100
+  "
+>
+          <div className="max-h-80 overflow-y-auto py-2">
+            {Object.entries(groupedAwards).map(([category, awards]) => (
+              <div key={category}>
+                <div className="px-4 py-3 bg-slate-100 text-xs font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200">
+                  {category}
+                </div>
+
+                {awards.map((award) => {
+                  const optionValue = `${category} -> ${award}`;
+                  const selected = value === optionValue;
+
+                  return (
+                    <button
+                      key={optionValue}
+                      type="button"
+                      onClick={() =>
+                        handleInputChange(field.id, optionValue)
+                      }
+                      className={`
+                        flex
+                        w-full
+                        items-center
+                        justify-between
+                        px-4
+                        py-3
+                        text-left
+                        transition-colors
+                        ${
+                          selected
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'hover:bg-slate-50'
+                        }
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Award className="h-4 w-4" />
+                        <span>{award}</span>
+                      </div>
+
+                      {selected && (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
+
+      {!options.length && (
+        <div className="text-sm italic text-slate-400">
+          No award categories available.
+        </div>
+      )}
+    </div>
+  );
+}
       case 'file': {
         const fileState: { name?: string; url?: string; uploading?: boolean; error?: string } =
           typeof value === 'object' && value !== null ? value : {};
