@@ -316,45 +316,80 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
                         ×{c.weight}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-2">
-                      <input
-                        type="number"
-                        min={c.minScore}
-                        max={Math.min(c.maxScore, 100)}
-                        step={1}
-                        value={scores[c.id] ?? ''}
-                        onChange={e => {
-                          const value = e.target.value.trim();
-                          if (value === '') {
-                            setScores(prev => {
-                              const next = { ...prev };
-                              delete next[c.id];
-                              return next;
-                            });
-                            setClampWarnings(prev => ({ ...prev, [c.id]: false }));
-                            setIsDirty(true);
-                            return;
-                          }
+<div className="flex items-center gap-3 mt-2">
+  <input
+    type="number"
+    min={c.minScore}
+    max={Math.min(c.maxScore, 100)}
+    step={1}
+    value={scores[c.id] ?? ''}
+    onChange={e => {
+      const value = e.target.value.trim();
 
-                          const parsed = Number(value);
-                          if (!Number.isFinite(parsed)) return;
+      if (value === '') {
+        setScores(prev => {
+          const next = { ...prev };
+          delete next[c.id];
+          return next;
+        });
 
-                          const clamped = clampScore(parsed, c.minScore, c.maxScore);
-                          // Task 3: show inline warning if value was clamped
-                          const wasClamped = clamped !== parsed;
-                          setClampWarnings(prev => ({ ...prev, [c.id]: wasClamped }));
-                          setScores(prev => ({ ...prev, [c.id]: clamped }));
-                          setIsDirty(true);
-                        }}
-                        placeholder={`${c.minScore}–${Math.min(c.maxScore, 100)}`}
-                        className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-300"
-                      />
-                      <span className="text-xs text-slate-400">/ {c.maxScore}</span>
-                    </div>
-                    {/* Task 3: inline clamp warning */}
-                    {clampWarnings[c.id] && (
-                      <p className="mt-1 text-xs text-amber-600">Score adjusted to max ({Math.min(c.maxScore, 100)})</p>
-                    )}
+        setClampWarnings(prev => ({
+          ...prev,
+          [c.id]: false,
+        }));
+
+        setIsDirty(true);
+        return;
+      }
+
+      const parsed = Number(value);
+
+      if (!Number.isFinite(parsed)) {
+        return;
+      }
+
+      const maxAllowed = Math.min(c.maxScore, 100);
+
+      if (parsed < c.minScore || parsed > maxAllowed) {
+        setClampWarnings(prev => ({
+          ...prev,
+          [c.id]: true,
+        }));
+
+        return;
+      }
+
+      setClampWarnings(prev => ({
+        ...prev,
+        [c.id]: false,
+      }));
+
+      setScores(prev => ({
+        ...prev,
+        [c.id]: parsed,
+      }));
+
+      setIsDirty(true);
+    }}
+    placeholder={`${c.minScore}–${Math.min(c.maxScore, 100)}`}
+    className={`w-24 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2
+      ${
+        clampWarnings[c.id]
+          ? 'border-red-300 focus:ring-red-300'
+          : 'border-slate-200 focus:ring-indigo-300'
+      }`}
+  />
+
+  <span className="text-xs text-slate-400">
+    / {c.maxScore}
+  </span>
+</div>
+
+{clampWarnings[c.id] && (
+  <p className="mt-1 text-xs text-red-600">
+    Score must be between {c.minScore} and {Math.min(c.maxScore, 100)}
+  </p>
+)}
                     <textarea
                       rows={2}
                       value={comments[c.id] ?? ''}
