@@ -1214,34 +1214,63 @@ if (!newEvent.deadline) {
                      onChange={e => setEditingEvent({ ...editingEvent, title: e.target.value })}
                   />
                </div>
-               <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Industry / Category</label>
-                  <select
-                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
-                     value={editingEvent.category}
-                     onChange={e => setEditingEvent({ ...editingEvent, category: e.target.value })}
-                  >
-                     <option>General</option>
-                     <option>Design</option>
-                     <option>Technology</option>
-                     <option>Business</option>
-                     <option>Arts</option>
-                     <option>Education</option>
-                     <option>Non-Profit</option>
-                  </select>
-               </div>
-               <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Status</label>
-                  <select
-                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
-                     value={editingEvent.status}
-                     onChange={e => setEditingEvent({ ...editingEvent, status: e.target.value as Program['status'] })}
-                  >
-                     <option value="Draft">Draft</option>
-                     <option value="Active">Active</option>
-                     <option value="Completed">Completed</option>
-                  </select>
-               </div>
+<div>
+   <label className="block text-sm font-semibold text-slate-700 mb-3">
+      Industry Focus
+   </label>
+
+   <div className="flex flex-wrap gap-2">
+      {INDUSTRIES.map((industry) => (
+         <button
+            key={industry}
+            type="button"
+            onClick={() =>
+               setEditingEvent({
+                  ...editingEvent,
+                  category: industry,
+               })
+            }
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all
+               ${
+                  editingEvent.category === industry
+                     ? 'bg-emerald-600 text-white border-emerald-600'
+                     : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
+               }`}
+         >
+            {industry}
+         </button>
+      ))}
+   </div>
+</div>
+<div>
+   <label className="block text-sm font-semibold text-slate-700 mb-3">
+      Status
+   </label>
+
+   <div className="flex flex-wrap gap-2">
+      {(['Draft', 'Active', 'Completed'] as Program['status'][]).map((status) => (
+         <button
+            key={status}
+            type="button"
+            onClick={() =>
+               setEditingEvent({
+                  ...editingEvent,
+                  status,
+               })
+            }
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all
+               ${
+                  editingEvent.status === status
+                     ? 'bg-emerald-600 text-white border-emerald-600'
+                     : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
+               }`}
+         >
+            {status}
+         </button>
+      ))}
+   </div>
+</div>
+<br></br>
                <div>
                   <AppDatePicker
                      label="Submission Deadline"
