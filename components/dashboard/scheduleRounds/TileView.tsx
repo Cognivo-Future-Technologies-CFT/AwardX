@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Round } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
-import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar, Play } from 'lucide-react';
+import { Plus, GripVertical, Users, Globe, Shield, Settings, Calendar, Play, Mail } from 'lucide-react';
 import { primaryActionLabel, formatRoundTypeWithAudience, shortlistRuleSummary } from '../../../lib/roundScheduleUtils';
 import { participantMetricLabel, participantPillLabel } from '../../../lib/roundInsightUtils';
 import { RoundCardShareLinks } from './RoundCardShareLinks';
@@ -49,6 +49,7 @@ interface TileViewProps {
   insightsLoading?: boolean;
   onAdvanceRound?: (roundId: string) => void;
   onPromoteRound?: (roundId: string) => void;
+  onInformParticipants?: (roundId: string) => Promise<void>;
   /** When true, drag-reorder updates the sequential flow (not visual-only). */
   reorderUpdatesFlow?: boolean;
 }
@@ -67,9 +68,11 @@ export const TileView: React.FC<TileViewProps> = ({
   insightsLoading,
   onAdvanceRound,
   onPromoteRound,
+  onInformParticipants,
   reorderUpdatesFlow = false,
 }) => {
   const [items, setItems] = useState(rounds);
+  const [loadingInform, setLoadingInform] = useState<Record<string, boolean>>({});
   const [participantsListRoundId, setParticipantsListRoundId] = useState<string | null>(null);
   const [judgesListRoundId, setJudgesListRoundId] = useState<string | null>(null);
 
@@ -335,20 +338,24 @@ export const TileView: React.FC<TileViewProps> = ({
 
                     <RoundCardShareLinks round={round} programId={programId} />
 
-                    {pipelineAction && !round.isFinalized && onAdvanceRound && (
-                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onAdvanceRound(round.id);
-                          }}
-                          disabled={round.id.startsWith('round-')}
-                          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                          {pipelineAction}
-                        </button>
+                    {((pipelineAction && !round.isFinalized && onAdvanceRound) ||
+                      (round.type?.toLowerCase() === 'nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound) ||
+                      ((round.status === 'active' || round.status === 'completed') && onInformParticipants)) && (
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                        {pipelineAction && !round.isFinalized && onAdvanceRound && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onAdvanceRound(round.id);
+                            }}
+                            disabled={round.id.startsWith('round-')}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            {pipelineAction}
+                          </button>
+                        )}
                         {round.type?.toLowerCase() === 'nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound && (
                           <button
                             type="button"
@@ -361,6 +368,25 @@ export const TileView: React.FC<TileViewProps> = ({
                           >
                             <Play className="w-3.5 h-3.5" />
                             Promote
+                          </button>
+                        )}
+                        {(round.status === 'active' || round.status === 'completed') && onInformParticipants && (
+                          <button
+                            type="button"
+                            onClick={async (event) => {
+                              event.stopPropagation();
+                              setLoadingInform((prev) => ({ ...prev, [round.id]: true }));
+                              try {
+                                await onInformParticipants(round.id);
+                              } finally {
+                                setLoadingInform((prev) => ({ ...prev, [round.id]: false }));
+                              }
+                            }}
+                            disabled={round.id.startsWith('round-') || loadingInform[round.id]}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            {loadingInform[round.id] ? 'Informing...' : 'Inform Participants'}
                           </button>
                         )}
                       </div>

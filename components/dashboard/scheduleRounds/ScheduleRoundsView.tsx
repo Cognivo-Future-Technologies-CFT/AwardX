@@ -31,6 +31,7 @@ import {
   previewAdvancement,
   resetPipeline,
   syncProgramEnrollments,
+  informRoundParticipants,
   type AdvancementPreview,
 } from '../../../services/roundPipelineApi';
 import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges, isVotingRoundType } from '../../../lib/roundScheduleUtils';
@@ -759,6 +760,28 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     [loadWorkflow],
   );
 
+  const handleInformParticipants = useCallback(
+    async (roundId: string) => {
+      const round = rounds.find((r) => r.id === roundId);
+      if (!round || round.id.startsWith('round-')) return;
+
+      try {
+        const result = await informRoundParticipants(roundId);
+        if (!result.ok) {
+          throw new Error(result.error || 'Failed to inform participants');
+        }
+        if (result.sent === 0 && result.failed === 0) {
+          toast.info('No participants found to inform in this round.');
+        } else {
+          toast.success(`Informed ${result.sent} participants successfully!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to inform participants');
+      }
+    },
+    [rounds],
+  );
+
   const handleResetParticipants = useCallback(async () => {
     if (!activeEvent) return;
     setIsResetting(true);
@@ -981,6 +1004,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
             insightsLoading={isInsightsLoading}
             onAdvanceRound={handleRunPipelineAction}
             onPromoteRound={handlePromoteRound}
+            onInformParticipants={handleInformParticipants}
             reorderUpdatesFlow
           />
         )}

@@ -104,3 +104,15 @@ export async function enrollSubmissionInPipeline(programId: string, submissionId
     },
   );
 }
+
+export async function informRoundParticipants(roundId: string) {
+  return fetchBackendJson<{ ok: boolean; sent: number; failed: number; error?: string }>(
+    `/api/advancement/rounds/${encodeURIComponent(roundId)}/inform`,
+    {
+      method: 'POST',
+      requireAuth: true,
+      errorPrefix: 'Advancement API',
+    },
+  );
+}
+
