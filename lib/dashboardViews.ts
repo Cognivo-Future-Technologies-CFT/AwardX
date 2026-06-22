@@ -17,6 +17,7 @@ export const DASHBOARD_VIEW_PERMISSIONS: Record<string, string> = {
   categories: PERMISSIONS.MANAGE_PROGRAMS,
   schedule: PERMISSIONS.MANAGE_PROGRAMS,
   'submission-process': PERMISSIONS.MANAGE_PROGRAMS,
+  broadcasts: PERMISSIONS.MANAGE_PROGRAMS,
 };
 
 export function resolveAllowedDashboardView(

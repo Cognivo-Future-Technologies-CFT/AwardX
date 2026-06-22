@@ -5,7 +5,7 @@ import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Shield, Activity,
-  ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2,
+  ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Mail, Settings2,
   UserCog, Edit, Workflow, Layout, Command, Globe, CheckCircle2, AlertCircle, AlertTriangle
 } from 'lucide-react';
 
@@ -1046,6 +1046,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'overview',          label: 'Overview',           icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
     { id: 'program-details',   label: 'Program Details',    icon: Edit,            permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule-rounds',   label: 'Schedule & Rounds',  icon: CalendarClock,   permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'broadcasts',        label: 'Broadcasts',         icon: Mail,            permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submissions',       label: 'Submissions',        icon: FileText,        permission: PERMISSIONS.VIEW_SUBMISSIONS },
     { id: 'judging',           label: 'Judging',            icon: Gavel,           permission: PERMISSIONS.VIEW_JUDGING },
     { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },

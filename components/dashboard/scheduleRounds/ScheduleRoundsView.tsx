@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Program } from '../../../services/models';
 import { ArrowRightLeft, LayoutGrid, Plus, Workflow, AlertCircle, RotateCcw } from 'lucide-react';
@@ -107,6 +108,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   representation: representationProp,
   onRepresentationChange,
 }) => {
+  const queryClient = useQueryClient();
   const [internalRepresentation, setInternalRepresentation] = useState<ScheduleRepresentation>('tiles');
   const representation = representationProp ?? internalRepresentation;
 
@@ -774,12 +776,15 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
           toast.info('No participants found to inform in this round.');
         } else {
           toast.success(`Informed ${result.sent} participants successfully!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+          if (activeEvent?.id) {
+            queryClient.invalidateQueries({ queryKey: ['broadcast-history', activeEvent.id] });
+          }
         }
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to inform participants');
       }
     },
-    [rounds],
+    [rounds, activeEvent?.id, queryClient],
   );
 
   const handleResetParticipants = useCallback(async () => {

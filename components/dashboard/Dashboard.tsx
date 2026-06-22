@@ -40,6 +40,7 @@ const ScheduleRoundsView = lazy(() =>
   import('./scheduleRounds/ScheduleRoundsView').then((m) => ({ default: m.ScheduleRoundsView })),
 );
 const AnalyticsView = lazy(() => import('./AnalyticsView').then((m) => ({ default: m.AnalyticsView })));
+const BroadcastsView = lazy(() => import('./BroadcastsView').then((m) => ({ default: m.BroadcastsView })));
 
 const ViewLoader: React.FC = () => (
   <div className="flex items-center justify-center h-64">
@@ -324,6 +325,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               representation={scheduleRepresentation}
               onRepresentationChange={setScheduleRepresentation}
             />
+          </Suspense>
+        );
+      case 'broadcasts':
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <BroadcastsView activeEvent={activeEvent} />
           </Suspense>
         );
 

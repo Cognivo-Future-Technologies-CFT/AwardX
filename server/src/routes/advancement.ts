@@ -329,6 +329,8 @@ router.post('/rounds/:roundId/inform', requireAuth, async (req: AuthenticatedReq
                   roundTitle: round.title,
                   status: item.status,
                   submissionId: item.submissionId,
+                  subject: item.subject,
+                  body: item.text,
                 },
                 status: 'pending',
               })
