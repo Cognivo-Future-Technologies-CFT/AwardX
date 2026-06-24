@@ -41,6 +41,7 @@ const ScheduleRoundsView = lazy(() =>
 );
 const AnalyticsView = lazy(() => import('./AnalyticsView').then((m) => ({ default: m.AnalyticsView })));
 const BroadcastsView = lazy(() => import('./BroadcastsView').then((m) => ({ default: m.BroadcastsView })));
+const CertificatesView = lazy(() => import('./CertificatesView').then((m) => ({ default: m.CertificatesView })));
 
 const ViewLoader: React.FC = () => (
   <div className="flex items-center justify-center h-64">
@@ -331,6 +332,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return (
           <Suspense fallback={<ViewLoader />}>
             <BroadcastsView activeEvent={activeEvent} />
+          </Suspense>
+        );
+      case 'certificates':
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <CertificatesView activeEvent={activeEvent} />
           </Suspense>
         );
 
