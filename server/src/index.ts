@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import apiRoutes from './routes/index.js';
 import { getCacheStatus } from './cache/redisCache.js';
 import { startRoundScheduler } from './jobs/roundScheduler.js';
+import { rateLimit } from './middleware/rateLimit.js';
 
 // Resolve __dirname in ESM and load .env from the project root (two levels up from server/src/)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,9 @@ app.use(cors({
 	credentials: true,
 }));
 app.use(express.json());
+
+// Global rate limiting: 100 requests per minute per IP
+app.use('/api', rateLimit({ windowMs: 60_000, max: 100 }));
 
 app.use((_req, res, next) => {
 	res.setHeader('X-Content-Type-Options', 'nosniff');

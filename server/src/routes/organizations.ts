@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getSupabaseAdmin } from '../supabase.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { canAccessOrganization } from '../middleware/programAccess.js';
 import {
 	cacheKeys,
 	cacheTtls,
@@ -89,10 +90,15 @@ router.get('/current/info', requireAuth, async (req: AuthenticatedRequest, res) 
 	}
 });
 
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
 	const { id } = req.params;
 	if (!id) {
 		return res.status(400).json({ error: 'Organization id is required' });
+	}
+
+	const permitted = await canAccessOrganization(req.userId || '', id);
+	if (!permitted) {
+		return res.status(403).json({ error: 'You do not have access to this organization' });
 	}
 
 	try {
@@ -156,12 +162,17 @@ router.post('/', requireAuth, async (req, res) => {
 	}
 });
 
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
 	const { id } = req.params;
 	const patch = req.body || {};
 
 	if (!id) {
 		return res.status(400).json({ error: 'Organization id is required' });
+	}
+
+	const permitted = await canAccessOrganization(req.userId || '', id);
+	if (!permitted) {
+		return res.status(403).json({ error: 'You do not have access to this organization' });
 	}
 
 	try {

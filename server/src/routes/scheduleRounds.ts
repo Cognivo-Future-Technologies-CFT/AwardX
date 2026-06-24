@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ensureCanManageProgram } from '../middleware/programManagement.js';
+import { requireProgramAccess } from '../middleware/programAccess.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 import { validateRoundTransitions } from '../services/flowValidation.js';
@@ -231,7 +232,7 @@ async function invalidateSchedule(programId: string) {
   ]);
 }
 
-router.get('/:programId/rounds', requireAuth, async (req, res) => {
+router.get('/:programId/rounds', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -259,7 +260,7 @@ router.get('/:programId/rounds', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/:programId/edges', requireAuth, async (req, res) => {
+router.get('/:programId/edges', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -593,7 +594,7 @@ router.put('/:programId/edges', requireAuth, async (req: AuthenticatedRequest, r
 
 // ---- Active Form Management ----
 
-router.get('/:programId/active-form', requireAuth, async (req, res) => {
+router.get('/:programId/active-form', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { programId } = req.params;
   try {
     const supabase = getSupabaseAdmin();
@@ -637,7 +638,7 @@ router.put('/:programId/active-form', requireAuth, async (req: AuthenticatedRequ
 
 // ---- Round Submissions (Pipeline Enrollment) ----
 
-router.get('/:programId/rounds/:roundId/submissions', requireAuth, async (req, res) => {
+router.get('/:programId/rounds/:roundId/submissions', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { roundId } = req.params;
   try {
     const data = await wrapWithCache(cacheKeys.roundSubmissions(roundId), cacheTtls.short, async () => {
@@ -659,7 +660,7 @@ router.get('/:programId/rounds/:roundId/submissions', requireAuth, async (req, r
   }
 });
 
-router.get('/:programId/rounds/:roundId/submissions/count', requireAuth, async (req, res) => {
+router.get('/:programId/rounds/:roundId/submissions/count', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { roundId } = req.params;
   try {
     const supabase = getSupabaseAdmin();

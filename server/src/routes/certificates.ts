@@ -9,11 +9,13 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { requireProgramAccess } from '../middleware/programAccess.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import {
 	getOrgResendMailer,
 	RESEND_NOT_CONFIGURED_MESSAGE,
 } from '../services/orgResend.js';
+import { rateLimit } from '../middleware/rateLimit.js';
 
 const router = Router();
 
@@ -26,7 +28,7 @@ function generateVerificationCode(): string {
  * Body: { recipients: [{ email, name, submissionId, certificateType, roundsCleared, totalRounds, certificateDataUrl }] }
  * Records a delivery row per recipient and emails the certificate.
  */
-router.post('/:programId/send', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), rateLimit({ windowMs: 60_000, max: 10 }), async (req: AuthenticatedRequest, res) => {
 	const { programId } = req.params;
 	const { recipients } = req.body || {};
 
@@ -113,7 +115,7 @@ router.post('/:programId/send', requireAuth, async (req: AuthenticatedRequest, r
  * GET /:programId/deliveries
  * Returns all delivery records for the program (for the dashboard to show delivered status).
  */
-router.get('/:programId/deliveries', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.get('/:programId/deliveries', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
 	const { programId } = req.params;
 	const supabase = getSupabaseAdmin();
 
