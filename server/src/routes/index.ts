@@ -18,6 +18,7 @@ import programFormsRouter from './programForms.js';
 import kycRouter from './kyc.js';
 import scoresRouter from './scores.js';
 import announcementsRouter from './announcements.js';
+import certificatesRouter from './certificates.js';
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use('/program-forms', programFormsRouter);
 router.use('/kyc', kycRouter);
 router.use('/scores', scoresRouter);
 router.use('/announcements', announcementsRouter);
+router.use('/certificates', certificatesRouter);
 
 export default router;

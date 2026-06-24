@@ -25,6 +25,7 @@ const TeamInvitePage = lazy(() => import('./components/pages/TeamInvitePage').th
 const MySubmissionsPage = lazy(() => import('./components/pages/MySubmissionsPage').then((m) => ({ default: m.MySubmissionsPage })));
 const PublicVotingPage = lazy(() => import('./components/pages/PublicVotingPage').then((m) => ({ default: m.PublicVotingPage })));
 const PublicAnnouncementsPage = lazy(() => import('./components/pages/PublicAnnouncementsPage').then((m) => ({ default: m.PublicAnnouncementsPage })));
+const CertificateVerifyPage = lazy(() => import('./components/pages/CertificateVerifyPage').then((m) => ({ default: m.CertificateVerifyPage })));
 
 const RouteLoader: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -269,6 +270,7 @@ const App: React.FC = () => {
             <Route path="/voting/:roundId" element={<PublicVotingPage />} />
             <Route path="/announce/:programId" element={<PublicAnnouncementsPage />} />
             <Route path="/winners/:programId" element={<PublicAnnouncementsPage />} />
+            <Route path="/certificates/verify/:code" element={<CertificateVerifyPage />} />
             <Route
               path="/my-submissions"
               element={
