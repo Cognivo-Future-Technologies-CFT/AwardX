@@ -1,7 +1,25 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ScheduleRoundsView } from '../../../components/dashboard/scheduleRounds/ScheduleRoundsView';
+
+const queryClientInstance = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+    },
+  },
+});
+
+const renderWithProviders = (ui: React.ReactElement) => {
+  return render(
+    <QueryClientProvider client={queryClientInstance}>
+      {ui}
+    </QueryClientProvider>
+  );
+};
+
 
 const mocks = vi.hoisted(() => ({
   getRounds: vi.fn(),
@@ -124,7 +142,7 @@ describe('ScheduleRoundsView representation conversion', () => {
       },
     ]);
 
-    render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
+    renderWithProviders(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
     await waitFor(() => expect(screen.getByTestId('current-representation')).toHaveTextContent('Block diagram'));
     expect(screen.queryByTestId('tile-reorder-rounds')).not.toBeInTheDocument();
@@ -145,7 +163,7 @@ describe('ScheduleRoundsView representation conversion', () => {
       },
     ]);
 
-    render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
+    renderWithProviders(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
     await waitFor(() => expect(screen.getByTestId('current-representation')).toHaveTextContent('Tile sequence'));
     fireEvent.click(screen.getByTestId('tile-reorder-rounds'));
@@ -159,7 +177,7 @@ describe('ScheduleRoundsView representation conversion', () => {
   it('opens conversion dialog instead of switching views instantly', async () => {
     mocks.getEdges.mockResolvedValue([]);
 
-    render(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
+    renderWithProviders(<ScheduleRoundsView activeEvent={{ id: 'program-1' } as any} />);
 
     await waitFor(() => expect(screen.getByTestId('convert-to-workflow')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('convert-to-workflow'));

@@ -22,6 +22,7 @@ import {
   Smartphone,
   RefreshCw,
   Save,
+  Plus,
 } from 'lucide-react';
 import { Program } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
@@ -214,6 +215,26 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
     };
     localStorage.setItem(`broadcast_draft_${programId}`, JSON.stringify(draft));
     toast.success('Draft saved successfully!');
+  };
+
+  const handleNewBroadcast = () => {
+    if (subject.trim() || templateBody.trim()) {
+      if (!window.confirm('Are you sure you want to discard the current draft and start a new broadcast?')) {
+        return;
+      }
+    }
+    setSubject('');
+    setTemplateBody('');
+    setFromName('Organizer');
+    setHeaderGradient('linear-gradient(135deg, #6366f1, #7c3aed)');
+    setManualEmails('');
+    setSelectedRoundId('');
+    setSelectedSegment('winners');
+    setRecipientMode('segment');
+    if (programId) {
+      localStorage.removeItem(`broadcast_draft_${programId}`);
+    }
+    toast.success('Form cleared. Ready for a new broadcast!');
   };
 
   // React Query Queries
@@ -430,7 +451,7 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
   <table role="presentation" width="100%" style="background-color:#f8fafc; border-collapse: collapse;">
     <tr>
       <td align="center" style="padding:20px 10px;">
-        <table role="presentation" width="560" style="max-width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px -2px rgba(0,0,0,.08); border-collapse: collapse;">
+        <table role="presentation" align="center" width="100%" style="max-width:560px; margin:0 auto; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px -2px rgba(0,0,0,.08); border-collapse: collapse;">
           <tr>
             <td style="background:${headerGradient};padding:32px 32px;text-align:center;">
               <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">Broadcast</h1>
@@ -875,6 +896,14 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
                 Targeting <span className="font-bold text-slate-800">{resolvedRecipients.length}</span> recipient{resolvedRecipients.length !== 1 ? 's' : ''}
               </span>
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleNewBroadcast}
+                  className="px-4 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-slate-500" />
+                  New Broadcast
+                </button>
                 <button
                   type="button"
                   onClick={handleSaveDraft}
