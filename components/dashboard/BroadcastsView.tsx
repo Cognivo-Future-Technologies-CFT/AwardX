@@ -26,8 +26,13 @@ import {
 } from 'lucide-react';
 import { Program } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
-import { fetchBackendJson } from '../../services/backendApi';
 import { fetchBroadcastHistory, sendCustomBroadcast, BroadcastLog } from '../../services/broadcastApi';
+import {
+  getEmailSegments,
+  getRoundsForEmail,
+  type EmailRecipient,
+  type EmailSegmentData,
+} from '../../services/massEmailApi';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Modal } from '../Modal';
 import { supabase, getCurrentOrgId } from '../../services/supabase';
@@ -44,19 +49,8 @@ interface Round {
   status: string;
 }
 
-interface Recipient {
-  submissionId: string;
-  submissionTitle: string;
-  applicantName: string;
-  applicantEmail: string | null;
-  status: string;
-}
-
-interface SegmentData {
-  round: { id: string; title: string; type: string; status: string };
-  segments: { winners: Recipient[]; eliminated: Recipient[]; active: Recipient[] };
-  counts: { winners: number; eliminated: number; active: number; total: number };
-}
+type Recipient = EmailRecipient;
+type SegmentData = EmailSegmentData;
 
 const TEMPLATE_PRESETS = [
   {
@@ -133,25 +127,6 @@ const VARIABLES = [
   { key: '{{submission_title}}', label: 'Submission Title', desc: 'Submission title' },
   { key: '{{program_title}}', label: 'Program Name', desc: 'Program name' },
 ];
-
-// ── API Helpers ───────────────────────────────────────────────────────────────
-
-async function fetchRounds(programId: string): Promise<{ data?: Round[]; rounds?: Round[] }> {
-  return fetchBackendJson<{ data?: Round[]; rounds?: Round[] }>(`/api/schedule-rounds/${programId}/rounds`, {
-    requireAuth: true,
-    errorPrefix: 'Rounds API',
-  });
-}
-
-async function fetchSegments(programId: string, roundId: string): Promise<{ data: SegmentData }> {
-  return fetchBackendJson<{ data: SegmentData }>(
-    `/api/mass-email/${programId}/rounds/${roundId}/segments`,
-    {
-      requireAuth: true,
-      errorPrefix: 'Segments API',
-    },
-  );
-}
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -246,17 +221,17 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
     refetchOnMount: true,
   });
 
-  const { data: roundsData, isLoading: roundsLoading } = useQuery({
+  const { data: rounds = [], isLoading: roundsLoading } = useQuery({
     queryKey: queryKeys.rounds.all(programId ?? ''),
-    queryFn: () => fetchRounds(programId!),
+    queryFn: () => getRoundsForEmail(programId!),
     enabled: !!programId && activeTab === 'new-broadcast' && recipientMode === 'segment',
     staleTime: 0,
     refetchOnMount: true,
   });
 
-  const { data: segmentsData, isLoading: segmentsLoading } = useQuery({
+  const { data: segments, isLoading: segmentsLoading } = useQuery({
     queryKey: queryKeys.massEmail.segments(programId ?? '', selectedRoundId),
-    queryFn: () => fetchSegments(programId!, selectedRoundId),
+    queryFn: () => getEmailSegments(programId!, selectedRoundId),
     enabled: !!programId && activeTab === 'new-broadcast' && recipientMode === 'segment' && !!selectedRoundId,
     staleTime: 0,
     refetchOnMount: true,
@@ -332,9 +307,6 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
       refetchHistory();
     }
   }, [activeTab, programId, refetchHistory]);
-
-  const rounds = roundsData?.data || roundsData?.rounds || [];
-  const segments = segmentsData?.data;
 
   // Resolve recipients
   const resolvedRecipients: Array<{ email: string; name?: string; submissionTitle?: string }> = React.useMemo(() => {

@@ -15,6 +15,8 @@ export const DASHBOARD_PATH_VIEWS = new Set([
   'settings',
   'voting',
   'tile-hub',
+  'certificates',
+  'broadcasts',
 ]);
 
 export const SETTINGS_TABS = new Set([

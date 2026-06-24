@@ -1,22 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Copy, Check, ExternalLink, Globe, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { auth } from '../../../services/supabase';
-import { resolveBackendPath } from '../../../services/backendApi';
 import { getIntegrationStatus } from '../../../services/integrations';
+import {
+  getVotingConfig,
+  updateVotingConfig,
+  type VotingAccessMode,
+  type VotingConfigPayload,
+} from '../../../services/votingApi';
 
-export type VotingAccessMode = 'open' | 'org_only' | 'authenticated';
-
-export interface RoundVotingConfig {
-  votes_per_user: number;
-  votes_per_submission: number;
-  require_auth: boolean;
-  allow_anonymous: boolean;
-  show_results_publicly: boolean;
-  show_leaderboard: boolean;
-  access_mode: VotingAccessMode;
-  public_voting_slug?: string;
-}
+export type { VotingAccessMode };
+export type RoundVotingConfig = VotingConfigPayload & { access_mode: VotingAccessMode };
 
 const defaultConfig: RoundVotingConfig = {
   votes_per_user: 5,
@@ -38,11 +32,17 @@ interface PublicVotingRoundSectionProps {
   configRef: React.MutableRefObject<RoundVotingConfig | null>;
 }
 
-async function authHeaders(): Promise<Record<string, string>> {
-  const { session } = await auth.getSession();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-  return headers;
+function mapConfigRow(row: VotingConfigPayload): RoundVotingConfig {
+  return {
+    votes_per_user: row.votes_per_user ?? 5,
+    votes_per_submission: row.votes_per_submission ?? 1,
+    require_auth: row.require_auth ?? false,
+    allow_anonymous: row.allow_anonymous ?? true,
+    show_results_publicly: row.show_results_publicly ?? true,
+    show_leaderboard: row.show_leaderboard ?? true,
+    access_mode: row.access_mode || 'open',
+    public_voting_slug: row.public_voting_slug,
+  };
 }
 
 export const PublicVotingRoundSection: React.FC<PublicVotingRoundSectionProps> = ({
@@ -80,26 +80,9 @@ export const PublicVotingRoundSection: React.FC<PublicVotingRoundSectionProps> =
     setLoading(true);
     (async () => {
       try {
-        const res = await fetch(resolveBackendPath(`/api/voting/${roundId}/config`), {
-          headers: await authHeaders(),
-        });
-        if (!res.ok) {
-          if (!cancelled) setConfig(defaultConfig);
-          return;
-        }
-        const json = await res.json();
-        const row = json.data;
+        const row = await getVotingConfig(roundId);
         if (!cancelled && row) {
-          setConfig({
-            votes_per_user: row.votes_per_user ?? 5,
-            votes_per_submission: row.votes_per_submission ?? 1,
-            require_auth: row.require_auth ?? false,
-            allow_anonymous: row.allow_anonymous ?? true,
-            show_results_publicly: row.show_results_publicly ?? true,
-            show_leaderboard: row.show_leaderboard ?? true,
-            access_mode: row.access_mode || 'open',
-            public_voting_slug: row.public_voting_slug,
-          });
+          setConfig(mapConfigRow(row));
         } else if (!cancelled) {
           setConfig(defaultConfig);
         }
@@ -306,14 +289,5 @@ export const PublicVotingRoundSection: React.FC<PublicVotingRoundSectionProps> =
 
 /** Persist voting config after round is saved (real UUID). */
 export async function saveRoundVotingConfig(roundId: string, config: RoundVotingConfig) {
-  const res = await fetch(resolveBackendPath(`/api/voting/${roundId}/config`), {
-    method: 'PUT',
-    headers: await authHeaders(),
-    body: JSON.stringify(config),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || 'Failed to save public voting settings');
-  }
-  return res.json();
+  return updateVotingConfig(roundId, config);
 }

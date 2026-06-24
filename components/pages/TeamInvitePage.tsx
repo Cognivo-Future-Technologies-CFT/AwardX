@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, Mail, UserPlus, XCircle } from 'lucide-react';
 import { auth } from '../../services/supabase';
+import { acceptTeamInvite, verifyTeamInvite } from '../../services/invitesApi';
 import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
 
 type InviteContext = {
@@ -94,25 +95,22 @@ export const TeamInvitePage: React.FC = () => {
         const accessToken = session?.access_token;
         setIsAuthenticated(!!accessToken);
 
-        const resp = await fetch(`/api/invites/verify-team?token=${encodeURIComponent(token)}`, {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-        });
-        const body = await resp.json().catch(() => ({}));
+        const resp = await verifyTeamInvite(token);
 
-        if (resp.status === 401 && body?.requiresAuth) {
-          setInvite(body?.invite || null);
+        if (resp.status === 401 && resp.body?.requiresAuth) {
+          setInvite(resp.body?.invite || null);
           setIsAuthenticated(false);
           setChecking(false);
           return;
         }
 
         if (!resp.ok) {
-          setError(body?.error || 'Invalid or expired invite link.');
+          setError(resp.body?.error || 'Invalid or expired invite link.');
           setChecking(false);
           return;
         }
 
-        setInvite(body?.invite || null);
+        setInvite(resp.body?.invite || null);
         setIsAuthenticated(true);
       } catch (e: any) {
         setError(e?.message || 'Failed to verify invite.');
@@ -141,18 +139,10 @@ export const TeamInvitePage: React.FC = () => {
         return;
       }
 
-      const resp = await fetch('/api/invites/verify-team', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ token, action: 'accept' }),
-      });
+      const resp = await acceptTeamInvite({ token, action: 'accept' });
 
-      const body = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        setError(body?.error || 'Failed to accept invite.');
+        setError(resp.body?.error || 'Failed to accept invite.');
         return;
       }
 
@@ -180,18 +170,10 @@ export const TeamInvitePage: React.FC = () => {
         return;
       }
 
-      const resp = await fetch('/api/invites/verify-team', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ token, action: 'decline' }),
-      });
+      const resp = await acceptTeamInvite({ token, action: 'decline' });
 
-      const body = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        setError(body?.error || 'Failed to decline invite.');
+        setError(resp.body?.error || 'Failed to decline invite.');
         return;
       }
 

@@ -28,6 +28,7 @@ import { JudgeScoringModal } from '../dashboard/JudgeScoringModal';
 import { Logo } from '../Logo';
 import { Submission, JudgingCriterion } from '../../services/models';
 import { formatRoundTypeLabel } from '../../lib/roundScheduleUtils';
+import { acceptJudgeInvite, verifyJudgeInvite } from '../../services/invitesApi';
 import { fireCelebrationConfetti } from '../../lib/confetti';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -87,9 +88,9 @@ export const JudgePortalPage: React.FC = () => {
 
   // Task 14: separate function that only re-fetches assignments/criteria (no token re-verify)
   const fetchAssignments = useMemo(() => async (token: string) => {
-    const resp = await fetch(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`);
-    const data = await resp.json();
+    const resp = await verifyJudgeInvite(token);
     if (!resp.ok) return;
+    const data = resp.body;
     const allAssignments: AssignmentInfo[] = data.assignments || [];
     const valid = allAssignments.filter((item) => item.submission);
     const removed = allAssignments.length - valid.length;
@@ -117,8 +118,8 @@ export const JudgePortalPage: React.FC = () => {
           return;
         }
 
-        const resp = await fetch(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`);
-        const data = await resp.json();
+        const resp = await verifyJudgeInvite(token);
+        const data = resp.body;
 
         if (!resp.ok) {
           setStatus('error');
@@ -164,12 +165,8 @@ export const JudgePortalPage: React.FC = () => {
 
     setAccepting(true);
     try {
-      const resp = await fetch('/api/invites/verify-judge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, action: 'accept' }),
-      });
-      const data = await resp.json();
+      const resp = await acceptJudgeInvite({ token, action: 'accept' });
+      const data = resp.body;
       if (!resp.ok) {
         setStatus('error');
         setErrorMessage(data.error || 'Failed to accept invite.');
@@ -198,15 +195,10 @@ export const JudgePortalPage: React.FC = () => {
 
     setDeclining(true);
     try {
-      const resp = await fetch('/api/invites/verify-judge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, action: 'decline' }),
-      });
+      const resp = await acceptJudgeInvite({ token, action: 'decline' });
       if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
         setStatus('error');
-        setErrorMessage(data.error || 'Failed to decline invite.');
+        setErrorMessage(resp.body?.error || 'Failed to decline invite.');
         return;
       }
 

@@ -68,4 +68,10 @@ app.listen(port, () => {
 	} else {
 		console.log('[scheduler] Skipped: SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not configured.');
 	}
+
+	// Pre-warm embedding model in background
+	if (hasServerSupabaseEnv) {
+		import('./services/submissionEmbedder.js').then(() => {}).catch(() => {});
+		import('./services/aiDetector.js').then((m) => m.prewarmAIDetector()).catch(() => {});
+	}
 });

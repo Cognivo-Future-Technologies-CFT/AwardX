@@ -22,6 +22,9 @@ describe('dashboardRoutes', () => {
     expect(buildDashboardPath({ eventId: 'evt-1', view: 'settings', settingsTab: 'billing' })).toBe(
       '/dashboard/events/evt-1/settings/billing',
     );
+    expect(buildDashboardPath({ eventId: 'evt-1', view: 'certificates' })).toBe(
+      '/dashboard/events/evt-1/certificates',
+    );
   });
 
   it('parses dashboard paths', () => {
@@ -38,6 +41,11 @@ describe('dashboardRoutes', () => {
     expect(parseDashboardPath('/dashboard/events/evt-1/judging')).toEqual({
       eventId: 'evt-1',
       view: 'judging',
+      settingsTab: null,
+    });
+    expect(parseDashboardPath('/dashboard/events/evt-1/certificates')).toEqual({
+      eventId: 'evt-1',
+      view: 'certificates',
       settingsTab: null,
     });
     expect(parseDashboardPath('/dashboard/events/evt-1/settings/integrations')).toEqual({

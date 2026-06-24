@@ -3,6 +3,7 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ensureCanManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { enrollSubmissionsInRootRound } from '../services/roundEngine.js';
+import { queueSubmissionProcessing } from '../services/submissionProcessor.js';
 
 const router = Router();
 
@@ -231,6 +232,8 @@ router.post('/:programId/submissions', requireAuth, async (req: AuthenticatedReq
     } catch (enrollErr) {
       console.warn('[pipeline] Failed to auto-enroll submission in nomination round:', enrollErr);
     }
+
+    queueSubmissionProcessing(submissionId);
 
     return res.status(201).json({
       data: mapSubmissionRow(row, row.categories?.title ?? null),

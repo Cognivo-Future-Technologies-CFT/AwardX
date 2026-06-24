@@ -19,13 +19,8 @@ import {
 import { SkeletonLoader } from '../SkeletonLoader';
 import { EmptyState } from '../EmptyState';
 import { resolveMediaPublicUrl } from '../../services/supabase';
-import { resolveBackendPath } from '../../services/backendApi';
+import { getPublicAnnouncements } from '../../services/announcementsApi';
 import { fireCelebrationConfetti } from '../../lib/confetti';
-
-function apiUrl(path: string) {
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  return resolveBackendPath(`/api${normalized}`);
-}
 
 interface WinnerEntry {
   id: string;
@@ -50,14 +45,7 @@ export const PublicAnnouncementsPage: React.FC = () => {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['public-announcements', programId],
-    queryFn: async () => {
-      const res = await fetch(apiUrl(`/announcements/programs/${programId}/public`));
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Announcements not found');
-      }
-      return res.json();
-    },
+    queryFn: () => getPublicAnnouncements(programId!),
     enabled: !!programId,
     staleTime: 60_000,
   });

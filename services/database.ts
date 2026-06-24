@@ -2789,6 +2789,15 @@ class DatabaseService {
       console.warn('[pipeline] Failed to auto-enroll submission in first round:', e);
     }
 
+    try {
+      await fetchBackendJson(
+        `/api/submissions/${encodeURIComponent(submissionId)}/trigger`,
+        { method: 'POST', errorPrefix: 'Processing API' },
+      );
+    } catch (e) {
+      console.warn('[processor] Failed to queue submission processing:', e);
+    }
+
     return data;
   }
 

@@ -1,35 +1,25 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Program } from '../../services/models';
-import { supabase, auth } from '../../services/supabase';
+import { supabase } from '../../services/supabase';
 import { Globe, Check, Copy, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
-import { resolveBackendPath } from '../../services/backendApi';
+import {
+  updateVotingConfig,
+  votingPublicUrl,
+  type VotingAccessMode,
+  type VotingConfigPayload,
+} from '../../services/votingApi';
 
 interface VotingConfigViewProps {
   activeEvent: Program | null;
 }
 
-type VotingAccessMode = 'open' | 'org_only' | 'authenticated';
+type VotingConfig = VotingConfigPayload & { id?: string; round_id: string };
 
-interface VotingConfig {
-  id?: string;
-  round_id: string;
-  votes_per_user: number;
-  votes_per_submission: number;
-  require_auth: boolean;
-  allow_anonymous: boolean;
-  show_results_publicly: boolean;
-  show_leaderboard: boolean;
-  access_mode?: VotingAccessMode;
-  public_voting_slug?: string;
-}
-
-function votingPublicUrl(slug?: string, roundId?: string) {
-  if (slug) return `${window.location.origin}/vote/${slug}`;
-  if (roundId) return `${window.location.origin}/voting/${roundId}`;
-  return '';
+function votingPublicUrlForRound(slug?: string, roundId?: string) {
+  return votingPublicUrl(slug, roundId);
 }
 
 export const VotingConfigView: React.FC<VotingConfigViewProps> = ({ activeEvent }) => {
@@ -62,29 +52,7 @@ export const VotingConfigView: React.FC<VotingConfigViewProps> = ({ activeEvent 
 
   const updateConfig = useMutation({
     mutationFn: async (config: Partial<VotingConfig> & { round_id: string }) => {
-      const { session } = await auth.getSession();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-
-      const res = await fetch(resolveBackendPath(`/api/voting/${config.round_id}/config`), {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({
-          votes_per_user: config.votes_per_user ?? 5,
-          votes_per_submission: config.votes_per_submission ?? 1,
-          require_auth: config.require_auth ?? false,
-          allow_anonymous: config.allow_anonymous ?? true,
-          show_results_publicly: config.show_results_publicly ?? false,
-          show_leaderboard: config.show_leaderboard ?? true,
-          access_mode: config.access_mode ?? 'open',
-          public_voting_slug: config.public_voting_slug,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Failed to save');
-      }
-      return res.json();
+      return updateVotingConfig(config.round_id, config);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['voting-configs'] });
@@ -94,7 +62,7 @@ export const VotingConfigView: React.FC<VotingConfigViewProps> = ({ activeEvent 
   });
 
   const copyVotingLink = async (roundId: string, slug?: string) => {
-    const url = votingPublicUrl(slug, roundId);
+    const url = votingPublicUrlForRound(slug, roundId);
     await navigator.clipboard.writeText(url);
     setCopiedRoundId(roundId);
     setTimeout(() => setCopiedRoundId(null), 2000);

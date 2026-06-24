@@ -7,8 +7,10 @@ import { Button } from '../Button';
 import { db } from '../../services/database';
 import { Submission, JudgingCriterion, CriterionScore } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
+import { submitJudgeScores } from '../../services/scoresApi';
 import { useConfirm } from '../ConfirmDialog';
 import { SubmissionFormResponses } from './SubmissionFormResponses';
+import { SubmissionSummary } from './SubmissionSummary';
 
 interface JudgeScoringModalProps {
   isOpen: boolean;
@@ -133,20 +135,12 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
       if (!effectiveSubmissionJudgeId) throw new Error('No judge assignment found');
 
       if (judgeToken) {
-        // Judge portal: use server endpoint that authenticates via token
-        const resp = await fetch('/api/scores/judge-submit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            token: judgeToken,
-            submissionJudgeId: effectiveSubmissionJudgeId,
-            criteriaScores: payload.criteriaScores,
-            overallComment: payload.overallComment,
-          }),
+        return submitJudgeScores({
+          token: judgeToken,
+          submissionJudgeId: effectiveSubmissionJudgeId,
+          criteriaScores: payload.criteriaScores,
+          overallComment: payload.overallComment,
         });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Failed to submit scores');
-        return data;
       }
 
       return db.submitScores(
@@ -237,6 +231,11 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
           <div className="px-6 pt-4 pb-2 flex items-center gap-3">
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{submission.category}</span>
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{submission.status}</span>
+          </div>
+
+          {/* AI Summary */}
+          <div className="px-6 pb-4">
+            <SubmissionSummary submission={submission} enabled={isOpen} judgeToken={judgeToken} />
           </div>
 
           <SubmissionFormResponses submission={submission} enabled={isOpen} />

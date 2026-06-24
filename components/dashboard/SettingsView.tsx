@@ -8,6 +8,7 @@ import { IntegrationsPanel } from './IntegrationsPanel';
 import { db } from '../../services/database';
 import { auth, storage } from '../../services/supabase';
 import { Program } from '../../services/models';
+import { getStripeConnectStartUrl, getStripeConnectStatus } from '../../services/paymentsApi';
 import {
   buildDashboardPath,
   isValidSettingsTab,
@@ -245,11 +246,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(`/api/payments/stripe-connect-status?programId=${selectedProgramId}`);
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Unable to refresh Stripe account status');
-      }
+      const payload = await getStripeConnectStatus(selectedProgramId) as Record<string, any>;
 
       setStripeConnected(!!payload.connected);
       setStripeStatusDetails(payload);
@@ -397,7 +394,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
       setError('Please select a program first.');
       return;
     }
-    window.location.href = `/api/payments/stripe-connect-start?programId=${selectedProgramId}`;
+    window.location.href = getStripeConnectStartUrl(selectedProgramId);
   };
 
   const refreshPrograms = async () => {

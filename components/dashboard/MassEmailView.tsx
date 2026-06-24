@@ -33,49 +33,19 @@ import { Program } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
 import { sendMassEmail } from '../../services/email';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { fetchBackendJson } from '../../services/backendApi';
+import {
+  getEmailSegments,
+  getRoundsForEmail,
+  type EmailRecipient,
+  type EmailSegmentData,
+} from '../../services/massEmailApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type SegmentKey = 'winners' | 'eliminated' | 'active' | 'all';
 
-interface Recipient {
-  submissionId: string;
-  submissionTitle: string;
-  applicantName: string;
-  applicantEmail: string | null;
-  status: string;
-}
-
-interface SegmentData {
-  round: { id: string; title: string; type: string; status: string };
-  segments: { winners: Recipient[]; eliminated: Recipient[]; active: Recipient[] };
-  counts: { winners: number; eliminated: number; active: number; total: number };
-}
-
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-type RoundsApiResponse = {
-  data?: Array<{ id: string; title: string; status: string }>;
-  rounds?: Array<{ id: string; title: string; status: string }>;
-};
-
-async function fetchRounds(programId: string): Promise<RoundsApiResponse> {
-  return fetchBackendJson<RoundsApiResponse>(`/api/schedule-rounds/${programId}`, {
-    requireAuth: true,
-    errorPrefix: 'Rounds API',
-  });
-}
-
-async function fetchSegments(programId: string, roundId: string): Promise<{ data: SegmentData }> {
-  return fetchBackendJson<{ data: SegmentData }>(
-    `/api/mass-email/${programId}/rounds/${roundId}/segments`,
-    {
-      requireAuth: true,
-      errorPrefix: 'Segments API',
-    },
-  );
-}
+type Recipient = EmailRecipient;
+type SegmentData = EmailSegmentData;
 
 interface SendResult {
   email: string;
@@ -159,15 +129,12 @@ export const MassEmailView: React.FC<MassEmailViewProps> = ({ activeEvent }) => 
   const [showVarsHint, setShowVarsHint] = useState(false);
 
   // Fetch rounds list
-  const { data: roundsData, isLoading: roundsLoading } = useQuery({
+  const { data: rounds = [], isLoading: roundsLoading } = useQuery({
     queryKey: queryKeys.rounds.all(programId ?? ''),
-    queryFn: () => fetchRounds(programId!),
+    queryFn: () => getRoundsForEmail(programId!),
     enabled: !!programId,
     staleTime: 60_000,
   });
-
-  const rounds: Array<{ id: string; title: string; status: string }> =
-    roundsData?.data || roundsData?.rounds || [];
 
   // Fetch segments when round is selected
   const {
@@ -175,14 +142,14 @@ export const MassEmailView: React.FC<MassEmailViewProps> = ({ activeEvent }) => 
     isLoading: segmentsLoading,
     error: segmentsError,
     refetch: refetchSegments,
-  } = useQuery<{ data: SegmentData }>({
+  } = useQuery<SegmentData>({
     queryKey: queryKeys.massEmail.segments(programId ?? '', selectedRoundId),
-    queryFn: () => fetchSegments(programId!, selectedRoundId),
+    queryFn: () => getEmailSegments(programId!, selectedRoundId),
     enabled: !!programId && !!selectedRoundId,
     staleTime: 30_000,
   });
 
-  const segments = segmentsData?.data;
+  const segments = segmentsData;
 
   // Determine recipients for selected segment
   const recipients: Recipient[] =

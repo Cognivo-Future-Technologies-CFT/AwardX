@@ -4,19 +4,11 @@ import { toast } from 'sonner';
 import type { Round } from '../../../types/scheduleRounds';
 import { isAnnounceRoundType } from '../../../lib/roundInsightUtils';
 import { isVotingRoundType } from '../../../lib/roundScheduleUtils';
-import { auth } from '../../../services/supabase';
-import { resolveBackendPath } from '../../../services/backendApi';
+import { getVotingConfig } from '../../../services/votingApi';
 
 interface RoundCardShareLinksProps {
   round: Round;
   programId: string;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { session } = await auth.getSession();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-  return headers;
 }
 
 export const RoundCardShareLinks: React.FC<RoundCardShareLinksProps> = ({ round, programId }) => {
@@ -38,16 +30,9 @@ export const RoundCardShareLinks: React.FC<RoundCardShareLinksProps> = ({ round,
     setLoadingVoting(true);
     (async () => {
       try {
-        const res = await fetch(resolveBackendPath(`/api/voting/${round.id}/config`), {
-          headers: await authHeaders(),
-        });
-        if (!res.ok) {
-          if (!cancelled) setVotingSlug(null);
-          return;
-        }
-        const json = await res.json();
+        const row = await getVotingConfig(round.id);
         if (!cancelled) {
-          setVotingSlug(json.data?.public_voting_slug || null);
+          setVotingSlug(row?.public_voting_slug || null);
         }
       } catch {
         if (!cancelled) setVotingSlug(null);

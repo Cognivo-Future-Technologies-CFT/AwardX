@@ -13,6 +13,7 @@ import {
   syncProgramNominationEnrollments,
   enrollSubmissionsInRootRound,
 } from '../services/roundEngine.js';
+import { queueSubmissionProcessing } from '../services/submissionProcessor.js';
 import { canManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
@@ -213,6 +214,7 @@ router.post('/programs/:programId/enroll-submission', requireAuth, async (req: A
     if (!result.ok) return res.status(400).json({ error: result.error });
 
     await invalidateRound(programId);
+    queueSubmissionProcessing(submissionId);
 
     return res.json({ ok: true, enrolled: result.enrolled });
   } catch (error: any) {

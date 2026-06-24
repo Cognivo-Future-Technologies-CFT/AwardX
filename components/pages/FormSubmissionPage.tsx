@@ -10,6 +10,11 @@ import { auth } from '../../services/supabase';
 import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
 import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
+import {
+  createCheckoutSession,
+  verifyRazorpayPayment,
+  verifyStripePayment,
+} from '../../services/paymentsApi';
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
 import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles } from 'lucide-react';
 import { storage } from '../../services/supabase';
@@ -257,15 +262,7 @@ export const FormSubmissionPage: React.FC = () => {
     if (payment === 'success' && sessionId && submissionId) {
       void (async () => {
         try {
-          const verifyResponse = await fetch('/api/payments/stripe-verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, submissionId }),
-          });
-          const verifyPayload = await verifyResponse.json();
-          if (!verifyResponse.ok) {
-            throw new Error(verifyPayload?.error || 'Payment verification failed');
-          }
+          await verifyStripePayment({ sessionId, submissionId });
           setIsSubmitted(true);
           setPaymentState('success');
           setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
@@ -673,19 +670,14 @@ const fieldsByStep = useMemo(() => {
         : undefined);
 
       if (paymentRequired && submission?.id && programId) {
-        const checkoutResponse = await fetch('/api/payments/create-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            submissionId: submission.id,
-            programId,
-            formId: currentFormId,
-            currency: paymentConfig?.currency || 'USD',
-          }),
-        });
+        const checkoutPayload = await createCheckoutSession({
+          submissionId: submission.id,
+          programId,
+          formId: currentFormId,
+          currency: paymentConfig?.currency || 'USD',
+        }) as Record<string, any>;
 
-        const checkoutPayload = await checkoutResponse.json();
-        if (!checkoutResponse.ok) {
+        if (!checkoutPayload || checkoutPayload.error) {
           throw new Error(checkoutPayload?.error || 'Failed to initialize payment checkout');
         }
 
@@ -703,21 +695,12 @@ const fieldsByStep = useMemo(() => {
             description: checkoutPayload.description,
             order_id: checkoutPayload.orderId,
             handler: async (response: any) => {
-              const verifyResponse = await fetch('/api/payments/razorpay-verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  submissionId: submission.id,
-                  razorpayOrderId: response.razorpay_order_id,
-                  razorpayPaymentId: response.razorpay_payment_id,
-                  razorpaySignature: response.razorpay_signature,
-                }),
+              await verifyRazorpayPayment({
+                submissionId: submission.id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
               });
-
-              const verifyPayload = await verifyResponse.json();
-              if (!verifyResponse.ok) {
-                throw new Error(verifyPayload?.error || 'Razorpay payment verification failed');
-              }
 
               await completeSubmissionSideEffects(currentFormId);
               setPaymentState('success');

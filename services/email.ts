@@ -1,7 +1,5 @@
+import { fetchBackendJson, getBackendCandidateUrls } from './backendApi';
 import { getAccessToken } from './userContext';
-
-const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim();
-const normalizedBackendUrl = envBackendUrl.replace(/\/$/, '');
 
 type TeamInvitePayload = {
   email: string;
@@ -48,103 +46,49 @@ export interface EmailApiRequestTrace {
 type EmailTraceCallback = (trace: EmailApiRequestTrace) => void;
 
 async function postJson(path: string, payload: Record<string, any>, onTrace?: EmailTraceCallback) {
-  const candidateUrls = normalizedBackendUrl
-    ? [`${normalizedBackendUrl}${path}`, path]
-    : [path];
+  const candidateUrls = getBackendCandidateUrls(path);
+  const url = candidateUrls[0] || path;
+  const startedAt = new Date().toISOString();
 
-  let lastError: Error | null = null;
+  try {
+    const authToken = await getAccessToken();
+    const result = await fetchBackendJson(path, {
+      method: 'POST',
+      body: payload,
+      requireAuth: !!authToken,
+      errorPrefix: 'Email API',
+    });
 
-  const authToken = await getAccessToken();
+    onTrace?.({
+      path,
+      url,
+      method: 'POST',
+      attempt: 1,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      status: 200,
+      ok: true,
+      error: null,
+      requestBody: payload,
+    });
 
-  for (let i = 0; i < candidateUrls.length; i++) {
-    const url = candidateUrls[i];
-    const startedAt = new Date().toISOString();
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) {
-        const contentType = resp.headers.get('content-type') || '';
-        let parsedBody: any = {};
-        let rawBody = '';
-
-        if (contentType.includes('application/json')) {
-          parsedBody = await resp.json().catch(() => ({}));
-        } else {
-          rawBody = await resp.text().catch(() => '');
-        }
-
-        const detail =
-          parsedBody?.error ||
-          parsedBody?.message ||
-          (rawBody ? rawBody.replace(/\s+/g, ' ').trim().slice(0, 240) : '');
-        const errorMessage = detail
-          ? `Email API returned ${resp.status}: ${detail}`
-          : `Email API returned ${resp.status}`;
-
-        onTrace?.({
-          path,
-          url,
-          method: 'POST',
-          attempt: i + 1,
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          status: resp.status,
-          ok: false,
-          error: errorMessage,
-          requestBody: payload,
-        });
-
-        // Try the fallback endpoint only when primary fails with a server-side error.
-        const canTryFallback = i < candidateUrls.length - 1;
-        if (canTryFallback && resp.status >= 500) {
-          lastError = new Error(errorMessage);
-          continue;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      onTrace?.({
-        path,
-        url,
-        method: 'POST',
-        attempt: i + 1,
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        status: resp.status,
-        ok: true,
-        error: null,
-        requestBody: payload,
-      });
-
-      return resp.json();
-    } catch (err: any) {
-      if (!(err instanceof Error && /^Email API returned /.test(err.message))) {
-        onTrace?.({
-          path,
-          url,
-          method: 'POST',
-          attempt: i + 1,
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          status: null,
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-          requestBody: payload,
-        });
-      }
-      lastError = err instanceof Error ? err : new Error(String(err));
-    }
+    return result;
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    onTrace?.({
+      path,
+      url,
+      method: 'POST',
+      attempt: 1,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      status: null,
+      ok: false,
+      error: errorMessage,
+      requestBody: payload,
+    });
+    throw err instanceof Error ? err : new Error(errorMessage);
   }
-
-  throw lastError || new Error('Email API request failed');
 }
 
 export async function sendTeamInviteEmail(payload: TeamInvitePayload, options?: { onTrace?: EmailTraceCallback }) {

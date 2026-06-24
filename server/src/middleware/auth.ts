@@ -26,3 +26,23 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 		return res.status(500).json({ error: error?.message || 'Authentication failed' });
 	}
 }
+
+/** Sets req.userId when a valid bearer token is present; does not reject otherwise. */
+export async function optionalAuth(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
+	const authHeader = req.header('authorization') || '';
+	const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+	if (token) {
+		try {
+			const supabase = getSupabaseAdmin();
+			const { data } = await supabase.auth.getUser(token);
+			if (data.user) {
+				req.userId = data.user.id;
+			}
+		} catch {
+			// Ignore — judge token or other auth may be used instead
+		}
+	}
+
+	return next();
+}

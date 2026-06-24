@@ -28,75 +28,23 @@ import { SkeletonLoader } from '../SkeletonLoader';
 import { EmptyState } from '../EmptyState';
 import { queryKeys } from '../../services/queryKeys';
 import { resolveMediaPublicUrl } from '../../services/supabase';
-import { resolveBackendPath } from '../../services/backendApi';
+import {
+  castVote,
+  getKycStatus,
+  getMyVotes,
+  getVotingLeaderboard,
+  getVotingPageByRoundId,
+  getVotingPageBySlug,
+  startKycDidit,
+  type MyVoteEntry,
+  type VotingConfigPayload,
+  type VotingLeaderboardEntry,
+  type VotingProgramPayload,
+  type VotingRoundPayload,
+  type VotingSubmissionPayload,
+} from '../../services/votingApi';
 import { useAuth } from '../../contexts/AuthContext';
-import { auth } from '../../services/supabase';
 import { fireCelebrationConfetti } from '../../lib/confetti';
-
-function apiUrl(path: string) {
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  return resolveBackendPath(`/api${normalized}`);
-}
-
-async function authHeaders(): Promise<HeadersInit> {
-  const { session } = await auth.getSession();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (session?.access_token) {
-    headers.Authorization = `Bearer ${session.access_token}`;
-  }
-  return headers;
-}
-
-type VotingAccessMode = 'open' | 'org_only' | 'authenticated';
-
-interface VotingRound {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  start_date: string;
-  end_date: string;
-  public_voting_slug?: string;
-}
-
-interface VotingSubmission {
-  id: string;
-  title: string;
-  description: string;
-  cover_image_url?: string;
-  applicant_name: string;
-  votes_count: number;
-  category?: string;
-}
-
-interface VotingConfig {
-  votes_per_user: number;
-  votes_per_submission: number;
-  require_auth: boolean;
-  allow_anonymous: boolean;
-  show_results_publicly: boolean;
-  show_leaderboard: boolean;
-  access_mode: VotingAccessMode;
-  public_voting_slug?: string;
-}
-
-interface MyVote {
-  id: string;
-  submission_id: string;
-  title: string;
-  applicant_name: string;
-  cover_image_url?: string;
-  created_at: string;
-}
-
-interface LeaderboardEntry {
-  rank: number;
-  submission_id: string;
-  title: string;
-  applicant_name: string;
-  vote_count: number;
-  judge_score?: number | null;
-}
 
 function resolveVotingKey(slug?: string, roundId?: string): string {
   return slug || roundId || '';
@@ -113,27 +61,23 @@ export const PublicVotingPage: React.FC = () => {
   const [userName, setUserName] = useState('');
   const [kycStarting, setKycStarting] = useState(false);
 
-  const fetchPath = slug ? `/voting/s/${slug}` : `/voting/${votingKey}`;
-
   const { data: roundData, isLoading: roundLoading } = useQuery({
     queryKey: queryKeys.voting.round(votingKey),
     queryFn: async () => {
-      const res = await fetch(apiUrl(fetchPath));
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'Voting round not found');
+      if (slug) {
+        return getVotingPageBySlug(slug);
       }
-      return res.json();
+      return getVotingPageByRoundId(votingKey);
     },
     enabled: !!votingKey,
     staleTime: 30_000,
   });
 
-  const payload = roundData?.data || roundData;
-  const round: VotingRound | null = payload?.round ?? null;
-  const config: VotingConfig | null = payload?.config ?? null;
+  const payload = roundData;
+  const round = payload?.round ?? null;
+  const config = payload?.config ?? null;
   const program = payload?.program ?? null;
-  const submissions: VotingSubmission[] = payload?.submissions ?? [];
+  const submissions = payload?.submissions ?? [];
   const resolvedRoundId = round?.id || votingKey;
 
   const needsAuth =
@@ -143,14 +87,7 @@ export const PublicVotingPage: React.FC = () => {
 
   const { data: kycStatus } = useQuery({
     queryKey: ['kyc-status', program?.id, user?.id],
-    queryFn: async () => {
-      const res = await fetch(apiUrl(`/kyc/status/${program.id}`), {
-        headers: await authHeaders(),
-      });
-      if (!res.ok) return { status: 'none' };
-      const json = await res.json();
-      return json.data || { status: 'none' };
-    },
+    queryFn: () => getKycStatus(String(program?.id)),
     enabled: !!program?.kyc_enabled && isAuthenticated && !!program?.id,
   });
 
@@ -159,19 +96,12 @@ export const PublicVotingPage: React.FC = () => {
 
   const { data: myVotesData, refetch: refetchMyVotes } = useQuery({
     queryKey: ['voting-my-votes', resolvedRoundId, user?.id],
-    queryFn: async () => {
-      const res = await fetch(apiUrl(`/voting/${resolvedRoundId}/my-votes`), {
-        headers: await authHeaders(),
-      });
-      if (!res.ok) return { votes: [], total: 0 };
-      const json = await res.json();
-      return json.data as { votes: MyVote[]; total: number };
-    },
+    queryFn: () => getMyVotes(resolvedRoundId),
     enabled: !!resolvedRoundId && (isAuthenticated || !needsAuth),
     staleTime: 10_000,
   });
 
-  const myVotes: MyVote[] = myVotesData?.votes || [];
+  const myVotes: MyVoteEntry[] = myVotesData?.votes || [];
   const votedSubmissionIds = useMemo(
     () => new Set(myVotes.map((v) => v.submission_id)),
     [myVotes],
@@ -181,33 +111,19 @@ export const PublicVotingPage: React.FC = () => {
 
   const { data: leaderboardData, isFetching: leaderboardFetching, refetch: refetchLeaderboard } = useQuery({
     queryKey: queryKeys.voting.leaderboard(resolvedRoundId),
-    queryFn: async () => {
-      const res = await fetch(apiUrl(`/voting/${resolvedRoundId}/leaderboard`));
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: () => getVotingLeaderboard(resolvedRoundId),
     enabled: !!resolvedRoundId && !!config?.show_leaderboard,
     refetchInterval: config?.show_leaderboard ? 20_000 : false,
     staleTime: 15_000,
   });
 
   const voteMutation = useMutation({
-    mutationFn: async (submissionId: string) => {
-      const res = await fetch(apiUrl(`/voting/${resolvedRoundId}/vote`), {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({
-          submission_id: submissionId,
-          email: userEmail || undefined,
-          name: userName || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to cast vote');
-      }
-      return res.json();
-    },
+    mutationFn: (submissionId: string) =>
+      castVote(resolvedRoundId, {
+        submission_id: submissionId,
+        email: userEmail || undefined,
+        name: userName || undefined,
+      }),
     onSuccess: (_data, submissionId) => {
       toast.success('Vote recorded!');
       queryClient.invalidateQueries({ queryKey: queryKeys.voting.leaderboard(resolvedRoundId) });
@@ -228,15 +144,8 @@ export const PublicVotingPage: React.FC = () => {
     if (!program?.id) return;
     setKycStarting(true);
     try {
-      const returnUrl = window.location.href;
-      const res = await fetch(apiUrl('/kyc/didit/start'), {
-        method: 'POST',
-        headers: await authHeaders(),
-        body: JSON.stringify({ program_id: program.id, return_url: returnUrl }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Could not start verification');
-      window.location.href = json.data.verification_url;
+      const verificationUrl = await startKycDidit(String(program.id), window.location.href);
+      window.location.href = verificationUrl;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'KYC failed to start');
       setKycStarting(false);
@@ -691,7 +600,7 @@ export const PublicVotingPage: React.FC = () => {
                 </div>
 
                 {(leaderboardData.data?.submissions || []).map(
-                  (entry: LeaderboardEntry, idx: number) => (
+                  (entry: VotingLeaderboardEntry, idx: number) => (
                     <motion.div
                       key={entry.submission_id}
                       initial={{ opacity: 0 }}
