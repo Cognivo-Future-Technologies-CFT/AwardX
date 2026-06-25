@@ -648,17 +648,21 @@ class DatabaseService {
     if (profile?.organization_id === this.currentOrgId) {
       const { data: membership } = await supabase
         .from('organization_members')
-        .select('id')
+        .select('id, role_id, roles(name, permissions)')
         .eq('organization_id', this.currentOrgId)
         .eq('user_id', user.id)
         .eq('status', 'active')
+        .is('program_id', null)
         .maybeSingle();
 
       if (membership) {
-        this.cachedRoleName = 'owner';
-        this.cachedPermissions = new Set(['all']);
-        this.permissionsLoaded = true;
-        return;
+        const memberRoleName = ((membership.roles as any)?.name || '').toLowerCase();
+        if (memberRoleName === 'owner' || memberRoleName === 'superadmin') {
+          this.cachedRoleName = (membership.roles as any)?.name || 'Owner';
+          this.cachedPermissions = new Set(['all']);
+          this.permissionsLoaded = true;
+          return;
+        }
       }
     }
 

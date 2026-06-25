@@ -248,7 +248,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     id: '',
     name: 'Loading...',
     email: '',
-    role: 'Admin',
+    role: 'Member',
     status: 'Active',
     lastActive: 'Now',
     avatar: '',
@@ -763,7 +763,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             id: authUser.id,
             name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
             email: authUser.email || '',
-            role: 'Admin',
+            role: 'Member',
             status: 'Active',
             lastActive: 'Now',
             avatar: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || '',
@@ -1065,7 +1065,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const canAccess = (requiredPermission?: string) => {
     if (!requiredPermission) return true;
-    if (currentUser.role === 'Admin' || currentUser.role === 'Owner') return true;
+    const role = (currentUser.role || '').toLowerCase();
+    if (role === 'admin' || role === 'owner' || role === 'superadmin') return true;
     return userPermissions.includes(requiredPermission);
   };
 
