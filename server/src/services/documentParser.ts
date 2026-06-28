@@ -4,6 +4,7 @@
  */
 
 import mammoth from 'mammoth';
+import { normalizeDocumentMime } from '../../../lib/documentMime.js';
 
 export interface SubmissionFile {
   fileUrl: string;
@@ -20,22 +21,7 @@ export interface ParsedDocument {
 }
 
 function normalizeMime(file: SubmissionFile): string {
-  const ext = file.fileName.split('.').pop()?.toLowerCase();
-  const mime = file.fileType?.toLowerCase() || '';
-
-  if (!mime || mime === 'application/octet-stream') {
-    const extMap: Record<string, string> = {
-      pdf: 'application/pdf',
-      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      doc: 'application/msword',
-      txt: 'text/plain',
-      csv: 'text/csv',
-      md: 'text/markdown',
-      json: 'application/json',
-    };
-    return ext ? extMap[ext] || '' : '';
-  }
-  return mime;
+  return normalizeDocumentMime(file);
 }
 
 async function parsePdf(buffer: ArrayBuffer): Promise<string> {

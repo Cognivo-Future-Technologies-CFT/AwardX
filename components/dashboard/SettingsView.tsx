@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../Button';
 import { User, CreditCard, Bell, Shield, Globe, Wallet, Keyboard, Plug, AlertTriangle } from 'lucide-react';
@@ -120,6 +120,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
   const [canManagePrograms, setCanManagePrograms] = useState(false);
   const [confirmEventName, setConfirmEventName] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const stripeRefreshRunning = useRef(false);
 
   const buildPresetAvatar = (seed: string, bg: string, fg: string) => {
     const initial = (seed || 'U').trim().charAt(0).toUpperCase() || 'U';
@@ -242,7 +243,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
       setError('Please select a program first.');
       return;
     }
+    if (stripeRefreshRunning.current) return;
 
+    stripeRefreshRunning.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -259,6 +262,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
     } catch (e: any) {
       setError(e?.message || 'Failed to refresh Stripe account status');
     } finally {
+      stripeRefreshRunning.current = false;
       setSaving(false);
     }
   };

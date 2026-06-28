@@ -14,6 +14,10 @@ import { detectAIContent } from './aiDetector.js';
 import { generateChunkedEmbeddings } from './submissionEmbedder.js';
 import { summarizeText } from './submissionSummarizer.js';
 import { parseDocuments, type SubmissionFile } from './documentParser.js';
+import { resolvePerson } from './identityResolver.js';
+import { extractAndStoreClaims } from './claimExtractor.js';
+import { queuePersonIntelligence } from './intelligenceJobs.js';
+import { isPersonIntelligenceEnabled } from '../lib/intelligenceConfig.js';
 
 const META_KEYS = new Set([
   'form_id', 'form_title', 'submitted_at', 'responses', 'votes',
@@ -225,6 +229,7 @@ export async function processSubmission(
         id,
         title,
         description,
+        program_id,
         applicant_name,
         applicant_email,
         submission_data,
@@ -278,6 +283,41 @@ export async function processSubmission(
       embeddingChunks = emb.chunksCount;
     } catch (embErr) {
       console.warn('[processor] Embedding generation failed:', embErr);
+    }
+
+    // — Person intelligence pipeline (best-effort, errors don't fail the whole process) —
+    const intelligenceEnabled = isPersonIntelligenceEnabled();
+    if (intelligenceEnabled && row.applicant_email) {
+      try {
+        // Resolve org from program
+        const { data: prog } = await supabase
+          .from('programs')
+          .select('organization_id')
+          .eq('id', row.program_id)
+          .maybeSingle();
+
+        const orgId = prog?.organization_id;
+        if (orgId) {
+          const { profile: person } = await resolvePerson(
+            row.applicant_email,
+            row.applicant_name,
+            orgId,
+          );
+
+          // Extract claims synchronously (fast, local)
+          const claimsCount = await extractAndStoreClaims(submissionId, processedText);
+          if (claimsCount > 0) {
+            console.log(`[processor] Extracted ${claimsCount} claims for submission ${submissionId}`);
+          }
+
+          // Queue footprint collection + claim verification in background
+          queuePersonIntelligence(person, submissionId).catch((err) =>
+            console.warn('[processor] Intelligence queue failed:', err),
+          );
+        }
+      } catch (intelErr) {
+        console.warn('[processor] Person intelligence pipeline failed:', intelErr);
+      }
     }
 
     const wordCount = processedText.split(/\s+/).filter(Boolean).length;

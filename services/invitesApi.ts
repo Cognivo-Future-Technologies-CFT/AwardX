@@ -7,7 +7,10 @@ export type InviteVerifyResult = {
 };
 
 async function requestInvite(path: string, init?: RequestInit): Promise<InviteVerifyResult> {
-  const candidateUrls = getBackendCandidateUrls(path);
+  const method = (init?.method || 'GET').toUpperCase();
+  // ponytail: only GET may failover to a second backend URL; writes must not duplicate
+  const candidateUrls =
+    method === 'GET' ? getBackendCandidateUrls(path) : getBackendCandidateUrls(path).slice(0, 1);
   const authToken = await getAuthToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

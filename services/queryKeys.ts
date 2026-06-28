@@ -88,4 +88,12 @@ export const queryKeys = {
   massEmail: {
     segments: (programId: string, roundId: string) => ['mass-email', 'segments', programId, roundId] as const,
   },
+  intelligence: {
+    submission: (submissionId: string, judgeToken?: string) =>
+      ['intelligence', 'submission', submissionId, judgeToken || ''] as const,
+    processing: (submissionId: string, judgeToken?: string) =>
+      ['intelligence', 'processing', submissionId, judgeToken || ''] as const,
+    similar: (submissionId: string, judgeToken: string | undefined, limit: number) =>
+      ['intelligence', 'similar', submissionId, judgeToken || '', limit] as const,
+  },
 } as const;

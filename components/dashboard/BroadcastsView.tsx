@@ -213,28 +213,22 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
   };
 
   // React Query Queries
-  const { data: historyData, isLoading: historyLoading, refetch: refetchHistory } = useQuery({
+  const { data: historyData, isLoading: historyLoading, isFetching: historyFetching, refetch: refetchHistory } = useQuery({
     queryKey: ['broadcast-history', programId],
     queryFn: () => fetchBroadcastHistory(programId!),
     enabled: !!programId,
-    staleTime: 0,
-    refetchOnMount: true,
   });
 
   const { data: rounds = [], isLoading: roundsLoading } = useQuery({
     queryKey: queryKeys.rounds.all(programId ?? ''),
     queryFn: () => getRoundsForEmail(programId!),
     enabled: !!programId && activeTab === 'new-broadcast' && recipientMode === 'segment',
-    staleTime: 0,
-    refetchOnMount: true,
   });
 
   const { data: segments, isLoading: segmentsLoading } = useQuery({
     queryKey: queryKeys.massEmail.segments(programId ?? '', selectedRoundId),
     queryFn: () => getEmailSegments(programId!, selectedRoundId),
     enabled: !!programId && activeTab === 'new-broadcast' && recipientMode === 'segment' && !!selectedRoundId,
-    staleTime: 0,
-    refetchOnMount: true,
   });
 
   const { data: judgesList } = useQuery({
@@ -300,13 +294,6 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
     },
     enabled: !!programId && activeTab === 'new-broadcast' && recipientMode === 'all_people',
   });
-
-  // Explicitly trigger history refetch when switching back to the history tab or when program changes
-  React.useEffect(() => {
-    if (activeTab === 'history' && programId) {
-      refetchHistory();
-    }
-  }, [activeTab, programId, refetchHistory]);
 
   // Resolve recipients
   const resolvedRecipients: Array<{ email: string; name?: string; submissionTitle?: string }> = React.useMemo(() => {
@@ -562,7 +549,8 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
             {/* Refresh */}
             <button
               onClick={() => refetchHistory()}
-              className="inline-flex items-center justify-center p-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 rounded-xl transition-colors"
+              disabled={historyFetching}
+              className="inline-flex items-center justify-center p-2 text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 rounded-xl transition-colors disabled:opacity-50 disabled:pointer-events-none"
               title="Refresh History"
             >
               <RefreshCw className="w-4 h-4" />

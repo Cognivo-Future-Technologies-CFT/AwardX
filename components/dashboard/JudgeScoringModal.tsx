@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,6 +11,9 @@ import { submitJudgeScores } from '../../services/scoresApi';
 import { useConfirm } from '../ConfirmDialog';
 import { SubmissionFormResponses } from './SubmissionFormResponses';
 import { SubmissionSummary } from './SubmissionSummary';
+import { ApplicantIntelligenceSidebar } from './ApplicantIntelligenceSidebar';
+import { extractSubmissionResponses } from '../../lib/submissionFormData';
+import { useRequestLock } from '../../hooks/useRequestLock';
 
 interface JudgeScoringModalProps {
   isOpen: boolean;
@@ -48,6 +51,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   // Task 3: per-criterion clamp warning
   const [clampWarnings, setClampWarnings] = useState<Record<string, boolean>>({});
   const populatedRef = useRef(false);
+  const runLocked = useRequestLock();
 
   const clampScore = (value: number, minScore: number, maxScore: number) => {
     const boundedMax = Math.min(maxScore, 100);
@@ -172,23 +176,24 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   });
 
   const handleSubmit = async () => {
-    const ok = await confirm({
-      title: hasExistingScore ? 'Update scores?' : 'Save scores?',
-      description: hasExistingScore
-        ? 'This will overwrite your previous scoring values for this submission.'
-        : 'These scores will be saved for this submission.',
-      confirmLabel: hasExistingScore ? 'Update Scores' : 'Save Scores',
-    });
-    if (!ok) return;
+    await runLocked(async () => {
+      const ok = await confirm({
+        title: hasExistingScore ? 'Update scores?' : 'Save scores?',
+        description: hasExistingScore
+          ? 'This will overwrite your previous scoring values for this submission.'
+          : 'These scores will be saved for this submission.',
+        confirmLabel: hasExistingScore ? 'Update Scores' : 'Save Scores',
+      });
+      if (!ok) return;
 
-    setSaveState('saving');
-    const criteriaScores: CriterionScore[] = criteria.map(c => ({
-      criterionId: c.id,
-      score: scores[c.id] ?? c.minScore,
-      comment: comments[c.id] || undefined,
-    }));
-    // Pass overall comment to submitScores
-    submitMutation.mutate({ criteriaScores, overallComment });
+      setSaveState('saving');
+      const criteriaScores: CriterionScore[] = criteria.map(c => ({
+        criterionId: c.id,
+        score: scores[c.id] ?? c.minScore,
+        comment: comments[c.id] || undefined,
+      }));
+      submitMutation.mutate({ criteriaScores, overallComment });
+    });
   };
 
   // Weighted total calculation
@@ -205,6 +210,20 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   // In admin view (not isJudgeView), and no submissionJudgeId provided, show read-only.
   const isAdminReadOnly = !isJudgeView && !submissionJudgeId && !resolvedAssignmentId;
 
+  const applicantEmail = useMemo(() => {
+    if (!submission) return null;
+    if (submission.applicantEmail) return submission.applicantEmail;
+    const responses = extractSubmissionResponses(
+      (submission.submissionData || {}) as Record<string, unknown>,
+    );
+    for (const [key, value] of Object.entries(responses)) {
+      if (!/email/i.test(key)) continue;
+      const email = String(value || '').trim();
+      if (email.includes('@')) return email;
+    }
+    return null;
+  }, [submission]);
+
   if (!submission) return null;
 
   return (
@@ -216,9 +235,9 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
     >
       {ConfirmDialogNode}
       {/* Task 4: responsive layout — stack on small screens, side-by-side on lg+ */}
-      <div className="flex flex-col lg:flex-row h-auto lg:h-[70vh] gap-0 -mx-6 -mb-6 mt-2 overflow-hidden border-t border-slate-100">
+      <div className="flex flex-col xl:flex-row h-auto xl:h-[70vh] gap-0 -mx-6 -mb-6 mt-2 overflow-hidden border-t border-slate-100">
         {/* LEFT: Submitted form data */}
-        <div className="w-full lg:w-[60%] border-b lg:border-b-0 lg:border-r border-slate-100 overflow-y-auto">
+        <div className="w-full xl:w-[45%] border-b xl:border-b-0 xl:border-r border-slate-100 overflow-y-auto">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
             <FileText className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-700">Submitted Entry</span>
@@ -265,8 +284,20 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
           )}
         </div>
 
+        {/* MIDDLE: Person intelligence sidebar */}
+        <div className="hidden xl:block w-[28%] border-r border-slate-100 overflow-y-auto bg-slate-50 p-3">
+          <ApplicantIntelligenceSidebar
+            submissionId={submission.id}
+            applicantName={submission.applicantName || submission.applicant}
+            applicantEmail={applicantEmail}
+            enabled={isOpen}
+            judgeToken={judgeToken}
+            className="h-full border-0 shadow-none"
+          />
+        </div>
+
         {/* RIGHT: Scoring panel */}
-        <div className="w-full lg:w-[40%] flex flex-col">
+        <div className="w-full xl:w-[27%] flex flex-col">
           <div className="px-6 py-4 bg-slate-50 border-b border-slate-100">
             <span className="text-sm font-semibold text-slate-700">{hasExistingScore ? 'Edit this Score' : 'Score this Entry'}</span>
             {criteria.length > 0 && (

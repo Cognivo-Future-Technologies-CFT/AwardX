@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { useConfirm } from '../ConfirmDialog';
 import { Filter, Download, Eye, ImageIcon, Calendar, Search, ChevronDown, ChevronLeft, ChevronRight, User, UserX, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles, LayoutTemplate, AlertCircle, ExternalLink, ArrowUpCircle } from 'lucide-react';
@@ -20,6 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TableSkeleton } from '../SkeletonLoader';
 import { realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
+import { useRequestLock } from '../../hooks/useRequestLock';
 import { getProgramFormSetupState } from '../../lib/programFormSetup';
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -437,6 +438,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const [promoteRoundId, setPromoteRoundId] = useState('');
    const [isPromoting, setIsPromoting] = useState(false);
    const [deletingSubmissionId, setDeletingSubmissionId] = useState<string | null>(null);
+   const runLocked = useRequestLock();
 
    useEffect(() => {
       const timer = window.setTimeout(() => {
@@ -634,39 +636,40 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
 
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!newSub.applicantName.trim()) return;
-      if (!activeEvent?.id) {
-         toast.error('Select a program before creating a submission');
-         return;
-      }
+      await runLocked(async () => {
+         if (!newSub.applicantName.trim()) return;
+         if (!activeEvent?.id) {
+            toast.error('Select a program before creating a submission');
+            return;
+         }
 
-      // Derive a display title from form responses (look for a title-like field) or fall back to applicant name
-      const rawFields = (formFieldsQuery.data || []) as Array<{ id: string; label: string; type: string }>;
-      const titleField = rawFields.find(
-         (f) => /title|project|submission/i.test(f.label) && (f.type === 'text' || f.type === 'textarea'),
-      );
-      const title =
-         (titleField && String(newSub.responses[titleField.id] ?? '').trim()) ||
-         newSub.applicantName.trim();
+         const rawFields = (formFieldsQuery.data || []) as Array<{ id: string; label: string; type: string }>;
+         const titleField = rawFields.find(
+            (f) => /title|project|submission/i.test(f.label) && (f.type === 'text' || f.type === 'textarea'),
+         );
+         const title =
+            (titleField && String(newSub.responses[titleField.id] ?? '').trim()) ||
+            newSub.applicantName.trim();
 
-      try {
-         await db.addSubmission({
-            title,
-            applicant: newSub.applicantName.trim(),
-            applicantEmail: newSub.applicantEmail.trim(),
-            category: 'General',
-            status: newSub.status,
-            programId: activeEvent.id,
-            responses: newSub.responses,
-         });
-         await refreshSubmissions();
-         setIsModalOpen(false);
-         setNewSub({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} });
-         toast.success('Submission created');
-      } catch (error) {
-         const message = error instanceof Error ? error.message : 'Failed to create submission';
-         toast.error(message);
-      }
+         try {
+            await db.addSubmission({
+               title,
+               applicant: newSub.applicantName.trim(),
+               applicantEmail: newSub.applicantEmail.trim(),
+               category: 'General',
+               status: newSub.status,
+               programId: activeEvent.id,
+               responses: newSub.responses,
+            });
+            await refreshSubmissions();
+            setIsModalOpen(false);
+            setNewSub({ applicantName: '', applicantEmail: '', status: 'Pending', responses: {} });
+            toast.success('Submission created');
+         } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create submission';
+            toast.error(message);
+         }
+      });
    };
 
    const handleView = (submission: Submission) => {
@@ -793,12 +796,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    };
 
    const handleAssignJudges = async () => {
-      if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
-         await db.assignJudgesToSubmissions(selectedIds, selectedJudgesForBulk);
-         await refreshSubmissions();
-         setIsJudgeModalOpen(false);
-         setSelectedJudgesForBulk([]);
-      }
+      await runLocked(async () => {
+         if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
+            await db.assignJudgesToSubmissions(selectedIds, selectedJudgesForBulk);
+            await refreshSubmissions();
+            setIsJudgeModalOpen(false);
+            setSelectedJudgesForBulk([]);
+         }
+      });
    };
 
    const handleExportCsv = async () => {

@@ -35,6 +35,8 @@ export async function fetchBackendJson<T = unknown>(
   } = options;
 
   const candidateUrls = getBackendCandidateUrls(path);
+  // ponytail: only GET may failover to a second backend URL; writes must not duplicate
+  const urlsToTry = method === 'GET' ? candidateUrls : candidateUrls.slice(0, 1);
 
   let authToken: string | undefined;
   if (requireAuth) {
@@ -46,7 +48,7 @@ export async function fetchBackendJson<T = unknown>(
 
   let lastError: Error | null = null;
 
-  for (const url of candidateUrls) {
+  for (const url of urlsToTry) {
     try {
       const resp = await fetch(url, {
         method,

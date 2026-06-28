@@ -6,11 +6,6 @@ import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
 import { OrganizationSelectionView } from './OrganizationSelectionView';
 import { DashboardOverview } from './DashboardOverview';
-import { FormBuilderView } from './FormBuilderView';
-import { SubmissionTable } from './SubmissionTable';
-import { JudgingView } from './JudgingView';
-import { SettingsView } from './SettingsView';
-import { TeamsView } from './TeamsView';
 import { AuditLogsView } from './AuditLogsView';
 import { CategoriesView } from './CategoriesView';
 import { ScheduleView } from './ScheduleView';
@@ -42,6 +37,11 @@ const ScheduleRoundsView = lazy(() =>
 const AnalyticsView = lazy(() => import('./AnalyticsView').then((m) => ({ default: m.AnalyticsView })));
 const BroadcastsView = lazy(() => import('./BroadcastsView').then((m) => ({ default: m.BroadcastsView })));
 const CertificatesView = lazy(() => import('./CertificatesView').then((m) => ({ default: m.CertificatesView })));
+const FormBuilderView = lazy(() => import('./FormBuilderView').then((m) => ({ default: m.FormBuilderView })));
+const SubmissionTable = lazy(() => import('./SubmissionTable').then((m) => ({ default: m.SubmissionTable })));
+const JudgingView = lazy(() => import('./JudgingView').then((m) => ({ default: m.JudgingView })));
+const SettingsView = lazy(() => import('./SettingsView').then((m) => ({ default: m.SettingsView })));
+const TeamsView = lazy(() => import('./TeamsView').then((m) => ({ default: m.TeamsView })));
 
 const ViewLoader: React.FC = () => (
   <div className="flex items-center justify-center h-64">
@@ -352,12 +352,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'templates':
         return activeEvent?.status === 'Active'
           ? <PublishedLockBanner program={activeEvent} sectionName="Form Builder" />
-          : <FormBuilderView activeEvent={activeEvent} />;
+          : (
+            <Suspense fallback={<ViewLoader />}>
+              <FormBuilderView activeEvent={activeEvent} />
+            </Suspense>
+          );
       case 'submissions':
-        return <SubmissionTable activeEvent={activeEvent} onNavigate={handleChangeView} />;
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <SubmissionTable activeEvent={activeEvent} onNavigate={handleChangeView} />
+          </Suspense>
+        );
 
       case 'judging':
-        return <JudgingView activeEvent={activeEvent} />;
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <JudgingView activeEvent={activeEvent} />
+          </Suspense>
+        );
       case 'voting':
         return (
           <ScheduleRoundsView
@@ -373,15 +385,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           </Suspense>
         );
       case 'teams':
-        return <TeamsView activeEvent={activeEvent} />;
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <TeamsView activeEvent={activeEvent} />
+          </Suspense>
+        );
       case 'logs':
         return <AuditLogsView />;
       case 'settings':
         return (
-          <SettingsView
-            activeEvent={activeEvent}
-            onDeleteEvent={handleDeleteEvent}
-          />
+          <Suspense fallback={<ViewLoader />}>
+            <SettingsView
+              activeEvent={activeEvent}
+              onDeleteEvent={handleDeleteEvent}
+            />
+          </Suspense>
         );
       default:
         return activeEvent

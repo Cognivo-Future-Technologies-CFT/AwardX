@@ -6,6 +6,8 @@ import { Judge, Submission } from '../../services/models';
 import { db } from '../../services/database';
 import { queryKeys } from '../../services/queryKeys';
 import { SubmissionFormResponses } from './SubmissionFormResponses';
+import { ApplicantIntelligenceSidebar } from './ApplicantIntelligenceSidebar';
+import { extractSubmissionResponses } from '../../lib/submissionFormData';
 
 interface SubmissionReviewSheetProps {
   isOpen: boolean;
@@ -47,6 +49,20 @@ export const SubmissionReviewSheet: React.FC<SubmissionReviewSheetProps> = ({
       .map((id) => byId.get(id))
       .filter(Boolean) as Judge[];
   }, [submission, judges]);
+
+  const applicantEmail = useMemo(() => {
+    if (!submission) return null;
+    if (submission.applicantEmail) return submission.applicantEmail;
+    const responses = extractSubmissionResponses(
+      (submission.submissionData || {}) as Record<string, unknown>,
+    );
+    for (const [key, value] of Object.entries(responses)) {
+      if (!/email/i.test(key)) continue;
+      const email = String(value || '').trim();
+      if (email.includes('@')) return email;
+    }
+    return null;
+  }, [submission]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -95,7 +111,7 @@ export const SubmissionReviewSheet: React.FC<SubmissionReviewSheetProps> = ({
         >
           {/* Sticky header */}
           <header className="shrink-0 border-b border-slate-200/90 bg-white/95 backdrop-blur-md">
-            <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
               <button
                 type="button"
                 onClick={onClose}
@@ -187,16 +203,32 @@ export const SubmissionReviewSheet: React.FC<SubmissionReviewSheetProps> = ({
             )}
           </header>
 
-          {/* Full-screen scrollable body */}
-          <main className="flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-              <SubmissionFormResponses
-                submission={submission}
-                enabled={isOpen}
-                variant="page"
-                inputsOnly
-                fallbackFormId={activeFormId || undefined}
-              />
+          {/* Two-pane body: form answers left, intelligence right */}
+          <main className="flex-1 overflow-hidden">
+            <div className="mx-auto flex h-full w-full max-w-7xl flex-col lg:flex-row">
+              {/* Left: submitted answers */}
+              <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:border-r lg:border-slate-200">
+                <SubmissionFormResponses
+                  submission={submission}
+                  enabled={isOpen}
+                  variant="page"
+                  inputsOnly
+                  fallbackFormId={activeFormId || undefined}
+                />
+              </div>
+
+              {/* Right: intelligence sidebar (sticky on desktop) */}
+              <div className="w-full shrink-0 border-t border-slate-200 bg-[#f4f6f8] p-4 lg:w-96 lg:border-t-0 lg:overflow-y-auto">
+                <div className="lg:sticky lg:top-0">
+                  <ApplicantIntelligenceSidebar
+                    submissionId={submission.id}
+                    applicantName={applicant}
+                    applicantEmail={applicantEmail}
+                    enabled={isOpen}
+                    className="min-h-[320px] lg:min-h-[calc(100dvh-12rem)]"
+                  />
+                </div>
+              </div>
             </div>
           </main>
         </motion.div>

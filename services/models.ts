@@ -93,6 +93,7 @@ export interface Submission {
   title: string;
   applicant?: string;
   applicantName?: string; // Preferred name from new data layer
+  applicantEmail?: string;
   category: string;
   categoryId?: string | null;
   status: 'Pending' | 'Under Review' | 'Shortlisted' | 'Accepted' | 'Rejected';

@@ -44,6 +44,7 @@ import {
   type VotingSubmissionPayload,
 } from '../../services/votingApi';
 import { useAuth } from '../../contexts/AuthContext';
+import { useRequestLock } from '../../hooks/useRequestLock';
 import { fireCelebrationConfetti } from '../../lib/confetti';
 
 function resolveVotingKey(slug?: string, roundId?: string): string {
@@ -60,6 +61,7 @@ export const PublicVotingPage: React.FC = () => {
   const [userEmail, setUserEmail] = useState('');
   const [userName, setUserName] = useState('');
   const [kycStarting, setKycStarting] = useState(false);
+  const runLocked = useRequestLock();
 
   const { data: roundData, isLoading: roundLoading } = useQuery({
     queryKey: queryKeys.voting.round(votingKey),
@@ -108,14 +110,7 @@ export const PublicVotingPage: React.FC = () => {
   );
   const totalVotesCast = myVotes.length;
   const maxVotes = config?.votes_per_user ?? 1;
-
-  const { data: leaderboardData, isFetching: leaderboardFetching, refetch: refetchLeaderboard } = useQuery({
-    queryKey: queryKeys.voting.leaderboard(resolvedRoundId),
-    queryFn: () => getVotingLeaderboard(resolvedRoundId),
-    enabled: !!resolvedRoundId && !!config?.show_leaderboard,
-    refetchInterval: config?.show_leaderboard ? 20_000 : false,
-    staleTime: 15_000,
-  });
+  const loginUrl = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
 
   const voteMutation = useMutation({
     mutationFn: (submissionId: string) =>
@@ -126,33 +121,73 @@ export const PublicVotingPage: React.FC = () => {
       }),
     onSuccess: (_data, submissionId) => {
       toast.success('Vote recorded!');
+      queryClient.setQueryData<{ votes: MyVoteEntry[]; total: number }>(
+        ['voting-my-votes', resolvedRoundId, user?.id],
+        (old) => {
+          if (!old) return old;
+          const voted = submissions.find((s) => s.id === submissionId);
+          return {
+            votes: [
+              ...old.votes,
+              {
+                id: `local-${submissionId}`,
+                submission_id: submissionId,
+                title: voted?.title || 'Submission',
+                applicant_name: voted?.applicant_name || '',
+                cover_image_url: voted?.cover_image_url,
+                created_at: new Date().toISOString(),
+              },
+            ],
+            total: (old.total ?? old.votes.length) + 1,
+          };
+        },
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.voting.leaderboard(resolvedRoundId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.voting.round(votingKey) });
-      void refetchMyVotes().then((result) => {
-        const newTotal = result.data?.total ?? totalVotesCast + 1;
-        if (newTotal >= maxVotes && maxVotes > 0) {
-          fireCelebrationConfetti();
-        }
-      });
+      const newTotal = totalVotesCast + 1;
+      if (newTotal >= maxVotes && maxVotes > 0) {
+        fireCelebrationConfetti();
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to cast vote');
     },
   });
 
-  const startKyc = async () => {
-    if (!program?.id) return;
-    setKycStarting(true);
-    try {
-      const verificationUrl = await startKycDidit(String(program.id), window.location.href);
-      window.location.href = verificationUrl;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'KYC failed to start');
-      setKycStarting(false);
-    }
+  const { data: leaderboardData, isFetching: leaderboardFetching, refetch: refetchLeaderboard } = useQuery({
+    queryKey: queryKeys.voting.leaderboard(resolvedRoundId),
+    queryFn: () => getVotingLeaderboard(resolvedRoundId),
+    enabled: !!resolvedRoundId && !!config?.show_leaderboard,
+    refetchInterval: config?.show_leaderboard && !voteMutation.isPending ? 20_000 : false,
+    staleTime: 15_000,
+  });
+
+  const castVoteLocked = async (submissionId: string) => {
+    await runLocked(async () => {
+      if (needsAuth && !isAuthenticated) {
+        navigate(loginUrl);
+        return;
+      }
+      if (kycRequired) {
+        toast.error('Complete KYC verification first');
+        return;
+      }
+      voteMutation.mutate(submissionId);
+    });
   };
 
-  const loginUrl = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  const startKyc = async () => {
+    await runLocked(async () => {
+      if (!program?.id) return;
+      setKycStarting(true);
+      try {
+        const verificationUrl = await startKycDidit(String(program.id), window.location.href);
+        window.location.href = verificationUrl;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'KYC failed to start');
+        setKycStarting(false);
+      }
+    });
+  };
 
   if (roundLoading || authLoading) {
     return (
@@ -521,17 +556,7 @@ export const PublicVotingPage: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (needsAuth && !isAuthenticated) {
-                          navigate(loginUrl);
-                          return;
-                        }
-                        if (kycRequired) {
-                          toast.error('Complete KYC verification first');
-                          return;
-                        }
-                        voteMutation.mutate(submission.id);
-                      }}
+                      onClick={() => void castVoteLocked(submission.id)}
                       disabled={!canVoteForThis || voteMutation.isPending}
                       className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
                         hasVoted

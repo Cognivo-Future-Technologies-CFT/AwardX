@@ -4,6 +4,7 @@ import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff, Gavel, Star, TrendingUp }
 import { auth } from '../../services/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
+import { useRequestLock } from '../../hooks/useRequestLock';
 import { Logo } from '../Logo';
 
 function humanizeAuthError(message: string): string {
@@ -53,54 +54,57 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const runLocked = useRequestLock();
 
   const handleGoogleLogin = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      if (nextPath) {
-        storePostAuthRedirect(nextPath);
-      }
-      const { error: authError } = await auth.signInWithProvider('google');
-      if (authError) {
-        setError(humanizeAuthError(authError.message));
+    await runLocked(async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        if (nextPath) {
+          storePostAuthRedirect(nextPath);
+        }
+        const { error: authError } = await auth.signInWithProvider('google');
+        if (authError) {
+          setError(humanizeAuthError(authError.message));
+          setIsLoading(false);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to sign in with Google');
         setIsLoading(false);
       }
-      // If successful, redirect will happen via OAuth callback
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in with Google');
-      setIsLoading(false);
-    }
+    });
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError(null);
+    if (isLoading) return;
+    await runLocked(async () => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const { error: authError } = await auth.signIn(email, password);
-      if (authError) {
-        setError(humanizeAuthError(authError.message));
-        setIsLoading(false);
-      } else {
-        // Check if there's a return URL for form submission
-        const returnUrl = sessionStorage.getItem('formReturnUrl') || sessionStorage.getItem('postAuthRedirect');
-        if (returnUrl) {
-          sessionStorage.removeItem('formReturnUrl');
-          sessionStorage.removeItem('postAuthRedirect');
-          window.location.href = sanitizeRedirectPath(returnUrl);
-        } else if (nextPath) {
-          navigate(nextPath);
+      try {
+        const { error: authError } = await auth.signIn(email, password);
+        if (authError) {
+          setError(humanizeAuthError(authError.message));
+          setIsLoading(false);
         } else {
-          // Successfully logged in, navigate to dashboard
-          navigate('/dashboard');
+          const returnUrl = sessionStorage.getItem('formReturnUrl') || sessionStorage.getItem('postAuthRedirect');
+          if (returnUrl) {
+            sessionStorage.removeItem('formReturnUrl');
+            sessionStorage.removeItem('postAuthRedirect');
+            window.location.href = sanitizeRedirectPath(returnUrl);
+          } else if (nextPath) {
+            navigate(nextPath);
+          } else {
+            navigate('/dashboard');
+          }
         }
+      } catch (err: any) {
+        setError(err.message || 'Failed to sign in');
+        setIsLoading(false);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
-      setIsLoading(false);
-    }
+    });
   };
 
   return (

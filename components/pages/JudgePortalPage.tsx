@@ -85,6 +85,7 @@ export const JudgePortalPage: React.FC = () => {
   const [declined, setDeclined] = useState(false);
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const confettiFiredRef = useRef(false);
+  const verifiedTokenRef = useRef<string | null>(null);
 
   // Task 14: separate function that only re-fetches assignments/criteria (no token re-verify)
   const fetchAssignments = useMemo(() => async (token: string) => {
@@ -110,6 +111,9 @@ export const JudgePortalPage: React.FC = () => {
           setErrorMessage('No invite token found. Please check your email link.');
           return;
         }
+
+        if (verifiedTokenRef.current === token) return;
+        verifiedTokenRef.current = token;
 
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(token)) {

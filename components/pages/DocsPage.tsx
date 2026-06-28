@@ -428,7 +428,7 @@ npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
       {
         kind: 'list',
         items: [
-          'Dashboard: JudgingView.tsx, JudgeScoringModal.tsx, GroupJudgingPanel.tsx, JudgeScoresOverviewPanel.tsx',
+          'Dashboard: JudgingView.tsx, JudgeScoringModal.tsx, JudgeScoresOverviewPanel.tsx',
           'Public judge portal: JudgePortalPage.tsx at /judge/:token',
           'Score submit API: server/src/routes/scores.ts and api/_handlers/scores/judge-submit.ts',
           'Invite flow: server/src/routes/invites.ts + api/_handlers/invites/judge.ts',

@@ -208,6 +208,8 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
 
 
     // ── Mutations ──────────────────────────────────────────────────────────────
+    const skipInviteRefreshRef = useRef(false);
+
     const inviteMutation = useMutation({
         mutationFn: async (vars: { email: string; roleId: string; scope: 'program' | 'organization' }) => {
             const roleName = rawRoles.find(r => r.id === vars.roleId)?.name;
@@ -226,6 +228,7 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
             toast.error(`Error: ${message}`);
         },
         onSuccess: () => {
+            if (skipInviteRefreshRef.current) return;
             queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
             if (orgId) {
                 queryClient.invalidateQueries({ queryKey: queryKeys.invites.pending(orgId) });
@@ -454,6 +457,7 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
         }
 
         setIsBulkInviting(true);
+        skipInviteRefreshRef.current = true;
 
         const failed: string[] = [];
         const warned: string[] = [];
@@ -492,6 +496,7 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
             setInviteEmailDraft('');
             setIsInviteModalOpen(false);
         } finally {
+            skipInviteRefreshRef.current = false;
             setIsBulkInviting(false);
         }
     };

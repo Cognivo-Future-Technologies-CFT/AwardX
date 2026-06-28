@@ -2,6 +2,7 @@
 // Supports PDF (pdfjs-dist), DOCX (mammoth), and plain text.
 
 import type { SubmissionFile } from './types';
+import { normalizeDocumentMime } from '../../lib/documentMime';
 
 export interface ParsedDocument {
   text: string;
@@ -11,27 +12,8 @@ export interface ParsedDocument {
   error?: string;
 }
 
-/**
- * Normalizes MIME types for matching.
- */
 function normalizeMime(file: SubmissionFile): string {
-  const ext = file.fileName.split('.').pop()?.toLowerCase();
-  const mime = file.fileType?.toLowerCase() || '';
-
-  // Fall back to extension if MIME is missing
-  if (!mime || mime === 'application/octet-stream') {
-    const extMap: Record<string, string> = {
-      pdf: 'application/pdf',
-      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      doc: 'application/msword',
-      txt: 'text/plain',
-      csv: 'text/csv',
-      md: 'text/markdown',
-      json: 'application/json',
-    };
-    return ext ? extMap[ext] || '' : '';
-  }
-  return mime;
+  return normalizeDocumentMime(file);
 }
 
 /**

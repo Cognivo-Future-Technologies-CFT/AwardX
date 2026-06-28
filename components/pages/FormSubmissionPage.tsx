@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../Button';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +18,7 @@ import {
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
 import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles } from 'lucide-react';
 import { storage } from '../../services/supabase';
+import { useRequestLock } from '../../hooks/useRequestLock';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const defaultTheme: FormTheme = {
@@ -234,6 +235,11 @@ export const FormSubmissionPage: React.FC = () => {
   const [kycEnabled, setKycEnabled] = useState(false);
 
   const needsGithubApplication = applicationMode === 'hackathon' || requireGithubAuth;
+  const runLocked = useRequestLock();
+  const formLoadStartedRef = useRef<string | null>(null);
+  const draftRestoredRef = useRef<string | null>(null);
+  const uploadsInFlightRef = useRef(new Set<string>());
+  const fileFingerprint = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
   const completeSubmissionSideEffects = async (currentFormId: string) => {
     const { user } = await auth.getUser();
@@ -260,9 +266,18 @@ export const FormSubmissionPage: React.FC = () => {
     const submissionId = params.get('submission_id');
 
     if (payment === 'success' && sessionId && submissionId) {
+      const verifyKey = `stripe-verified:${sessionId}:${submissionId}`;
+      if (sessionStorage.getItem(verifyKey)) {
+        setIsSubmitted(true);
+        setPaymentState('success');
+        setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
+        return;
+      }
+
       void (async () => {
         try {
           await verifyStripePayment({ sessionId, submissionId });
+          sessionStorage.setItem(verifyKey, '1');
           setIsSubmitted(true);
           setPaymentState('success');
           setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
@@ -291,6 +306,9 @@ export const FormSubmissionPage: React.FC = () => {
       setIsLoading(false);
       return;
     }
+
+    if (formLoadStartedRef.current === currentFormId) return;
+    formLoadStartedRef.current = currentFormId;
 
     const loadForm = async () => {
       try {
@@ -480,6 +498,9 @@ export const FormSubmissionPage: React.FC = () => {
   // Restore draft data after form loads
   useEffect(() => {
     if (!formId || isLoading || formFields.length === 0) return;
+    if (draftRestoredRef.current === formId) return;
+    draftRestoredRef.current = formId;
+
     const restoreDraft = async () => {
       try {
         const { user } = await auth.getUser();
@@ -642,24 +663,25 @@ const fieldsByStep = useMemo(() => {
   };
 
   const handleSubmit = async () => {
-    if (!validateCurrentStep()) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+    await runLocked(async () => {
+      if (!validateCurrentStep()) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
 
-    if (!validateAllRequired()) {
-      toast.error('Please complete all required questions before submitting.');
-      return;
-    }
+      if (!validateAllRequired()) {
+        toast.error('Please complete all required questions before submitting.');
+        return;
+      }
 
-    const currentFormId = formId || getFormIdFromUrl();
-    if (!currentFormId) {
-      toast.error('Form ID is required');
-      return;
-    }
+      const currentFormId = formId || getFormIdFromUrl();
+      if (!currentFormId) {
+        toast.error('Form ID is required');
+        return;
+      }
 
-    try {
-      setIsSubmitting(true);
+      try {
+        setIsSubmitting(true);
       const paymentRequired = !!(paymentConfig?.enabled && (paymentConfig?.fee || 0) > 0 && programId);
 
       const submission: any = await db.submitFormResponse(currentFormId, formData, paymentRequired
@@ -742,6 +764,7 @@ const fieldsByStep = useMemo(() => {
     } finally {
       setIsSubmitting(false);
     }
+    });
   };
 
   const renderFieldInput = (field: FormField) => {
@@ -980,16 +1003,23 @@ case 'award_selector': {
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                const fp = fileFingerprint(file);
+                if (uploadsInFlightRef.current.has(fp)) return;
+                uploadsInFlightRef.current.add(fp);
                 handleInputChange(field.id, { name: file.name, uploading: true });
                 const tempId = `temp-${Date.now()}`;
-                const { path, bucket, error } = await storage.uploadSubmissionFile(file, tempId);
-                if (error || !path) {
-                  handleInputChange(field.id, { error: (error as any)?.message || 'Upload failed' });
-                  toast.error('File upload failed: ' + ((error as any)?.message || 'Unknown error'));
-                  return;
+                try {
+                  const { path, bucket, error } = await storage.uploadSubmissionFile(file, tempId);
+                  if (error || !path) {
+                    handleInputChange(field.id, { error: (error as any)?.message || 'Upload failed' });
+                    toast.error('File upload failed: ' + ((error as any)?.message || 'Unknown error'));
+                    return;
+                  }
+                  const { data: urlData } = (supabase as any).storage.from(bucket || 'media').getPublicUrl(path);
+                  handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path });
+                } finally {
+                  uploadsInFlightRef.current.delete(fp);
                 }
-                const { data: urlData } = (supabase as any).storage.from(bucket || 'media').getPublicUrl(path);
-                handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path });
               }}
             />
             {!fileState.url && !fileState.uploading && (
@@ -1080,6 +1110,10 @@ case 'award_selector': {
                 const file = e.target.files?.[0];
                 if (!file) return;
 
+                const fp = fileFingerprint(file);
+                if (uploadsInFlightRef.current.has(fp)) return;
+                uploadsInFlightRef.current.add(fp);
+
                 handleInputChange(field.id, {
                   name: file.name,
                   uploading: true,
@@ -1087,31 +1121,35 @@ case 'award_selector': {
 
                 const tempId = `temp-${Date.now()}`;
 
-                const { path, bucket, error } =
-                  await storage.uploadSubmissionFile(file, tempId);
+                try {
+                  const { path, bucket, error } =
+                    await storage.uploadSubmissionFile(file, tempId);
 
-                if (error || !path) {
+                  if (error || !path) {
+                    handleInputChange(field.id, {
+                      error: (error as any)?.message || 'Upload failed',
+                    });
+
+                    toast.error(
+                      'Image upload failed: ' +
+                        ((error as any)?.message || 'Unknown error')
+                    );
+
+                    return;
+                  }
+
+                  const { data: urlData } = (supabase as any)
+                    .storage
+                    .from(bucket || 'media')
+                    .getPublicUrl(path);
+
                   handleInputChange(field.id, {
-                    error: (error as any)?.message || 'Upload failed',
+                    name: file.name,
+                    url: urlData?.publicUrl || path,
                   });
-
-                  toast.error(
-                    'Image upload failed: ' +
-                      ((error as any)?.message || 'Unknown error')
-                  );
-
-                  return;
+                } finally {
+                  uploadsInFlightRef.current.delete(fp);
                 }
-
-                const { data: urlData } = (supabase as any)
-                  .storage
-                  .from(bucket || 'media')
-                  .getPublicUrl(path);
-
-                handleInputChange(field.id, {
-                  name: file.name,
-                  url: urlData?.publicUrl || path,
-                });
               }}
             />
 

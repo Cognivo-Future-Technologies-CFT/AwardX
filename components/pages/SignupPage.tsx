@@ -4,6 +4,7 @@ import { ArrowLeft, Sparkles, Check, Mail, Lock, User, Eye, EyeOff } from 'lucid
 import { auth } from '../../services/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
+import { useRequestLock } from '../../hooks/useRequestLock';
 import { Logo } from '../Logo';
 
 function humanizeAuthError(message: string): string {
@@ -54,44 +55,48 @@ export const SignupPage: React.FC = () => {
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const runLocked = useRequestLock();
 
   const handleGoogleSignup = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      if (nextPath) {
-        storePostAuthRedirect(nextPath);
-      }
-      const { error: authError } = await auth.signInWithProvider('google');
-      if (authError) {
-        setError(humanizeAuthError(authError.message));
+    await runLocked(async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        if (nextPath) {
+          storePostAuthRedirect(nextPath);
+        }
+        const { error: authError } = await auth.signInWithProvider('google');
+        if (authError) {
+          setError(humanizeAuthError(authError.message));
+          setIsLoading(false);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to sign up with Google');
         setIsLoading(false);
       }
-      // If successful, redirect will happen via OAuth callback
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up with Google');
-      setIsLoading(false);
-    }
+    });
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError(null);
+    if (isLoading) return;
+    await runLocked(async () => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const { error: authError } = await auth.signUp(email, password, { full_name: fullName });
-      if (authError) {
-        setError(humanizeAuthError(authError.message));
+      try {
+        const { error: authError } = await auth.signUp(email, password, { full_name: fullName });
+        if (authError) {
+          setError(humanizeAuthError(authError.message));
+          setIsLoading(false);
+        } else {
+          navigate(nextPath || '/dashboard');
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to sign up');
         setIsLoading(false);
-      } else {
-        // Successfully signed up
-        navigate(nextPath || '/dashboard');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
-      setIsLoading(false);
-    }
+    });
   };
 
   return (

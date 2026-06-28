@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Tag,
@@ -15,11 +15,18 @@ import { getProgramFormSetupState } from '../../lib/programFormSetup';
 import { DashboardOverview } from './DashboardOverview';
 import { CategoriesView } from './CategoriesView';
 // ScheduleView removed — schedule/rounds temporarily hidden from tile hub
-import { JudgingView } from './JudgingView';
-import { TeamsView } from './TeamsView';
-import { SettingsView } from './SettingsView';
 import { LeaderboardView } from './LeaderboardView';
 import { MassEmailView } from './MassEmailView';
+
+const JudgingView = lazy(() => import('./JudgingView').then((m) => ({ default: m.JudgingView })));
+const TeamsView = lazy(() => import('./TeamsView').then((m) => ({ default: m.TeamsView })));
+const SettingsView = lazy(() => import('./SettingsView').then((m) => ({ default: m.SettingsView })));
+
+const DrawerViewLoader: React.FC = () => (
+  <div className="flex items-center justify-center p-12">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+  </div>
+);
 
 interface ProgramTileHubProps {
   activeEvent: Program | null;
@@ -271,12 +278,27 @@ export const ProgramTileHub: React.FC<ProgramTileHubProps> = ({ activeEvent, onN
       case 'overview':    return <DashboardOverview activeEvent={activeEvent} onNavigate={onNavigate} />;
       case 'categories':  return <CategoriesView activeEvent={activeEvent} />;
       // 'entries' now navigates to full-page — handled in handleTileClick
-      case 'judging':     return <JudgingView activeEvent={activeEvent} />;
+      case 'judging':
+        return (
+          <Suspense fallback={<DrawerViewLoader />}>
+            <JudgingView activeEvent={activeEvent} />
+          </Suspense>
+        );
       case 'leaderboard': return <LeaderboardView activeEvent={activeEvent} />;
-      case 'team':        return <TeamsView activeEvent={activeEvent} />;
+      case 'team':
+        return (
+          <Suspense fallback={<DrawerViewLoader />}>
+            <TeamsView activeEvent={activeEvent} />
+          </Suspense>
+        );
       case 'mass-email':  return <MassEmailView activeEvent={activeEvent} />;
       case 'publish':     return <PublishPanel program={activeEvent} checks={readinessChecks} onClose={() => setActiveTile(null)} />;
-      case 'settings':    return <SettingsView activeEvent={activeEvent} onDeleteEvent={onDeleteEvent} />;
+      case 'settings':
+        return (
+          <Suspense fallback={<DrawerViewLoader />}>
+            <SettingsView activeEvent={activeEvent} onDeleteEvent={onDeleteEvent} />
+          </Suspense>
+        );
       default:            return null;
     }
   };

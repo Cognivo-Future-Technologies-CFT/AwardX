@@ -20,6 +20,7 @@ import scoresRouter from './scores.js';
 import announcementsRouter from './announcements.js';
 import certificatesRouter from './certificates.js';
 import submissionProcessingRouter from './submissionProcessing.js';
+import personIntelligenceRouter from './personIntelligence.js';
 
 const router = Router();
 
@@ -44,5 +45,7 @@ router.use('/scores', scoresRouter);
 router.use('/announcements', announcementsRouter);
 router.use('/certificates', certificatesRouter);
 router.use('/submissions', submissionProcessingRouter);
+router.use('/person', personIntelligenceRouter);
+router.use('/claims', personIntelligenceRouter);
 
 export default router;

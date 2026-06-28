@@ -7,6 +7,17 @@ import {
   queueSubmissionProcessing,
 } from '../services/submissionProcessor.js';
 import { findSimilarToSubmission } from '../services/submissionEmbedder.js';
+import { mapClaimRow, mapFootprintRow } from '../lib/footprintMappers.js';
+import { resolvePersonForSubmission } from '../lib/submissionPerson.js';
+import { resolveApplicantIdentity } from '../lib/submissionApplicant.js';
+import { collectFootprints } from '../services/footprintCollector.js';
+import { buildProfile } from '../services/profileBuilder.js';
+import {
+  isEmailIntelligenceConfigured,
+  isHoleheEnabled,
+  isPersonIntelligenceEnabled,
+} from '../lib/intelligenceConfig.js';
+import { isHoleheRuntimeAvailable } from '../services/emailIntelligence/EmailIntelligenceService.js';
 
 const router = Router();
 
@@ -249,6 +260,212 @@ router.post('/:submissionId/queue', async (req, res) => {
 
   queueSubmissionProcessing(submissionId);
   return res.json({ ok: true, queued: true });
+});
+
+/** GET /api/submissions/:submissionId/claims — auth user or ?judgeToken= */
+router.get('/:submissionId/claims', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const { submissionId } = req.params;
+
+  if (!submissionId) {
+    return res.status(400).json({ error: 'submissionId is required' });
+  }
+
+  try {
+    const access = await resolveAccess(req, submissionId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('submission_claims')
+      .select(`
+        *,
+        claim_verifications(*)
+      `)
+      .eq('submission_id', submissionId)
+      .order('extracted_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ data: (data || []).map((row) => mapClaimRow(row as Record<string, unknown>)) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected server error';
+    return res.status(500).json({ error: message });
+  }
+});
+
+async function fetchFootprintsForSubmission(personProfileId: string) {
+  const supabase = getSupabaseAdmin();
+  const { data, count, error } = await supabase
+    .from('person_digital_footprints')
+    .select('*', { count: 'exact' })
+    .eq('person_profile_id', personProfileId)
+    .order('collected_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    data: (data || []).map((row) => mapFootprintRow(row as Record<string, unknown>)),
+    total: count || 0,
+    personProfileId,
+  };
+}
+
+/** GET /api/submissions/:submissionId/footprints — auth user or ?judgeToken= */
+router.get('/:submissionId/footprints', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const { submissionId } = req.params;
+
+  if (!submissionId) {
+    return res.status(400).json({ error: 'submissionId is required' });
+  }
+
+  try {
+    const access = await resolveAccess(req, submissionId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const person = await resolvePersonForSubmission(submissionId);
+    if (!person) {
+      return res.json({ data: [], total: 0, personProfileId: null });
+    }
+
+    const result = await fetchFootprintsForSubmission(person.id);
+    return res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected server error';
+    return res.status(500).json({ error: message });
+  }
+});
+
+/** GET /api/submissions/:submissionId/intelligence — aggregated dossier */
+router.get('/:submissionId/intelligence', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const { submissionId } = req.params;
+
+  if (!submissionId) {
+    return res.status(400).json({ error: 'submissionId is required' });
+  }
+
+  try {
+    const access = await resolveAccess(req, submissionId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data: submission } = await supabase
+      .from('submissions')
+      .select('applicant_email, applicant_name, submission_data, processing_status')
+      .eq('id', submissionId)
+      .maybeSingle();
+
+    const person = await resolvePersonForSubmission(submissionId);
+    let profile = null;
+    let footprints: ReturnType<typeof mapFootprintRow>[] = [];
+    let footprintsTotal = 0;
+
+    if (person) {
+      try {
+        profile = await buildProfile(person.id);
+        const fp = await fetchFootprintsForSubmission(person.id);
+        footprints = fp.data;
+        footprintsTotal = fp.total;
+      } catch (profileErr) {
+        console.warn('[intelligence] Profile/footprints fetch failed:', profileErr);
+      }
+    }
+
+    const { data: claims, error: claimsError } = await supabase
+      .from('submission_claims')
+      .select(`*, claim_verifications(*)`)
+      .eq('submission_id', submissionId)
+      .order('extracted_at', { ascending: false });
+
+    if (claimsError && !claimsError.message?.includes('submission_claims')) {
+      return res.status(500).json({ error: claimsError.message });
+    }
+
+    const applicant = resolveApplicantIdentity({
+      applicant_email: submission?.applicant_email,
+      applicant_name: submission?.applicant_name,
+      submission_data: submission?.submission_data as Record<string, unknown> | undefined,
+    });
+
+    const profileData = (person?.profileData || {}) as Record<string, unknown>;
+    const emailIntelligence =
+      (profileData.emailIntelligence as Record<string, unknown> | undefined)
+      ?? (profileData.behindTheEmail as Record<string, unknown> | undefined)
+      ?? null;
+
+    const holeheAvailable = await isHoleheRuntimeAvailable();
+
+    return res.json({
+      personProfileId: person?.id ?? null,
+      applicantEmail: applicant.email ?? null,
+      applicantName: applicant.name ?? null,
+      processingStatus: submission?.processing_status ?? null,
+      profile,
+      footprints,
+      footprintsTotal,
+      claims: (claims || []).map((row) => mapClaimRow(row as Record<string, unknown>)),
+      emailIntelligence,
+      intelligenceEnabled: isPersonIntelligenceEnabled(),
+      holeheEnabled: isHoleheEnabled(),
+      holeheAvailable,
+      emailIntelligenceConfigured: isEmailIntelligenceConfigured(),
+      setupRequired: claimsError?.message?.includes('submission_claims') ?? false,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected server error';
+    return res.status(500).json({ error: message });
+  }
+});
+
+/** POST /api/submissions/:submissionId/footprints/refresh — auth user or ?judgeToken= */
+router.post('/:submissionId/footprints/refresh', optionalAuth, async (req: AuthenticatedRequest, res) => {
+  const { submissionId } = req.params;
+
+  if (!submissionId) {
+    return res.status(400).json({ error: 'submissionId is required' });
+  }
+
+  try {
+    const access = await resolveAccess(req, submissionId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const person = await resolvePersonForSubmission(submissionId, true);
+    if (!person) {
+      return res.status(400).json({
+        error: 'Applicant email is required to collect footprints. Ensure the submission has an email field filled in.',
+      });
+    }
+
+    try {
+      await collectFootprints(person, { force: true });
+      await buildProfile(person.id);
+    } catch (collectErr) {
+      const message = collectErr instanceof Error ? collectErr.message : 'Collection failed';
+      if (message.includes('person_profiles') || message.includes('person_digital_footprints')) {
+        return res.status(503).json({
+          error: 'Database tables not ready. Run migrations 037 and 038 in Supabase SQL Editor.',
+        });
+      }
+      throw collectErr;
+    }
+    const result = await fetchFootprintsForSubmission(person.id);
+    return res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unexpected server error';
+    return res.status(500).json({ error: message });
+  }
 });
 
 export default router;

@@ -232,9 +232,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [pendingShortcut, setPendingShortcut] = useState<string | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const shouldLoadSearchCorpus = true;
+  const shouldLoadSearchCorpus = isSearchOpen || showMobileSearch;
 
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
@@ -258,7 +259,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [permissionsReady, setPermissionsReady] = useState(false);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const queryClient = useQueryClient();
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   const notificationsQuery = useQuery({
     queryKey: ['notifications', activeEvent?.id || 'all'],

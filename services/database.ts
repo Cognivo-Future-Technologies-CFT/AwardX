@@ -1557,6 +1557,7 @@ class DatabaseService {
       description: s.description || undefined,
       coverImageUrl: s.cover_image_url || undefined,
       applicantName: s.applicant_name || undefined,
+      applicantEmail: s.applicant_email || undefined,
       submittedAt: s.submitted_at || undefined,
     };
   }

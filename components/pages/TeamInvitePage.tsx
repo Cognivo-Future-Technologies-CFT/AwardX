@@ -72,6 +72,7 @@ export const TeamInvitePage: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [invite, setInvite] = React.useState<InviteContext | null>(null);
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const verifiedTokenRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!pathToken && token) {
@@ -86,6 +87,9 @@ export const TeamInvitePage: React.FC = () => {
         setChecking(false);
         return;
       }
+
+      if (verifiedTokenRef.current === token) return;
+      verifiedTokenRef.current = token;
 
       setChecking(true);
       setError(null);

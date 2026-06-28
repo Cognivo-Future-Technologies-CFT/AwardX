@@ -4,11 +4,24 @@
 		"module": "ES2020",
 		"moduleResolution": "Bundler",
 		"outDir": "dist",
-		"rootDir": "src",
+		"rootDir": "..",
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"strict": true,
 		"skipLibCheck": true
 	},
-	"include": ["src/**/*"]
+	"include": [
+		"src/**/*",
+		"../lib/routeRateLimit.ts",
+		"../lib/inviteToken.ts",
+		"../lib/serviceResult.ts",
+		"../lib/documentMime.ts",
+		"../lib/inviteSchemas.ts",
+		"../lib/inviteEmailUtils.ts",
+		"../lib/inviteEmailTemplates.ts",
+		"../lib/emailLogs.ts",
+		"../lib/inviteMailer.ts",
+		"../lib/orgAccess.ts",
+		"../lib/handlers/**/*.ts"
+	]
 }
