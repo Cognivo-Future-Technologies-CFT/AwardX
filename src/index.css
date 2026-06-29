@@ -20,7 +20,7 @@
   --font-sans: Outfit, sans-serif;
   --secondary: #fdfdfd;
   --background: #fcfcfc;
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-serif: "Instrument Serif", Georgia, Cambria, "Times New Roman", Times, serif;
   --foreground: #171717;
   --destructive: #ca3214;
   --shadow-blur: 3px;
@@ -138,6 +138,8 @@
   --radius-3xl: 0.5rem;
   /* keep pill/full shapes */
   --radius-full: 9999px;
+  --font-accent: "Instrument Serif", Georgia, serif;
+  --font-display: Outfit, sans-serif;
 }
 
 body {

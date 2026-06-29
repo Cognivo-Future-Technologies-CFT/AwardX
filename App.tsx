@@ -10,6 +10,7 @@ const HomePage = lazy(() => import('./components/pages/HomePage').then((m) => ({
 const FeaturesPage = lazy(() => import('./components/pages/FeaturesPage').then((m) => ({ default: m.FeaturesPage })));
 const HowItWorksPage = lazy(() => import('./components/pages/HowItWorksPage').then((m) => ({ default: m.HowItWorksPage })));
 const StoriesPage = lazy(() => import('./components/pages/StoriesPage').then((m) => ({ default: m.StoriesPage })));
+const CaseStudyPage = lazy(() => import('./components/pages/CaseStudyPage').then((m) => ({ default: m.CaseStudyPage })));
 const PricingPage = lazy(() => import('./components/pages/PricingPage').then((m) => ({ default: m.PricingPage })));
 const DocsPage = lazy(() => import('./components/pages/DocsPage').then((m) => ({ default: m.DocsPage })));
 const SignupPage = lazy(() => import('./components/pages/SignupPage').then((m) => ({ default: m.SignupPage })));
@@ -209,6 +210,14 @@ const App: React.FC = () => {
           element={
             <MarketingLayout>
               <HowItWorksPage />
+            </MarketingLayout>
+          }
+        />
+        <Route
+          path="/stories/:slug"
+          element={
+            <MarketingLayout>
+              <CaseStudyPage />
             </MarketingLayout>
           }
         />
