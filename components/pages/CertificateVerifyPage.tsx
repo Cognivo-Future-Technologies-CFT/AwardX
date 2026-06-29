@@ -11,6 +11,7 @@ interface VerificationData {
   roundsCleared: number;
   totalRounds: number;
   programTitle: string;
+  roundTitle?: string | null;
   issuedAt: string;
 }
 
@@ -33,7 +34,7 @@ export const CertificateVerifyPage: React.FC = () => {
 
     canvas.width = 1120;
     canvas.height = 800;
-    const { recipientName, certificateType, roundsCleared, totalRounds, programTitle, issuedAt } = data;
+    const { recipientName, certificateType, roundsCleared, totalRounds, programTitle, roundTitle, issuedAt } = data;
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -46,7 +47,7 @@ export const CertificateVerifyPage: React.FC = () => {
     ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
     ctx.fillStyle = '#1e293b'; ctx.font = 'bold 42px Georgia, serif'; ctx.textAlign = 'center';
     ctx.fillText('CERTIFICATE', canvas.width / 2, 140);
-    const subtitle = certificateType === 'winner' ? 'OF EXCELLENCE' : certificateType === 'round_advance' ? 'OF MERIT' : 'OF PARTICIPATION';
+    const subtitle = certificateType === 'winner' ? 'OF EXCELLENCE' : certificateType === 'round_advance' ? `OF ${roundTitle ? roundTitle.toUpperCase() : 'MERIT'}` : 'OF PARTICIPATION';
     ctx.font = '20px Georgia, serif'; ctx.fillStyle = '#64748b';
     ctx.fillText(subtitle, canvas.width / 2, 180);
     ctx.font = '18px Georgia, serif'; ctx.fillStyle = '#475569';
@@ -57,7 +58,7 @@ export const CertificateVerifyPage: React.FC = () => {
     const detail = certificateType === 'winner'
       ? `has completed all ${totalRounds} rounds and emerged as a winner in`
       : certificateType === 'round_advance'
-        ? `has cleared ${roundsCleared} of ${totalRounds} rounds with outstanding merit in`
+        ? `has cleared ${roundTitle ? `the ${roundTitle}` : `${roundsCleared} of ${totalRounds} rounds`} with outstanding merit in`
         : 'has participated in';
     ctx.fillText(detail, canvas.width / 2, 400);
     ctx.font = 'bold 24px Georgia, serif'; ctx.fillStyle = '#4f46e5';
@@ -93,7 +94,7 @@ export const CertificateVerifyPage: React.FC = () => {
           <Award className="w-10 h-10 text-indigo-600 mx-auto" />
           <h1 className="text-2xl font-bold text-slate-900">{data.recipientName}</h1>
           <p className="text-slate-600">
-            {data.certificateType === 'winner' ? 'Winner' : data.certificateType === 'round_advance' ? 'Certificate of Merit' : 'Certificate of Participation'}
+            {data.certificateType === 'winner' ? 'Winner' : data.certificateType === 'round_advance' ? `Certificate of ${data.roundTitle || 'Merit'}` : 'Certificate of Participation'}
             {' — '}<span className="font-medium">{data.programTitle}</span>
           </p>
           <p className="text-sm text-slate-500">

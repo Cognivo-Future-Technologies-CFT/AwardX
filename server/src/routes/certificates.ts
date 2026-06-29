@@ -228,7 +228,7 @@ router.get('/verify/:code', async (req: Request, res: Response) => {
 
 	const { data, error } = await supabase
 		.from('certificate_deliveries')
-		.select('id, program_id, recipient_name, recipient_email, certificate_type, rounds_cleared, total_rounds, delivered_at')
+		.select('id, program_id, submission_id, recipient_name, recipient_email, certificate_type, rounds_cleared, total_rounds, delivered_at')
 		.eq('verification_code', code)
 		.maybeSingle();
 
@@ -241,6 +241,35 @@ router.get('/verify/:code', async (req: Request, res: Response) => {
 		.eq('id', data.program_id)
 		.maybeSingle();
 
+	// Get override round label
+	const { data: override } = await supabase
+		.from('certificate_participant_overrides')
+		.select('round_label')
+		.eq('submission_id', data.submission_id)
+		.maybeSingle();
+
+	let roundTitle = override?.round_label?.trim();
+	if (!roundTitle) {
+		const { data: rounds } = await supabase
+			.from('rounds')
+			.select('title')
+			.eq('program_id', data.program_id)
+			.order('sort_order', { ascending: true });
+			
+		if (rounds && rounds.length > 0) {
+			if (data.certificate_type === 'winner') {
+				roundTitle = rounds[rounds.length - 1].title;
+			} else if (data.certificate_type === 'round_advance') {
+				const clearedCount = Math.min(data.rounds_cleared, rounds.length);
+				if (clearedCount > 0) {
+					roundTitle = rounds[clearedCount - 1].title;
+				}
+			} else {
+				roundTitle = rounds[0].title;
+			}
+		}
+	}
+
 	return res.json({
 		valid: true,
 		recipientName: data.recipient_name,
@@ -248,6 +277,7 @@ router.get('/verify/:code', async (req: Request, res: Response) => {
 		roundsCleared: data.rounds_cleared,
 		totalRounds: data.total_rounds,
 		programTitle: program?.title || 'Awards Program',
+		roundTitle: roundTitle || null,
 		issuedAt: data.delivered_at,
 	});
 });
