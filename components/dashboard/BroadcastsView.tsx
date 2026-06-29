@@ -448,10 +448,10 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
   </style>
 </head>
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-  <table role="presentation" width="100%" style="background-color:#f8fafc; border-collapse: collapse;">
+  <table role="presentation" width="100%" style="width:100%; background-color:#f8fafc; border-collapse: collapse;">
     <tr>
       <td align="center" style="padding:20px 10px;">
-        <table role="presentation" align="center" width="100%" style="max-width:560px; margin:0 auto; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px -2px rgba(0,0,0,.08); border-collapse: collapse;">
+        <table role="presentation" align="center" width="100%" style="width:100%; max-width:560px; margin:0 auto; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px -2px rgba(0,0,0,.08); border-collapse: collapse;">
           <tr>
             <td style="background:${headerGradient};padding:32px 32px;text-align:center;">
               <h1 style="margin:0;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">Broadcast</h1>
@@ -460,7 +460,7 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
           </tr>
           <tr>
             <td style="padding:32px 32px;">
-              <div style="font-size:15px;line-height:1.75;color:#334155;font-weight:400;white-space:pre-wrap;">${interpolate(templateBody || 'Email body text goes here...').replace(/\n/g, '<br/>')}</div>
+              <div style="font-size:15px;line-height:1.75;color:#334155;font-weight:400;white-space:pre-wrap;word-break:break-word;">${interpolate(templateBody || 'Email body text goes here...').replace(/\n/g, '<br/>')}</div>
             </td>
           </tr>
           <tr>
