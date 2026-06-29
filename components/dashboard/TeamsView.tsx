@@ -26,6 +26,7 @@ const PERMISSION_GROUPS = [
             { key: PERMISSIONS.VIEW_SUBMISSIONS, label: "View Submissions" },
             { key: PERMISSIONS.MANAGE_SUBMISSIONS, label: "Manage Status (Accept/Reject)" },
             { key: PERMISSIONS.MANAGE_FORMS, label: "Edit Submission Forms" },
+            { key: PERMISSIONS.MARK_ATTENDANCE, label: "Mark Attendance" },
         ]
     },
     {
@@ -88,6 +89,16 @@ const ROLE_PRESETS = [
     ],
     color: 'bg-emerald-100 text-emerald-700',
     icon: '📋',
+  },
+  {
+    key: 'attendance-marker',
+    name: 'Attendance Marker',
+    description: 'Check in participants at the event',
+    permissions: [
+      PERMISSIONS.MARK_ATTENDANCE,
+    ],
+    color: 'bg-amber-100 text-amber-700',
+    icon: '✅',
   },
   {
     key: 'admin',

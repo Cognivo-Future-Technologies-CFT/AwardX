@@ -395,7 +395,8 @@ VALUES
   ('manage_teams',       'Manage Teams',          'Invite and remove team members, manage roles',  'Teams'),
   ('view_logs',          'View Logs',             'Read audit logs',                               'Logs'),
   ('manage_settings',    'Manage Settings',       'Update organization and program settings',      'Settings'),
-  ('manage_voting',      'Manage Public Voting',  'Configure and manage public voting rounds',     'Voting')
+  ('manage_voting',      'Manage Public Voting',  'Configure and manage public voting rounds',     'Voting'),
+  ('mark_attendance',    'Mark Attendance',       'Scan QR passes and manage event attendance check-in', 'Submissions')
 ON CONFLICT (key) DO NOTHING;
 
 

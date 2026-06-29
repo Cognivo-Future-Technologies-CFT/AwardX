@@ -19,19 +19,44 @@ export const DASHBOARD_VIEW_PERMISSIONS: Record<string, string> = {
   'submission-process': PERMISSIONS.MANAGE_PROGRAMS,
   broadcasts: PERMISSIONS.MANAGE_PROGRAMS,
   certificates: PERMISSIONS.MANAGE_PROGRAMS,
+  attendance: PERMISSIONS.MARK_ATTENDANCE,
 };
+
+/** First dashboard view the user is allowed to open (prefers overview when available). */
+export function resolveDefaultDashboardView(
+  hasPermission: (permission: string) => boolean,
+  fallback = 'overview',
+): string {
+  if (hasPermission(PERMISSIONS.VIEW_OVERVIEW)) {
+    return fallback;
+  }
+
+  for (const [viewId, permission] of Object.entries(DASHBOARD_VIEW_PERMISSIONS)) {
+    if (hasPermission(permission)) {
+      return viewId;
+    }
+  }
+
+  return fallback;
+}
 
 export function resolveAllowedDashboardView(
   requestedView: string | null | undefined,
   hasPermission: (permission: string) => boolean,
   fallback = 'overview',
 ): string {
-  if (!requestedView) return fallback;
+  if (!requestedView) {
+    return resolveDefaultDashboardView(hasPermission, fallback);
+  }
 
   const normalizedView = requestedView === 'builder' ? 'program-details' : requestedView;
   const required = DASHBOARD_VIEW_PERMISSIONS[normalizedView];
-  if (!required) return fallback;
-  if (!hasPermission(required)) return fallback;
+  if (!required) {
+    return resolveDefaultDashboardView(hasPermission, fallback);
+  }
+  if (!hasPermission(required)) {
+    return resolveDefaultDashboardView(hasPermission, fallback);
+  }
 
   return normalizedView;
 }

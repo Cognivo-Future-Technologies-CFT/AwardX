@@ -7,7 +7,7 @@ import {
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Mail, Settings2,
   UserCog, Edit, Workflow, Layout, Command, Globe, CheckCircle2, AlertCircle, AlertTriangle,
-  Award
+  Award, UserCheck
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1053,6 +1053,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'certificates',      label: 'Certificates',       icon: Award,           permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'templates',         label: 'Form Builder',       icon: LayoutTemplate,  permission: PERMISSIONS.MANAGE_FORMS },
+    { id: 'attendance',        label: 'Attendance',         icon: UserCheck,       permission: PERMISSIONS.MARK_ATTENDANCE },
   ];
 
 

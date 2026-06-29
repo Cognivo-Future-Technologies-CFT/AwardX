@@ -17,6 +17,7 @@ const LoginPage = lazy(() => import('./components/pages/LoginPage').then((m) => 
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })));
 const DemoDashboard = lazy(() => import('./components/demo/DemoDashboard').then((m) => ({ default: m.DemoDashboard })));
 const AuthCallback = lazy(() => import('./components/AuthCallback').then((m) => ({ default: m.AuthCallback })));
+const AttendanceScanPage = lazy(() => import('./components/pages/AttendanceScanPage').then((m) => ({ default: m.AttendanceScanPage })));
 const WorkflowPage = lazy(() => import('./components/pages/WorkflowPage').then((m) => ({ default: m.WorkflowPage })));
 const FormSubmissionPage = lazy(() => import('./components/pages/FormSubmissionPage').then((m) => ({ default: m.FormSubmissionPage })));
 const PublicProgramPage = lazy(() => import('./components/pages/PublicProgramPage').then((m) => ({ default: m.PublicProgramPage })));
@@ -256,6 +257,7 @@ const App: React.FC = () => {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/attendance/scan" element={<AttendanceScanPage />} />
             <Route path="/workflow" element={<WorkflowPage />} />
             <Route path="/workflow/:programId" element={<WorkflowPage />} />
             <Route path="/form" element={<FormSubmissionPage />} />

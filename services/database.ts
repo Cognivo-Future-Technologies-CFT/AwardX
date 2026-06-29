@@ -725,12 +725,18 @@ class DatabaseService {
     // Fetch role permissions keys
     const { data: roleRow } = await supabase
       .from('roles')
-      .select('id, name, role_permissions(permission_id, permissions(key))')
+      .select('id, name, permissions, role_permissions(permission_id, permissions(key))')
       .eq('id', member.role_id)
       .maybeSingle();
 
-    const permKeys: string[] =
+    const permsFromArray = Array.isArray((roleRow as any)?.permissions)
+      ? (roleRow as any).permissions.map((value: any) => String(value).trim())
+      : [];
+
+    const permsFromJunction: string[] =
       (roleRow as any)?.role_permissions?.map((rp: any) => rp?.permissions?.key).filter(Boolean) || [];
+
+    const permKeys = Array.from(new Set([...permsFromArray, ...permsFromJunction]));
 
     this.cachedRoleName = (roleRow as any)?.name || null;
     this.cachedPermissions = new Set(permKeys);

@@ -262,5 +262,6 @@ export const PERMISSIONS = {
   MANAGE_TEAMS: 'manage_teams', // Roles & Invites
   VIEW_LOGS: 'view_logs',
   MANAGE_SETTINGS: 'manage_settings',
+  MARK_ATTENDANCE: 'mark_attendance',
 } as const;
 
