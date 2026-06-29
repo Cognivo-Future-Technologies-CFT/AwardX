@@ -14,10 +14,11 @@ import {
   Mail,
   ChevronLeft,
   CheckCircle,
+  Pencil,
   Link as LinkIcon,
   Copy,
 } from 'lucide-react';
-import { Program } from '../../services/models';
+import { Program, Round } from '../../services/models';
 import { db as databaseService } from '../../services/database';
 import { roundSubmissions } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
@@ -50,6 +51,14 @@ interface NamePosition {
   fontFamily: string;
 }
 
+interface CertificateParticipantOverride {
+  submission_id: string;
+  round_label: string | null;
+  rounds_cleared: number | null;
+  total_rounds: number | null;
+  updated_at: string;
+}
+
 const FONT_OPTIONS = [
   { label: 'Georgia', value: 'Georgia, serif' },
   { label: 'Times New Roman', value: 'Times New Roman, serif' },
@@ -73,20 +82,90 @@ const FONT_OPTIONS = [
   { label: 'Roboto Slab', value: 'Roboto Slab, serif' },
 ];
 
-function getCertificateLabel(type: CertificateType): string {
-  switch (type) {
-    case 'winner': return 'Winner';
-    case 'round_advance': return 'Merit';
-    case 'participation': return 'Participation';
-  }
-}
-
 function getCertificateColor(type: CertificateType): string {
   switch (type) {
     case 'winner': return 'text-amber-600 bg-amber-50 border-amber-200';
     case 'round_advance': return 'text-indigo-600 bg-indigo-50 border-indigo-200';
     case 'participation': return 'text-slate-600 bg-slate-50 border-slate-200';
   }
+}
+
+function formatRoundWindow(round?: Round): string {
+  if (!round?.startDate || !round?.endDate) return '';
+  const start = new Date(`${round.startDate}T00:00:00`);
+  const end = new Date(`${round.endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+  const startLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const endLabel = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return startLabel === endLabel ? startLabel : `${startLabel} - ${endLabel}`;
+}
+
+function getRoundNarrative(participant: ParticipantCertData, rounds: Round[]): { headline: string; detail: string } {
+  const completedRounds = rounds.slice(0, Math.min(participant.roundsCleared, rounds.length));
+  const lastCompletedRound = completedRounds[completedRounds.length - 1];
+  const eliminatedRound = participant.eliminatedAtRound
+    ? rounds.find((r) => r.title === participant.eliminatedAtRound)
+    : undefined;
+
+  if (participant.certificateType === 'winner') {
+    const finalRound = rounds[rounds.length - 1];
+    return {
+      headline: `has completed all ${participant.totalRounds} scheduled rounds`,
+      detail: finalRound
+        ? `Final round: ${finalRound.title}${formatRoundWindow(finalRound) ? ` (${formatRoundWindow(finalRound)})` : ''}`
+        : `Progress tracked across ${participant.totalRounds} rounds`,
+    };
+  }
+
+  if (participant.certificateType === 'round_advance') {
+    const roundsWord = participant.roundsCleared === 1 ? 'round' : 'rounds';
+    if (eliminatedRound) {
+      return {
+        headline: `has advanced through ${participant.roundsCleared} ${roundsWord} in the schedule`,
+        detail: `Eliminated at ${eliminatedRound.title}${formatRoundWindow(eliminatedRound) ? ` (${formatRoundWindow(eliminatedRound)})` : ''}`,
+      };
+    }
+
+    return {
+      headline: `has advanced through ${participant.roundsCleared} ${roundsWord} in the schedule`,
+      detail: lastCompletedRound
+        ? `Latest cleared round: ${lastCompletedRound.title}${formatRoundWindow(lastCompletedRound) ? ` (${formatRoundWindow(lastCompletedRound)})` : ''}`
+        : 'Round progression is based on the configured schedule',
+    };
+  }
+
+  const firstRound = rounds[0];
+  return {
+    headline: 'has participated in the scheduled rounds',
+    detail: firstRound
+      ? `Started with ${firstRound.title}${formatRoundWindow(firstRound) ? ` (${formatRoundWindow(firstRound)})` : ''}`
+      : 'Participation recorded in this program schedule',
+  };
+}
+
+function getParticipantRoundLabel(participant: ParticipantCertData, rounds: Round[]): string {
+  if (participant.certificateType === 'winner') {
+    const finalRound = rounds[rounds.length - 1];
+    return finalRound?.title || 'Winner';
+  }
+
+  if (participant.certificateType === 'round_advance') {
+    if (participant.eliminatedAtRound) return participant.eliminatedAtRound;
+    const completedRounds = rounds.slice(0, Math.min(participant.roundsCleared, rounds.length));
+    const lastCompletedRound = completedRounds[completedRounds.length - 1];
+    return lastCompletedRound?.title || 'Round Advance';
+  }
+
+  const firstRound = rounds[0];
+  return firstRound?.title || 'Participation';
+}
+
+function getCertificateSubtitle(participant: ParticipantCertData, rounds: Round[], roundLabelOverride?: string): string {
+  if (participant.certificateType === 'winner') return 'OF EXCELLENCE';
+  if (participant.certificateType === 'participation') return 'OF PARTICIPATION';
+
+  const roundLabel = roundLabelOverride?.trim() || getParticipantRoundLabel(participant, rounds);
+  return `OF ${roundLabel.toUpperCase()}`;
 }
 
 export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent }) => {
@@ -97,7 +176,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantCertData | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isDelivering, setIsDelivering] = useState(false);
+  const [isSavingOverride, setIsSavingOverride] = useState(false);
   const [showTemplateSetup, setShowTemplateSetup] = useState(false);
+  const [editingRoundFor, setEditingRoundFor] = useState<ParticipantCertData | null>(null);
+  const [roundLabelInput, setRoundLabelInput] = useState('');
+  const [roundsClearedInput, setRoundsClearedInput] = useState('');
+  const [totalRoundsInput, setTotalRoundsInput] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +256,19 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     enabled: !!activeEvent?.id,
   });
 
+  const overridesQuery = useQuery({
+    queryKey: ['certificate-overrides', activeEvent?.id],
+    queryFn: async () => {
+      if (!activeEvent?.id) return [] as CertificateParticipantOverride[];
+      const res = await fetchBackendJson<{ overrides: CertificateParticipantOverride[] }>(
+        `/api/certificates/${activeEvent.id}/overrides`,
+        { requireAuth: true }
+      );
+      return res.overrides || [];
+    },
+    enabled: !!activeEvent?.id,
+  });
+
   const deliveredMap = React.useMemo(() => {
     const map = new Map<string, { verificationCode: string; deliveredAt: string }>();
     for (const d of deliveriesQuery.data || []) {
@@ -179,6 +276,14 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     }
     return map;
   }, [deliveriesQuery.data]);
+
+  const overridesMap = React.useMemo(() => {
+    const map = new Map<string, CertificateParticipantOverride>();
+    for (const row of overridesQuery.data || []) {
+      map.set(row.submission_id, row);
+    }
+    return map;
+  }, [overridesQuery.data]);
 
   const certificateData: ParticipantCertData[] = React.useMemo(() => {
     const submissions = submissionsQuery.data || [];
@@ -265,7 +370,93 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     }));
   };
 
+  const getEffectiveParticipant = useCallback((participant: ParticipantCertData): ParticipantCertData => {
+    const override = overridesMap.get(participant.submissionId);
+    if (!override) return participant;
+    return {
+      ...participant,
+      roundsCleared: override.rounds_cleared ?? participant.roundsCleared,
+      totalRounds: override.total_rounds ?? participant.totalRounds,
+    };
+  }, [overridesMap]);
+
+  const getEffectiveRoundLabel = useCallback((participant: ParticipantCertData) => {
+    const override = overridesMap.get(participant.submissionId);
+    if (override?.round_label?.trim()) return override.round_label.trim();
+    return getParticipantRoundLabel(getEffectiveParticipant(participant), roundsQuery.data || []);
+  }, [getEffectiveParticipant, overridesMap, roundsQuery.data]);
+
+  const openRoundLabelEditor = (participant: ParticipantCertData) => {
+    const effectiveParticipant = getEffectiveParticipant(participant);
+    setEditingRoundFor(participant);
+    setRoundLabelInput(getEffectiveRoundLabel(participant));
+    setRoundsClearedInput(String(effectiveParticipant.roundsCleared));
+    setTotalRoundsInput(String(effectiveParticipant.totalRounds));
+  };
+
+  const saveRoundOverride = async () => {
+    if (!editingRoundFor || !activeEvent?.id) return;
+    const parseNonNegative = (value: string): number | null => {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number.parseInt(trimmed, 10);
+      if (!Number.isFinite(parsed) || parsed < 0) return Number.NaN;
+      return parsed;
+    };
+
+    const roundsCleared = parseNonNegative(roundsClearedInput);
+    const totalRounds = parseNonNegative(totalRoundsInput);
+
+    if (Number.isNaN(roundsCleared) || Number.isNaN(totalRounds)) {
+      toast.error('Rounds values must be non-negative integers');
+      return;
+    }
+    if (roundsCleared !== null && totalRounds !== null && roundsCleared > totalRounds) {
+      toast.error('Cleared rounds cannot be greater than total rounds');
+      return;
+    }
+
+    setIsSavingOverride(true);
+    try {
+      await fetchBackendJson(`/api/certificates/${activeEvent.id}/overrides/${editingRoundFor.submissionId}`, {
+        method: 'PUT',
+        requireAuth: true,
+        body: {
+          roundLabel: roundLabelInput.trim() || null,
+          roundsCleared,
+          totalRounds,
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ['certificate-overrides', activeEvent.id] });
+      setEditingRoundFor(null);
+      toast.success('Certificate override saved');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save override');
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
+  const resetRoundOverride = async () => {
+    if (!editingRoundFor || !activeEvent?.id) return;
+    setIsSavingOverride(true);
+    try {
+      await fetchBackendJson(`/api/certificates/${activeEvent.id}/overrides/${editingRoundFor.submissionId}`, {
+        method: 'DELETE',
+        requireAuth: true,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['certificate-overrides', activeEvent.id] });
+      setEditingRoundFor(null);
+      toast.success('Reset to schedule defaults');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to reset override');
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
   const generateCertificateDataUrl = (participant: ParticipantCertData): string => {
+    const effectiveParticipant = getEffectiveParticipant(participant);
     const canvas = canvasRef.current;
     if (!canvas) return '';
     const ctx = canvas.getContext('2d');
@@ -281,16 +472,19 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       ctx.fillStyle = namePosition.color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(participant.applicantName, x, y);
+      ctx.fillText(effectiveParticipant.applicantName, x, y);
     } else {
       canvas.width = 1120;
       canvas.height = 800;
-      drawBuiltinCertificate(ctx, canvas, participant);
+      drawBuiltinCertificate(ctx, canvas, effectiveParticipant);
     }
     return canvas.toDataURL('image/png');
   };
 
   const drawBuiltinCertificate = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, p: ParticipantCertData) => {
+    const rounds = roundsQuery.data || [];
+    const narrative = getRoundNarrative(p, rounds);
+    const subtitle = getCertificateSubtitle(p, rounds, overridesMap.get(p.submissionId)?.round_label || undefined);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = p.certificateType === 'winner' ? '#d97706' : '#6366f1';
@@ -302,17 +496,17 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     ctx.fillStyle = '#1e293b'; ctx.font = 'bold 42px Georgia, serif'; ctx.textAlign = 'center';
     ctx.fillText('CERTIFICATE', canvas.width / 2, 140);
     ctx.font = '20px Georgia, serif'; ctx.fillStyle = '#64748b';
-    ctx.fillText(p.certificateType === 'winner' ? 'OF EXCELLENCE' : p.certificateType === 'round_advance' ? 'OF MERIT' : 'OF PARTICIPATION', canvas.width / 2, 180);
+    ctx.fillText(subtitle, canvas.width / 2, 180);
     ctx.font = '18px Georgia, serif'; ctx.fillStyle = '#475569';
     ctx.fillText('This is to certify that', canvas.width / 2, 270);
     ctx.font = 'bold 36px Georgia, serif'; ctx.fillStyle = '#1e293b';
     ctx.fillText(p.applicantName, canvas.width / 2, 330);
     ctx.font = '18px Georgia, serif'; ctx.fillStyle = '#475569';
-    if (p.certificateType === 'winner') ctx.fillText(`has completed all ${p.totalRounds} rounds and emerged as a winner in`, canvas.width / 2, 400);
-    else if (p.certificateType === 'round_advance') ctx.fillText(`has cleared ${p.roundsCleared} of ${p.totalRounds} rounds with outstanding merit in`, canvas.width / 2, 400);
-    else ctx.fillText('has participated in', canvas.width / 2, 400);
+    ctx.fillText(narrative.headline, canvas.width / 2, 400);
+    ctx.font = '15px Georgia, serif'; ctx.fillStyle = '#64748b';
+    ctx.fillText(narrative.detail, canvas.width / 2, 432);
     ctx.font = 'bold 24px Georgia, serif'; ctx.fillStyle = '#4f46e5';
-    ctx.fillText(activeEvent?.title || 'Awards Program', canvas.width / 2, 460);
+    ctx.fillText(activeEvent?.title || 'Awards Program', canvas.width / 2, 472);
     ctx.font = '16px Georgia, serif'; ctx.fillStyle = '#64748b';
     ctx.fillText(`Issued: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, canvas.width / 2, 650);
   };
@@ -330,23 +524,24 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const handleEmailOne = async (participant: ParticipantCertData) => {
     if (!participant.applicantEmail) { toast.error('No email address for this participant'); return; }
     if (!activeEvent?.id) return;
+    const effectiveParticipant = getEffectiveParticipant(participant);
     setIsSending(true);
     try {
-      const dataUrl = generateCertificateDataUrl(participant);
+      const dataUrl = generateCertificateDataUrl(effectiveParticipant);
       await fetchBackendJson<{ sent: number }>(`/api/certificates/${activeEvent.id}/send`, {
         method: 'POST',
         requireAuth: true,
         body: { recipients: [{
-          email: participant.applicantEmail,
-          name: participant.applicantName,
-          submissionId: participant.submissionId,
-          certificateType: participant.certificateType,
-          roundsCleared: participant.roundsCleared,
-          totalRounds: participant.totalRounds,
+          email: effectiveParticipant.applicantEmail,
+          name: effectiveParticipant.applicantName,
+          submissionId: effectiveParticipant.submissionId,
+          certificateType: effectiveParticipant.certificateType,
+          roundsCleared: effectiveParticipant.roundsCleared,
+          totalRounds: effectiveParticipant.totalRounds,
           certificateDataUrl: dataUrl,
         }] },
       });
-      toast.success(`Certificate emailed to ${participant.applicantEmail}`);
+      toast.success(`Certificate emailed to ${effectiveParticipant.applicantEmail}`);
       queryClient.invalidateQueries({ queryKey: ['certificate-deliveries', activeEvent.id] });
     } catch (err: any) {
       toast.error(err?.message || 'Failed to send email');
@@ -358,31 +553,76 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const handleDeliverAll = async () => {
     if (!activeEvent?.id || !filtered.length) return;
     const withEmail = filtered.filter((p) => p.applicantEmail && !deliveredMap.has(p.submissionId));
-    if (!withEmail.length) { toast.error('No undelivered participants with email addresses'); return; }
+    
+    if (!withEmail.length) {
+      const withoutEmail = filtered.filter((p) => !p.applicantEmail);
+      const alreadyDelivered = filtered.filter((p) => p.applicantEmail && deliveredMap.has(p.submissionId));
+      if (withoutEmail.length > 0) {
+        toast.error(`${withoutEmail.length} participants missing email addresses. Add emails in submissions to deliver.`);
+      } else if (alreadyDelivered.length === filtered.length) {
+        toast.error('All participants have already been delivered.');
+      } else {
+        toast.error('No undelivered participants with email addresses');
+      }
+      return;
+    }
 
     setIsDelivering(true);
     toast.info(`Sending certificates to ${withEmail.length} participants...`);
 
     try {
-      const batchSize = 10;
+      const batchSize = 5;
       let totalSent = 0;
       for (let i = 0; i < withEmail.length; i += batchSize) {
         const batch = withEmail.slice(i, i + batchSize);
-        const recipients = batch.map((p) => ({
-          email: p.applicantEmail!,
-          name: p.applicantName,
-          submissionId: p.submissionId,
-          certificateType: p.certificateType,
-          roundsCleared: p.roundsCleared,
-          totalRounds: p.totalRounds,
-          certificateDataUrl: generateCertificateDataUrl(p),
-        }));
-        const res = await fetchBackendJson<{ sent: number }>(`/api/certificates/${activeEvent.id}/send`, {
-          method: 'POST',
-          requireAuth: true,
-          body: { recipients },
+        const recipients = batch.map((p) => {
+          const effectiveParticipant = getEffectiveParticipant(p);
+          return {
+            email: effectiveParticipant.applicantEmail!,
+            name: effectiveParticipant.applicantName,
+            submissionId: effectiveParticipant.submissionId,
+            certificateType: effectiveParticipant.certificateType,
+            roundsCleared: effectiveParticipant.roundsCleared,
+            totalRounds: effectiveParticipant.totalRounds,
+            certificateDataUrl: generateCertificateDataUrl(effectiveParticipant),
+          };
         });
-        totalSent += res.sent;
+
+        // Retry logic for rate limiting (429)
+        let retries = 0;
+        const maxRetries = 3;
+        while (true) {
+          try {
+            const res = await fetchBackendJson<{ sent: number }>(`/api/certificates/${activeEvent.id}/send`, {
+              method: 'POST',
+              requireAuth: true,
+              body: { recipients },
+            });
+            totalSent += res.sent;
+            break; // Success, exit retry loop
+          } catch (err: any) {
+            const is429 = err?.message?.includes('429') || err?.message?.toLowerCase()?.includes('too many');
+            if (is429 && retries < maxRetries) {
+              retries++;
+              const waitMs = Math.min(2000 * Math.pow(2, retries - 1), 15000); // 2s, 4s, 8s
+              toast.info(`Rate limited — waiting ${Math.round(waitMs / 1000)}s before retrying (attempt ${retries}/${maxRetries})...`);
+              await new Promise((resolve) => setTimeout(resolve, waitMs));
+            } else {
+              throw err; // Not a 429 or max retries exceeded
+            }
+          }
+        }
+
+        // Show progress
+        const progress = Math.min(i + batchSize, withEmail.length);
+        if (withEmail.length > batchSize) {
+          toast.info(`Progress: ${progress}/${withEmail.length} certificates sent...`);
+        }
+
+        // Delay between batches to avoid rate limiting
+        if (i + batchSize < withEmail.length) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
       toast.success(`Delivered ${totalSent} certificates via email!`);
       queryClient.invalidateQueries({ queryKey: ['certificate-deliveries', activeEvent.id] });
@@ -397,7 +637,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     return <div className="flex items-center justify-center h-64 text-slate-500">Select a program to generate certificates.</div>;
   }
 
-  const isLoading = roundsQuery.isLoading || submissionsQuery.isLoading || roundSubmissionsQuery.isLoading;
+  const isLoading = roundsQuery.isLoading || submissionsQuery.isLoading || roundSubmissionsQuery.isLoading || overridesQuery.isLoading;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -413,6 +653,17 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           <p className="text-sm text-slate-500 mt-1">Tap a participant to preview. Deliver individually or all at once.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all(activeEvent?.id || '') });
+              queryClient.invalidateQueries({ queryKey: ['certificates-round-submissions', activeEvent?.id] });
+              toast.success('Refreshing participant data...');
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            title="Refresh participant data"
+          >
+            Refresh
+          </button>
           <button
             onClick={() => setShowTemplateSetup(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -450,7 +701,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
         >
           <option value="all">All ({certificateData.length})</option>
           <option value="winner">Winners ({certificateData.filter((p) => p.certificateType === 'winner').length})</option>
-          <option value="round_advance">Merit ({certificateData.filter((p) => p.certificateType === 'round_advance').length})</option>
+          <option value="round_advance">Round Advance ({certificateData.filter((p) => p.certificateType === 'round_advance').length})</option>
           <option value="participation">Participation ({certificateData.filter((p) => p.certificateType === 'participation').length})</option>
         </select>
       </div>
@@ -468,6 +719,8 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
         <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
           {filtered.map((p) => {
             const delivery = deliveredMap.get(p.submissionId);
+            const effectiveParticipant = getEffectiveParticipant(p);
+            const roundLabel = getEffectiveRoundLabel(p);
             return (
             <div
               key={p.submissionId}
@@ -489,9 +742,17 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
                     <CheckCircle className="w-3.5 h-3.5" /> Delivered
                   </span>
                 )}
-                <span className="text-xs text-slate-500">{p.roundsCleared}/{p.totalRounds} rounds</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${getCertificateColor(p.certificateType)}`}>
-                  {getCertificateLabel(p.certificateType)}
+                <span className="text-xs text-slate-500">{effectiveParticipant.roundsCleared}/{effectiveParticipant.totalRounds} rounds</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-semibold border max-w-[260px] inline-flex items-center gap-1 truncate cursor-pointer ${getCertificateColor(p.certificateType)}`}
+                  title={roundLabel}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openRoundLabelEditor(p);
+                  }}
+                >
+                  <span className="truncate">{roundLabel}</span>
+                  <Pencil className="w-3 h-3 opacity-70 shrink-0" />
                 </span>
               </div>
             </div>
@@ -503,6 +764,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       {/* Certificate Preview Modal */}
       <Modal isOpen={!!selectedParticipant} onClose={() => setSelectedParticipant(null)} title="Certificate Preview">
         {selectedParticipant && (() => {
+          const effectiveSelected = getEffectiveParticipant(selectedParticipant);
           const delivery = deliveredMap.get(selectedParticipant.submissionId);
           const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
           const verifyUrl = delivery ? `${siteUrl}/certificates/verify/${delivery.verificationCode}` : null;
@@ -510,10 +772,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           <div className="space-y-4">
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <CertificatePreviewCanvas
-                participant={selectedParticipant}
+                participant={effectiveSelected}
                 templateImage={templateImage}
                 namePosition={namePosition}
                 programTitle={activeEvent?.title || ''}
+                rounds={roundsQuery.data || []}
+                roundLabelOverride={overridesMap.get(selectedParticipant.submissionId)?.round_label || undefined}
               />
             </div>
             <div className="text-sm text-slate-600">
@@ -556,6 +820,63 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           </div>
           );
         })()}
+      </Modal>
+
+      <Modal
+        isOpen={!!editingRoundFor}
+        onClose={() => setEditingRoundFor(null)}
+        title={editingRoundFor ? `Edit Certificate Values - ${editingRoundFor.applicantName}` : 'Edit Certificate Values'}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Set custom round label and rounds count for this participant. Leave fields empty to use schedule defaults.</p>
+          <input
+            value={roundLabelInput}
+            onChange={(e) => setRoundLabelInput(e.target.value)}
+            placeholder="e.g. Public View Round"
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+            disabled={isSavingOverride}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Rounds Cleared</label>
+              <input
+                type="number"
+                min={0}
+                value={roundsClearedInput}
+                onChange={(e) => setRoundsClearedInput(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                disabled={isSavingOverride}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Total Rounds</label>
+              <input
+                type="number"
+                min={0}
+                value={totalRoundsInput}
+                onChange={(e) => setTotalRoundsInput(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                disabled={isSavingOverride}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={resetRoundOverride}
+              disabled={isSavingOverride}
+              className="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Reset
+            </button>
+            <button
+              onClick={saveRoundOverride}
+              disabled={isSavingOverride}
+              className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+            >
+              {isSavingOverride ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Template Setup — Full Screen */}
@@ -675,7 +996,9 @@ const CertificatePreviewCanvas: React.FC<{
   templateImage: HTMLImageElement | null;
   namePosition: NamePosition;
   programTitle: string;
-}> = ({ participant, templateImage, namePosition, programTitle }) => {
+  rounds: Round[];
+  roundLabelOverride?: string;
+}> = ({ participant, templateImage, namePosition, programTitle, rounds, roundLabelOverride }) => {
   const ref = useRef<HTMLCanvasElement>(null);
 
   React.useEffect(() => {
@@ -698,6 +1021,8 @@ const CertificatePreviewCanvas: React.FC<{
       ctx.textBaseline = 'middle';
       ctx.fillText(participant.applicantName, x, y);
     } else {
+      const narrative = getRoundNarrative(participant, rounds);
+      const subtitle = getCertificateSubtitle(participant, rounds, roundLabelOverride);
       canvas.width = 560;
       canvas.height = 400;
       const s = 0.5;
@@ -709,19 +1034,21 @@ const CertificatePreviewCanvas: React.FC<{
       ctx.fillStyle = '#1e293b'; ctx.font = 'bold 22px Georgia, serif'; ctx.textAlign = 'center';
       ctx.fillText('CERTIFICATE', canvas.width / 2, 60);
       ctx.font = '12px Georgia, serif'; ctx.fillStyle = '#64748b';
-      ctx.fillText(participant.certificateType === 'winner' ? 'OF EXCELLENCE' : participant.certificateType === 'round_advance' ? 'OF MERIT' : 'OF PARTICIPATION', canvas.width / 2, 82);
+      ctx.fillText(subtitle, canvas.width / 2, 82);
       ctx.font = '11px Georgia, serif'; ctx.fillStyle = '#475569';
       ctx.fillText('This is to certify that', canvas.width / 2, 130);
       ctx.font = 'bold 20px Georgia, serif'; ctx.fillStyle = '#1e293b';
       ctx.fillText(participant.applicantName, canvas.width / 2, 165);
       ctx.font = '11px Georgia, serif'; ctx.fillStyle = '#475569';
-      ctx.fillText(participant.certificateType === 'winner' ? `completed all ${participant.totalRounds} rounds` : participant.certificateType === 'round_advance' ? `cleared ${participant.roundsCleared} of ${participant.totalRounds} rounds` : 'has participated in', canvas.width / 2, 200);
+      ctx.fillText(narrative.headline, canvas.width / 2, 200);
+      ctx.font = '9px Georgia, serif'; ctx.fillStyle = '#64748b';
+      ctx.fillText(narrative.detail, canvas.width / 2, 220);
       ctx.font = 'bold 14px Georgia, serif'; ctx.fillStyle = '#4f46e5';
-      ctx.fillText(programTitle, canvas.width / 2, 235);
+      ctx.fillText(programTitle, canvas.width / 2, 250);
       ctx.font = '10px Georgia, serif'; ctx.fillStyle = '#94a3b8';
       ctx.fillText(`Issued: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, canvas.width / 2, 340);
     }
-  }, [participant, templateImage, namePosition, programTitle]);
+  }, [participant, templateImage, namePosition, programTitle, rounds, roundLabelOverride]);
 
   return <canvas ref={ref} className="w-full" />;
 };

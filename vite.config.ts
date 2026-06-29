@@ -28,6 +28,15 @@ export default defineConfig(({ mode }) => {
           '/api': {
             target: backendProxyTarget,
             changeOrigin: true,
+            configure: (proxy) => {
+              proxy.on('proxyReq', (proxyReq, req: any) => {
+                // Ensure large certificate payloads pass through the proxy
+                if (req.body) {
+                  const bodyData = JSON.stringify(req.body);
+                  proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+                }
+              });
+            },
           },
         },
       },

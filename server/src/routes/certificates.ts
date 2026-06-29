@@ -4,6 +4,9 @@
  * - POST /:programId/send — email certificates, record delivery with verification codes
  * - GET /verify/:code — public verification page (renders certificate on demand)
  * - GET /:programId/deliveries — list delivery statuses for a program
+ * - GET /:programId/overrides — list participant override values for certificates
+ * - PUT /:programId/overrides/:submissionId — upsert participant override values
+ * - DELETE /:programId/overrides/:submissionId — remove participant override values
  */
 
 import { Router, Request, Response } from 'express';
@@ -28,7 +31,7 @@ function generateVerificationCode(): string {
  * Body: { recipients: [{ email, name, submissionId, certificateType, roundsCleared, totalRounds, certificateDataUrl }] }
  * Records a delivery row per recipient and emails the certificate.
  */
-router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), rateLimit({ windowMs: 60_000, max: 10 }), async (req: AuthenticatedRequest, res) => {
+router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), rateLimit({ windowMs: 60_000, max: 60 }), async (req: AuthenticatedRequest, res) => {
 	const { programId } = req.params;
 	const { recipients } = req.body || {};
 
@@ -127,6 +130,91 @@ router.get('/:programId/deliveries', requireAuth, requireProgramAccess('programI
 
 	if (error) return res.status(500).json({ error: error.message });
 	return res.json({ deliveries: data || [] });
+});
+
+/**
+ * GET /:programId/overrides
+ * Returns participant-level certificate overrides for round label and round counts.
+ */
+router.get('/:programId/overrides', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
+	const { programId } = req.params;
+	const supabase = getSupabaseAdmin();
+
+	const { data, error } = await supabase
+		.from('certificate_participant_overrides')
+		.select('submission_id, round_label, rounds_cleared, total_rounds, updated_at')
+		.eq('program_id', programId)
+		.order('updated_at', { ascending: false });
+
+	if (error) return res.status(500).json({ error: error.message });
+	return res.json({ overrides: data || [] });
+});
+
+/**
+ * PUT /:programId/overrides/:submissionId
+ * Body: { roundLabel?: string, roundsCleared?: number, totalRounds?: number }
+ */
+router.put('/:programId/overrides/:submissionId', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
+	const { programId, submissionId } = req.params;
+	const supabase = getSupabaseAdmin();
+
+	const roundLabel = typeof req.body?.roundLabel === 'string' ? req.body.roundLabel.trim() : null;
+	const roundsClearedRaw = req.body?.roundsCleared;
+	type NumericLike = number | string | null | undefined;
+	const toNullableInt = (value: NumericLike): number | null => {
+		if (value === null || value === undefined || value === '') return null;
+		const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+		if (!Number.isFinite(parsed) || parsed < 0) return null;
+		return Math.floor(parsed);
+	};
+
+	const roundsCleared = toNullableInt(roundsClearedRaw);
+	const totalRounds = toNullableInt(req.body?.totalRounds);
+
+	if (!submissionId) return res.status(400).json({ error: 'submissionId is required' });
+	if (roundsClearedRaw !== undefined && roundsCleared === null) return res.status(400).json({ error: 'roundsCleared must be a non-negative integer' });
+	if (req.body?.totalRounds !== undefined && totalRounds === null) return res.status(400).json({ error: 'totalRounds must be a non-negative integer' });
+	if (roundsCleared !== null && totalRounds !== null && roundsCleared > totalRounds) {
+		return res.status(400).json({ error: 'roundsCleared cannot be greater than totalRounds' });
+	}
+
+	const payload = {
+		program_id: programId,
+		submission_id: submissionId,
+		round_label: roundLabel && roundLabel.length ? roundLabel : null,
+		rounds_cleared: roundsCleared,
+		total_rounds: totalRounds,
+		updated_by: req.user?.id || null,
+	};
+
+	const { data, error } = await supabase
+		.from('certificate_participant_overrides')
+		.upsert(payload, { onConflict: 'program_id,submission_id' })
+		.select('submission_id, round_label, rounds_cleared, total_rounds, updated_at')
+		.single();
+
+	if (error) return res.status(500).json({ error: error.message });
+	return res.json({ override: data });
+});
+
+/**
+ * DELETE /:programId/overrides/:submissionId
+ * Removes participant override and falls back to schedule-derived values.
+ */
+router.delete('/:programId/overrides/:submissionId', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
+	const { programId, submissionId } = req.params;
+	const supabase = getSupabaseAdmin();
+
+	if (!submissionId) return res.status(400).json({ error: 'submissionId is required' });
+
+	const { error } = await supabase
+		.from('certificate_participant_overrides')
+		.delete()
+		.eq('program_id', programId)
+		.eq('submission_id', submissionId);
+
+	if (error) return res.status(500).json({ error: error.message });
+	return res.json({ ok: true });
 });
 
 /**
