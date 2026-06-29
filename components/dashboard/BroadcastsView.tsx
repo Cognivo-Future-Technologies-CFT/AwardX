@@ -169,6 +169,16 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
   // Form States
   const [recipientMode, setRecipientMode] = useState<RecipientMode>('segment');
   const [selectedRoundId, setSelectedRoundId] = useState<string>('');
+  const [filterType, setFilterType] = useState<'all' | 'sent' | 'delivered' | 'failed' | 'bounced'>('all');
+
+  const overlayRef = React.useRef<HTMLDivElement>(null);
+  const handleBodyScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    if (overlayRef.current) {
+      overlayRef.current.scrollTop = e.currentTarget.scrollTop;
+      overlayRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
   const [selectedSegment, setSelectedSegment] = useState<'winners' | 'eliminated' | 'active' | 'all'>('winners');
   const [manualEmails, setManualEmails] = useState<string>('');
   
@@ -854,6 +864,23 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
                   placeholder="Subject line — e.g. Progression Update: {{program_title}}"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+                
+                {/* Variable bindings helper bar for Subject */}
+                <div className="flex items-center flex-wrap gap-2 pt-1">
+                  <span className="text-[10px] font-bold text-slate-400 mr-1 uppercase">Click to inject:</span>
+                  {VARIABLES.map((v) => (
+                    <button
+                      type="button"
+                      key={`subj-${v.key}`}
+                      onClick={() => setSubject((s) => `${s}${v.key}`)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-100/80 transition-all hover:scale-105 active:scale-95 duration-150 shadow-sm cursor-pointer"
+                      title={v.desc}
+                    >
+                      <span className="text-[8px] text-indigo-400 font-bold bg-white w-3 h-3 rounded-full flex items-center justify-center shadow-sm">+</span>
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -862,14 +889,41 @@ export const BroadcastsView: React.FC<BroadcastsViewProps> = ({ activeEvent }) =
                   <span className="text-[10px] text-slate-400">Supports markdown / double-braces variables</span>
                 </div>
                 
-                {/* Body Content Input */}
-                <textarea
-                  rows={9}
-                  value={templateBody}
-                  onChange={(e) => setTemplateBody(e.target.value)}
-                  placeholder={`Dear {{name}},\n\n[Write your email body here...]\n\nBest regards,\nThe Platform`}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none bg-slate-50/30"
-                />
+                {/* Body Content Input with Pill Overlay */}
+                <div className="relative rounded-xl overflow-hidden bg-slate-50/30 border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-transparent group">
+                  {/* The visible stylized overlay */}
+                  <div
+                    ref={overlayRef}
+                    className="absolute inset-0 w-full h-full px-3 py-2.5 text-sm font-mono whitespace-pre-wrap break-words pointer-events-none overflow-hidden"
+                    aria-hidden="true"
+                  >
+                    {!templateBody && (
+                      <span className="text-slate-400">
+                        Dear {'{{name}}'},{'\n\n'}[Write your email body here...]{'\n\n'}Best regards,{'\n'}The Platform
+                      </span>
+                    )}
+                    {templateBody && templateBody.split(/(\{\{\w+\}\})/g).map((part, i) =>
+                      part.match(/^\{\{\w+\}\}$/) ? (
+                        <span key={i} className="bg-indigo-100 text-indigo-800 rounded-sm">
+                          {part}
+                        </span>
+                      ) : (
+                        <span key={i} className="text-slate-700">{part}</span>
+                      )
+                    )}
+                    {/* Trailing newline space so the textarea height aligns with overlay */}
+                    {templateBody.endsWith('\n') ? <br /> : null}
+                  </div>
+                  {/* The invisible functional textarea */}
+                  <textarea
+                    rows={9}
+                    value={templateBody}
+                    onChange={(e) => setTemplateBody(e.target.value)}
+                    onScroll={handleBodyScroll}
+                    className="relative w-full h-full px-3 py-2.5 text-sm font-mono resize-y bg-transparent text-transparent caret-slate-800 outline-none block z-10 m-0"
+                    spellCheck={false}
+                  />
+                </div>
 
                 {/* Variable bindings helper bar */}
                 <div className="flex items-center flex-wrap gap-2 pt-2">
