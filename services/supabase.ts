@@ -666,7 +666,8 @@ export const programs = {
         event_types(name, icon),
         program_payment_configs(*),
         categories(count),
-        rounds(count)
+        rounds(count),
+        submissions(count)
       `)
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
@@ -685,7 +686,8 @@ export const programs = {
         categories(*),
         rounds(*),
         program_payment_configs(*),
-        judging_criteria(*)
+        judging_criteria(*),
+        submissions(count)
       `)
       .eq('id', id)
       .eq('organization_id', orgId)
@@ -884,7 +886,7 @@ export const categories = {
 
     const { data, error } = await supabase
       .from('categories')
-      .select('*')
+      .select('*, submissions(count)')
       .eq('program_id', programId)
       .order('sort_order');
     return { data, error };

@@ -780,7 +780,9 @@ class DatabaseService {
       type: (program.event_types?.name || 'Other') as Program['type'],
       status: this.mapStatus(program.status) as 'Active' | 'Draft' | 'Completed',
       deadline: program.deadline ? new Date(program.deadline).toISOString().split('T')[0] : '',
-      entriesCount: program.entries_count || 0,
+      entriesCount: Array.isArray(program.submissions) && program.submissions.length > 0 
+        ? program.submissions[0].count 
+        : (program.submissions?.count ?? program.entries_count ?? 0),
       paymentConfig: program.program_payment_configs ? {
         enabled: program.program_payment_configs.enabled || false,
         provider: (() => {
@@ -1214,7 +1216,9 @@ class DatabaseService {
         title: cat.title,
         programId: cat.program_id,
         parentId: cat.parent_id,
-        entriesCount: cat.entries_count || 0,
+        entriesCount: Array.isArray(cat.submissions) && cat.submissions.length > 0 
+          ? cat.submissions[0].count 
+          : (cat.submissions?.count ?? cat.entries_count ?? 0),
       }));
     } catch (error) {
       console.error('Failed to load categories:', error);
