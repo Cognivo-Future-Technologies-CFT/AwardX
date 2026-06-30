@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { preRegistrationService } from '../../services/preRegistration';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '../../services/queryKeys';
@@ -191,12 +190,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
   const isInitialLoading = statsQuery.isLoading && statsQuery.data === undefined;
   const stats = (statsQuery.data as any) || emptyStats;
 
-  const preRegStatsQuery = useQuery({
-    queryKey: ['pre-reg-stats'],
-    queryFn: () => preRegistrationService.getStats(),
-    staleTime: 60_000,
-  });
-  const preRegStats = preRegStatsQuery.data;
+
 
   return (
     <div className="space-y-6">
@@ -269,38 +263,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
         </div>
       </div>
 
-      {/* ── Pre-Registration Stats ─────────────────────────────────────────── */}
-      {preRegStats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Leads</span>
-            <span className="text-2xl font-bold text-slate-900 mt-2">{preRegStats.totalRegistrations}</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Today</span>
-            <span className="text-2xl font-bold text-emerald-600 mt-2">+{preRegStats.todayRegistrations}</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Qualified</span>
-            <span className="text-2xl font-bold text-indigo-600 mt-2">{preRegStats.qualifiedLeads}</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Converted</span>
-            <span className="text-2xl font-bold text-blue-600 mt-2">{preRegStats.convertedLeads}</span>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Demo Req.</span>
-            <span className="text-2xl font-bold text-amber-600 mt-2">{preRegStats.demoRequests}</span>
-          </div>
-          <button onClick={() => window.location.href='/admin/pre-registrations'} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-colors text-left group">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Beta Signups</span>
-            <div className="flex items-center justify-between mt-2 w-full">
-              <span className="text-2xl font-bold text-purple-600">{preRegStats.betaSignups}</span>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
-            </div>
-          </button>
-        </div>
-      )}
 
 
       {/* ── Form selector + charts (two-column on large screens) ─────────── */}

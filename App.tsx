@@ -35,6 +35,7 @@ const AdminPreRegistrationsList = lazy(() => import('./components/admin/PreRegis
 const AdminPreRegistrationDetails = lazy(() => import('./components/admin/PreRegistrationDetails').then((m) => ({ default: m.AdminPreRegistrationDetails })));
 const AdminSettings = lazy(() => import('./components/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const AdminAnalytics = lazy(() => import('./components/admin/AdminAnalytics').then((m) => ({ default: m.AdminAnalytics })));
 
 const RouteLoader: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -318,6 +319,13 @@ const App: React.FC = () => {
               <AdminProtectedRoute>
                 <AdminLayout>
                   <AdminDashboard />
+                </AdminLayout>
+              </AdminProtectedRoute>
+            } />
+            <Route path="/admin/analytics" element={
+              <AdminProtectedRoute>
+                <AdminLayout>
+                  <AdminAnalytics />
                 </AdminLayout>
               </AdminProtectedRoute>
             } />

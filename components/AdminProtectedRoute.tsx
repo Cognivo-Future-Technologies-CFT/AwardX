@@ -11,13 +11,17 @@ export const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ childr
   const { isAuthenticated, isLoading, userId } = useAuth();
   const location = useLocation();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
 
   useEffect(() => {
-    if (!userId || !isAuthenticated) {
-      setIsCheckingAdmin(false);
+    // Wait until auth finishes loading
+    if (isLoading) return;
+
+    if (!isAuthenticated || !userId) {
+      setIsAdmin(false);
       return;
     }
+
+    let isMounted = true;
 
     const checkAdmin = async () => {
       try {
@@ -30,18 +34,22 @@ export const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ childr
           .single();
         
         if (error) throw error;
-        setIsAdmin(!!data?.is_super_admin);
+        if (isMounted) setIsAdmin(!!data?.is_super_admin);
       } catch (err) {
         console.error('Failed to check admin status', err);
-        setIsAdmin(false);
-      } finally {
-        setIsCheckingAdmin(false);
+        if (isMounted) setIsAdmin(false);
       }
     };
-    void checkAdmin();
-  }, [userId, isAuthenticated]);
 
-  if (isLoading || isCheckingAdmin) {
+    void checkAdmin();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, isAuthenticated, isLoading]);
+
+  // While we are figuring out auth state OR figuring out admin state, show loader.
+  if (isLoading || (isAuthenticated && isAdmin === null)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -52,14 +60,21 @@ export const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ childr
     );
   }
 
+  // If we are definitely not authenticated, redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  // If we are authenticated but definitely NOT an admin, redirect immediately
   if (isAdmin === false) {
-    // If authenticated but not super admin, redirect to normal dashboard
-    return <Navigate to="/workflow" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  // Only render the admin UI if we are absolutely sure they are a super admin
+  if (isAdmin === true) {
+    return <>{children}</>;
+  }
+
+  // Fallback for typescript (should be unreachable)
+  return null;
 };

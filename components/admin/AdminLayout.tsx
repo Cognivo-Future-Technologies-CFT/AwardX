@@ -48,7 +48,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
         <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden no-scrollbar">
           <button
-            onClick={() => navigate('/workflow')}
+            onClick={() => navigate('/')}
             className={`group w-full flex items-center ${!isSidebarExpanded ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-50 border border-transparent mb-4`}
             title={!isSidebarExpanded ? 'Back to App' : undefined}
           >
@@ -115,6 +115,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-50 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
               </div>
               <div className="flex-1 py-6 px-4 space-y-1">
+                <button
+                  onClick={() => { navigate('/dashboard'); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                  Back to App
+                </button>
                 {navItems.map((item) => (
                   <button
                     key={item.id}
