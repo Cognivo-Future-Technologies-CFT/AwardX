@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, BarChart3, Settings, ArrowLeft, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart3, Settings, ArrowLeft, Menu, X, ShieldAlert } from 'lucide-react';
 import { Logo } from '../Logo';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -29,27 +29,86 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
-      {/* DESKTOP SIDEBAR */}
-      <aside
-        className={`hidden lg:flex flex-col bg-white border-r border-slate-200/60 shadow-sm transition-all duration-300 ease-in-out relative z-30 ${isSidebarExpanded ? 'w-64' : 'w-20'}`}
+    <div className="min-h-screen bg-[#F8FAFC] flex overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
+      
+      {/* ── DESKTOP SIDEBAR ── */}
+      <motion.aside
+        initial={false}
+        animate={{ width: isSidebarExpanded ? 280 : 88 }}
+        className="hidden lg:flex flex-col bg-white/80 backdrop-blur-xl border-r border-slate-200/50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] relative z-30 overflow-visible transition-all duration-300 ease-in-out"
       >
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100 shrink-0">
-          <div className={`overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'w-32 opacity-100' : 'w-0 opacity-0'}`}>
-            <Logo size="sm" />
+        {/* Toggle Button */}
+        <button
+          onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+          className="absolute -right-3 top-10 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-200 shadow-sm transition-all z-40"
+        >
+          <ChevronIcon isExpanded={isSidebarExpanded} />
+        </button>
+
+        <div className="h-20 flex items-center px-6 border-b border-slate-100/50 shrink-0">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <Logo size="sm" className="shrink-0" />
+            <AnimatePresence>
+              {isSidebarExpanded && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="flex flex-col whitespace-nowrap"
+                >
+                  <span className="text-[10px] font-bold tracking-widest text-indigo-500 uppercase leading-none">AwardX</span>
+                  <span className="text-sm font-bold text-slate-900 leading-tight tracking-tight">Platform Admin</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <button
-            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-            className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
         </div>
 
-        <div className="flex-1 py-6 px-3 space-y-1 overflow-y-auto overflow-x-hidden no-scrollbar">
+        <div className="flex-1 py-8 px-4 space-y-2 overflow-y-auto overflow-x-hidden no-scrollbar">
+          
+          <div className="mb-2">
+             {isSidebarExpanded && <div className="px-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Management</div>}
+          </div>
+
+          <div className="space-y-1.5">
+            {navItems.map((item) => {
+              const isActive = currentView === item.id || (item.id !== '/' && currentView.startsWith(item.id));
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className={`relative group w-full flex items-center ${!isSidebarExpanded ? 'justify-center' : 'justify-start'} px-4 py-3.5 rounded-2xl text-sm font-medium transition-all duration-300 ${
+                    isActive
+                      ? 'text-white shadow-md shadow-indigo-500/20'
+                      : 'text-slate-500 hover:bg-slate-100/50 hover:text-slate-900'
+                  }`}
+                  title={!isSidebarExpanded ? item.label : undefined}
+                >
+                  {/* Active Background Gradient */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeAdminNav"
+                      className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 -z-10"
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    />
+                  )}
+
+                  <div className={`flex items-center gap-3 relative z-10 ${!isSidebarExpanded ? 'justify-center w-full' : ''}`}>
+                    <item.icon className={`w-5 h-5 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                    {isSidebarExpanded && <span className="font-semibold">{item.label}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bottom Actions & User Profile */}
+        <div className="p-4 border-t border-slate-100/50 space-y-3">
           <button
-            onClick={() => navigate('/')}
-            className={`group w-full flex items-center ${!isSidebarExpanded ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-50 border border-transparent mb-4`}
+            onClick={() => navigate('/dashboard')}
+            className={`group w-full flex items-center ${!isSidebarExpanded ? 'justify-center' : 'justify-between'} px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-300 text-slate-500 hover:bg-slate-100/50 hover:text-slate-900`}
             title={!isSidebarExpanded ? 'Back to App' : undefined}
           >
             <div className={`flex items-center gap-3 ${!isSidebarExpanded ? 'justify-center w-full' : ''}`}>
@@ -57,43 +116,28 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               {isSidebarExpanded && <span>Back to App</span>}
             </div>
           </button>
-          
-          <div className="mb-4">
-             {isSidebarExpanded && <div className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Platform Admin</div>}
+
+          <div className={`flex items-center ${!isSidebarExpanded ? 'justify-center' : 'gap-3'} p-3 rounded-2xl bg-indigo-50/50 border border-indigo-100/50`}>
+             <ShieldAlert className="w-5 h-5 text-indigo-500 shrink-0" />
+             {isSidebarExpanded && (
+               <div className="flex flex-col min-w-0">
+                 <span className="text-xs font-bold text-indigo-900 truncate">Super Admin</span>
+                 <span className="text-[10px] text-indigo-500/80 font-medium truncate">Full Access</span>
+               </div>
+             )}
           </div>
-
-          {navItems.map((item) => {
-            const isActive = currentView === item.id || (item.id !== '/' && currentView.startsWith(item.id));
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`group w-full flex items-center ${!isSidebarExpanded ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100/50'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
-                }`}
-                title={!isSidebarExpanded ? item.label : undefined}
-              >
-                <div className={`flex items-center gap-3 ${!isSidebarExpanded ? 'justify-center w-full' : ''}`}>
-                  <item.icon className={`w-5 h-5 transition-colors ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                  {isSidebarExpanded && <span>{item.label}</span>}
-                </div>
-              </button>
-            );
-          })}
         </div>
-      </aside>
+      </motion.aside>
 
-      {/* MOBILE HEADER */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200/60 shadow-sm flex items-center justify-between px-4 z-40">
+      {/* ── MOBILE HEADER ── */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-sm flex items-center justify-between px-4 z-40">
         <Logo size="sm" />
-        <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-50 rounded-lg">
+        <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
           <Menu className="w-5 h-5" />
         </button>
       </div>
 
-      {/* MOBILE MENU */}
+      {/* ── MOBILE MENU ── */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -105,46 +149,61 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
               onClick={() => setIsMobileMenuOpen(false)}
             />
             <motion.aside
-              initial={{ x: -280 }}
+              initial={{ x: -320 }}
               animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              className="fixed inset-y-0 left-0 w-72 bg-white z-50 flex flex-col lg:hidden shadow-2xl"
+              exit={{ x: -320 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed inset-y-0 left-0 w-[280px] bg-white z-50 flex flex-col lg:hidden shadow-2xl rounded-r-3xl"
             >
-              <div className="h-16 flex items-center justify-between px-6 border-b border-slate-100">
+              <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100">
                 <Logo size="sm" />
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-50 rounded-lg text-slate-500"><X className="w-5 h-5" /></button>
-              </div>
-              <div className="flex-1 py-6 px-4 space-y-1">
-                <button
-                  onClick={() => { navigate('/dashboard'); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                  Back to App
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-50 hover:bg-slate-100 transition-colors rounded-xl text-slate-500">
+                  <X className="w-5 h-5" />
                 </button>
-                {navItems.map((item) => (
+              </div>
+              <div className="flex-1 py-8 px-4 flex flex-col h-full overflow-y-auto">
+                <div className="flex-1 space-y-2">
+                  <div className="px-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Management</div>
+
+                  <div className="space-y-1.5">
+                    {navItems.map((item) => {
+                      const isActive = currentView === item.id || (item.id !== '/' && currentView.startsWith(item.id));
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => handleNavClick(item.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all duration-300 ${
+                            isActive
+                              ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/20'
+                              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                          }`}
+                        >
+                          <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100/80 mt-6">
                   <button
-                    key={item.id}
-                    onClick={() => handleNavClick(item.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                      (currentView === item.id || (item.id !== '/' && currentView.startsWith(item.id)))
-                        ? 'bg-indigo-50 text-indigo-700'
-                        : 'text-slate-500 hover:bg-slate-50'
-                    }`}
+                    onClick={() => { navigate('/'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-semibold text-slate-500 hover:bg-slate-50 transition-colors"
                   >
-                    <item.icon className="w-5 h-5" />
-                    {item.label}
+                    <ArrowLeft className="w-5 h-5 text-slate-400" />
+                    Back to App
                   </button>
-                ))}
+                </div>
               </div>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col h-screen max-h-screen overflow-hidden pt-16 lg:pt-0">
-        <div className="flex-1 overflow-y-auto bg-slate-50 p-4 lg:p-8">
+      {/* ── MAIN CONTENT ── */}
+      <main className="flex-1 flex flex-col h-screen max-h-screen overflow-hidden pt-16 lg:pt-0 relative z-10">
+        <div className="flex-1 overflow-y-auto bg-transparent p-4 md:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
@@ -153,3 +212,19 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     </div>
   );
 };
+
+const ChevronIcon = ({ isExpanded }: { isExpanded: boolean }) => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={`transition-transform duration-300 ${!isExpanded ? 'rotate-180' : ''}`}
+  >
+    <path d="m15 18-6-6 6-6" />
+  </svg>
+);

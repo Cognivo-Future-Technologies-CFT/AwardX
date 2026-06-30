@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Menu, X, LayoutDashboard, LogOut, Github, ChevronDown } from 'lucide-react';
 import { Button } from './Button';
 import { PreRegistrationModal } from './PreRegistrationModal';
@@ -22,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
   const [isPreRegModalOpen, setIsPreRegModalOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<Contact | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { scrollY } = useScroll();
   const { isAuthenticated, user, signOut } = useAuth();
 
@@ -38,6 +39,17 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  const profileRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        if (activeDropdown === 'profile') setActiveDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeDropdown]);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -96,6 +108,8 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
   }, [isAuthenticated, user]);
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
+    setActiveDropdown(null);
     try {
       await signOut();
       setCurrentUser(null);
@@ -106,6 +120,8 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
       }
     } catch (error) {
       console.error('Error signing out:', error);
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -204,23 +220,41 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                 >
                   <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
                 </button>
-                <div className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full bg-white/50 border border-white/40">
-                  {currentUser?.avatar ? (
-                    <img src={currentUser.avatar} alt={currentUser.name} className="w-6 h-6 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold">
-                      {currentUser?.name.charAt(0).toUpperCase() || 'U'}
+                
+                {!isLoggingOut && (
+                  <div className="relative" ref={profileRef}>
+                    <button
+                      onClick={() => setActiveDropdown(activeDropdown === 'profile' ? null : 'profile')}
+                      className="flex items-center justify-center w-8 h-8 rounded-full bg-white/50 border border-white/40 hover:bg-white/70 hover:shadow-sm transition-all focus:outline-none"
+                    >
+                    {currentUser?.avatar ? (
+                      <img src={currentUser.avatar} alt={currentUser.name} className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[11px] font-bold">
+                        {currentUser?.name.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {activeDropdown === 'profile' && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden z-50">
+                      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{currentUser?.name || 'User'}</p>
+                        <p className="text-xs text-slate-500 truncate">{currentUser?.email || ''}</p>
+                      </div>
+                      <div className="p-2">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" /> Sign out
+                        </button>
+                      </div>
                     </div>
                   )}
-                  <span className="text-[12px] font-semibold text-slate-700 pr-1">{currentUser?.name?.split(' ')[0] || 'User'}</span>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-1.5 rounded-full text-slate-500 hover:text-rose-600 hover:bg-white/50 transition-colors"
-                  title="Sign out"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
+                )}
               </>
             ) : (
               <>
@@ -301,21 +335,23 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                 <Button variant="secondary" className="w-full justify-center" onClick={() => handleNavClick('dashboard')}>
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Dashboard
                 </Button>
-                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50">
-                  {currentUser?.avatar ? (
-                    <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border-2 border-slate-200 object-cover" />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
-                      {currentUser?.name.charAt(0).toUpperCase() || 'U'}
+                {!isLoggingOut && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50">
+                    {currentUser?.avatar ? (
+                      <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border-2 border-slate-200 object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
+                        {currentUser?.name.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-700 truncate">{currentUser?.name || 'User'}</div>
+                      <div className="text-xs text-slate-500 truncate">{currentUser?.email || ''}</div>
                     </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-700 truncate">{currentUser?.name || 'User'}</div>
-                    <div className="text-xs text-slate-500 truncate">{currentUser?.email || ''}</div>
                   </div>
-                </div>
-                <Button variant="outline" className="w-full justify-center text-red-600 border-red-200 hover:bg-red-50" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 mr-2" /> Logout
+                )}
+                <Button disabled={isLoggingOut} variant="outline" className="w-full justify-center text-red-600 border-red-200 hover:bg-red-50" onClick={handleLogout}>
+                  <LogOut className="w-4 h-4 mr-2" /> {isLoggingOut ? 'Logging out...' : 'Logout'}
                 </Button>
               </>
             ) : (
