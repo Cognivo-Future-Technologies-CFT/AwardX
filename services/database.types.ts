@@ -59,6 +59,7 @@ export interface Database {
           timezone: string
           created_at: string
           updated_at: string
+          is_super_admin: boolean
         }
         Insert: {
           id: string
@@ -69,6 +70,7 @@ export interface Database {
           timezone?: string
           created_at?: string
           updated_at?: string
+          is_super_admin?: boolean
         }
         Update: {
           id?: string
@@ -79,6 +81,7 @@ export interface Database {
           timezone?: string
           created_at?: string
           updated_at?: string
+          is_super_admin?: boolean
         }
       }
       permissions: {

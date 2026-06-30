@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, LayoutDashboard, LogOut, Github } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut, Github, ChevronDown } from 'lucide-react';
 import { Button } from './Button';
+import { PreRegistrationModal } from './PreRegistrationModal';
 import { Logo } from './Logo';
 import { GITHUB_REPO } from '@/lib/brand';
 import { isLandingOnly } from '@/lib/landingOnly';
@@ -18,9 +19,17 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogout }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPreRegModalOpen, setIsPreRegModalOpen] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<Contact | null>(null);
   const { scrollY } = useScroll();
   const { isAuthenticated, user, signOut } = useAuth();
+
+  useEffect(() => {
+    const handleOpen = () => setIsPreRegModalOpen(true);
+    window.addEventListener('open-pre-registration', handleOpen);
+    return () => window.removeEventListener('open-pre-registration', handleOpen);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -231,6 +240,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                 >
                   Login
                 </button>
+
                 <button
                   onClick={() => handleNavClick('signup')}
                   className="px-4 py-1.5 text-[13px] font-bold text-white rounded-full bg-gradient-to-br from-slate-900 to-slate-800 hover:from-indigo-600 hover:to-purple-600 shadow-md shadow-slate-900/20 transition-all"
@@ -250,6 +260,11 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
           </button>
         </motion.div>
       </div>
+
+      <PreRegistrationModal 
+        isOpen={isPreRegModalOpen} 
+        onClose={() => setIsPreRegModalOpen(false)} 
+      />
 
       {/* Mobile floating glass panel */}
       {isMobileMenuOpen && (
@@ -317,6 +332,7 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                   <Github className="w-4 h-4" /> View on GitHub
                 </a>
                 <Button variant="outline" className="w-full justify-center" onClick={() => handleNavClick('login')}>Login</Button>
+                <Button variant="secondary" className="w-full justify-center" onClick={() => handleNavClick('pre-registration')}>Pre-Registration</Button>
                 <Button variant="primary" className="w-full justify-center" onClick={() => handleNavClick('signup')}>Self Host</Button>
               </>
             )}

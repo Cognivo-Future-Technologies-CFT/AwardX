@@ -4,6 +4,8 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { auth } from './services/supabase';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminProtectedRoute } from './components/AdminProtectedRoute';
+import { AdminLayout } from './components/admin/AdminLayout';
 import { isLandingOnly } from './lib/landingOnly';
 
 const HomePage = lazy(() => import('./components/pages/HomePage').then((m) => ({ default: m.HomePage })));
@@ -28,6 +30,11 @@ const MySubmissionsPage = lazy(() => import('./components/pages/MySubmissionsPag
 const PublicVotingPage = lazy(() => import('./components/pages/PublicVotingPage').then((m) => ({ default: m.PublicVotingPage })));
 const PublicAnnouncementsPage = lazy(() => import('./components/pages/PublicAnnouncementsPage').then((m) => ({ default: m.PublicAnnouncementsPage })));
 const CertificateVerifyPage = lazy(() => import('./components/pages/CertificateVerifyPage').then((m) => ({ default: m.CertificateVerifyPage })));
+const PreRegistrationPage = lazy(() => import('./components/pages/PreRegistrationPage').then((m) => ({ default: m.PreRegistrationPage })));
+const AdminPreRegistrationsList = lazy(() => import('./components/admin/PreRegistrationsList').then((m) => ({ default: m.AdminPreRegistrationsList })));
+const AdminPreRegistrationDetails = lazy(() => import('./components/admin/PreRegistrationDetails').then((m) => ({ default: m.AdminPreRegistrationDetails })));
+const AdminSettings = lazy(() => import('./components/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
 
 const RouteLoader: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -85,6 +92,7 @@ const pageToPath = (page: string): string => {
     dashboard: '/dashboard',
     login: '/login',
     signup: '/signup',
+    'pre-registration': '/pre-registration',
     'form-submission': '/form',
     'judge-portal': '/judge',
     'public-program': '/program',
@@ -103,6 +111,7 @@ const pathToPage = (pathname: string): string => {
   if (pathname.startsWith('/workflow')) return 'workflow';
   if (pathname.startsWith('/login')) return 'login';
   if (pathname.startsWith('/signup')) return 'signup';
+  if (pathname.startsWith('/pre-registration')) return 'pre-registration';
   return 'home';
 };
 
@@ -257,6 +266,7 @@ const App: React.FC = () => {
           <>
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="/signup" element={<Navigate to="/" replace />} />
+            <Route path="/pre-registration" element={<Navigate to="/" replace />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="/dashboard/*" element={<Navigate to="/" replace />} />
             <Route path="/demo" element={<Navigate to="/" replace />} />
@@ -265,6 +275,7 @@ const App: React.FC = () => {
           <>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/pre-registration" element={<PreRegistrationPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/attendance/scan" element={<AttendanceScanPage />} />
             <Route path="/workflow" element={<WorkflowPage />} />
@@ -301,6 +312,43 @@ const App: React.FC = () => {
                     }}
                   />
                 </ProtectedRoute>
+              }
+            />
+            <Route path="/admin" element={
+              <AdminProtectedRoute>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AdminProtectedRoute>
+            } />
+            <Route
+              path="/admin/pre-registrations"
+              element={
+                <AdminProtectedRoute>
+                  <AdminLayout>
+                    <AdminPreRegistrationsList />
+                  </AdminLayout>
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/pre-registrations/:id"
+              element={
+                <AdminProtectedRoute>
+                  <AdminLayout>
+                    <AdminPreRegistrationDetails />
+                  </AdminLayout>
+                </AdminProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <AdminProtectedRoute>
+                  <AdminLayout>
+                    <AdminSettings />
+                  </AdminLayout>
+                </AdminProtectedRoute>
               }
             />
             <Route path="/demo" element={<DemoDashboard />} />

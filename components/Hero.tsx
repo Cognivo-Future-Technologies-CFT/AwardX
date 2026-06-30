@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Github, ArrowRight, FileText, Gavel, Vote, CreditCard, Trophy, ChevronDown } from 'lucide-react';
+import { Github, ArrowRight, FileText, Gavel, Vote, CreditCard, Trophy, ChevronDown, Sparkles } from 'lucide-react';
 import {
   motion,
   useScroll,
@@ -362,6 +362,14 @@ export const Hero: React.FC = () => {
                 See Live Demo
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-pre-registration'))}
+              className="group inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 px-7 py-3.5 text-[15px] font-semibold text-white shadow-md shadow-indigo-500/20 hover:from-indigo-600 hover:to-purple-700 transition-all hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5"
+            >
+              <Sparkles className="w-4 h-4" />
+              Pre-Registration
+            </button>
           </motion.div>
 
           {/* Capability strip — what's in the box, no fabricated metrics */}
