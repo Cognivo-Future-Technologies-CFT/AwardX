@@ -9,6 +9,7 @@ import {
 import { Button } from '../Button';
 import { useConfirm } from '../ConfirmDialog';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getCategorySelectorLabels } from '../../lib/judgingType';
 
 export interface FormField {
   id: string;
@@ -64,13 +65,16 @@ interface FormBuilderProps {
   onElementsPanelOpenChange?: (open: boolean) => void;
   onPropertiesPanelOpenChange?: (open: boolean) => void;
   awardOptions?: string[];
+  isAutoAssignJudging?: boolean;
 }
 
 export interface FormBuilderRef {
   getCurrentFormData: () => { fields: FormField[]; pages: FormPage[]; theme: FormTheme };
 }
 
-const fieldTypes = [
+const buildFieldTypes = (isAutoAssign: boolean) => {
+  const labels = getCategorySelectorLabels(isAutoAssign);
+  return [
   {
     group: 'Essentials',
     items: [
@@ -94,7 +98,7 @@ const fieldTypes = [
       { type: 'file', label: 'File Upload', icon: ImageIcon, description: 'Images, Docs, PDF' },
       { type: 'url', label: 'Website', icon: Link2, description: 'External links' },
       { type: 'number', label: 'Number', icon: Layout, description: 'Quantities, scores' },
-      { type: 'award_selector', label: 'Award Selector', icon: Award, description: 'Pick award category' },
+      { type: 'award_selector', label: labels.fieldTypeLabel, icon: Award, description: labels.fieldDescription },
           {
       type: 'image',
       label: 'Image',
@@ -110,6 +114,7 @@ const fieldTypes = [
     ]
   }
 ];
+};
 
 const defaultTheme: FormTheme = {
   primaryColor: '#6366f1',
@@ -137,8 +142,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   onElementsPanelOpenChange,
   onPropertiesPanelOpenChange,
   awardOptions = [],
+  isAutoAssignJudging = false,
 }, ref) => {
   const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
+  const selectorLabels = getCategorySelectorLabels(isAutoAssignJudging);
+  const fieldTypes = React.useMemo(() => buildFieldTypes(isAutoAssignJudging), [isAutoAssignJudging]);
 
   // --- State ---
   const [fields, setFields] = useState<FormField[]>(initialFields);
@@ -315,10 +323,10 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     const newField: FormField = {
       id: `field-${Date.now()}`,
       type,
-      label: fieldDef?.label || 'New Field',
-      placeholder: '',
+      label: type === 'award_selector' ? selectorLabels.defaultLabel : (fieldDef?.label || 'New Field'),
+      placeholder: type === 'award_selector' ? selectorLabels.defaultPlaceholder : '',
       helpText: '',
-      required: false,
+      required: type === 'award_selector' && isAutoAssignJudging,
       pageId: selectedPageId,
       ...(type === 'select' || type === 'radio' || type === 'checkbox'
         ? { options: ['Option 1', 'Option 2', 'Option 3'] }
@@ -594,7 +602,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               className="w-full p-3 pl-10 pr-10 border border-indigo-200 rounded-xl bg-indigo-50/30 text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer hover:border-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium"
               style={style}
             >
-              <option value="" disabled>{field.placeholder || 'Select award category...'}</option>
+              <option value="" disabled>{field.placeholder || selectorLabels.defaultPlaceholder}</option>
               {field.options?.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -760,10 +768,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (isAutoAssignJudging && field.type === 'award_selector') return;
                               updateField(field.id, { required: !field.required });
                             }}
-                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'}`}
-                            title={field.required ? 'Mark optional' : 'Mark required'}
+                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'} ${isAutoAssignJudging && field.type === 'award_selector' ? 'cursor-not-allowed opacity-70' : ''}`}
+                            title={isAutoAssignJudging && field.type === 'award_selector' ? 'Required for Auto Assign Judging' : (field.required ? 'Mark optional' : 'Mark required')}
                           >
                             <span className="text-[10px] px-0.5">{field.required ? 'REQ' : 'OPT'}</span>
                           </button>
@@ -859,7 +868,9 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                         {field.type === 'award_selector' && (
                           <div className="pt-2 border-t border-slate-100">
                             <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-2.5 py-2 font-medium">
-                              Award options are synced from program award categories. Toggle REQ/OPT to make this field required or optional.
+                              {isAutoAssignJudging
+                                ? 'Category options are synced from program categories. This field is required for Auto Assign Judging.'
+                                : 'Award options are synced from program award categories. Toggle REQ/OPT to make this field required or optional.'}
                             </p>
                           </div>
                         )}

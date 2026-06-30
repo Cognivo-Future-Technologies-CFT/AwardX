@@ -7,6 +7,7 @@ export const DASHBOARD_PATH_VIEWS = new Set([
   'schedule',
   'submissions',
   'judging',
+  'judge-category-mapping',
   'awards',
   'templates',
   'analytics',

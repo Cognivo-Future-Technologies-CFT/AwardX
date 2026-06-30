@@ -699,6 +699,7 @@ export const programs = {
     title: string;
     description?: string;
     industry_category?: string;
+    judging_type?: 'parallel' | 'auto_assign';
     event_type_id?: string;
     deadline?: string;
   }) => {
@@ -721,6 +722,7 @@ export const programs = {
           title: program.title,
           description: program.description || '',
           industry_category: program.industry_category,
+          judging_type: program.judging_type || 'parallel',
           event_type_id: program.event_type_id,
           deadline: program.deadline,
         },
@@ -740,6 +742,7 @@ export const programs = {
     slug: string;
     cover_image_url: string;
     industry_category: string;
+    judging_type: 'parallel' | 'auto_assign';
     visibility: string;
     timezone: string;
   }>) => {

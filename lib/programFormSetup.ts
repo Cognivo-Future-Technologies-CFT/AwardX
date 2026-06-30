@@ -61,6 +61,14 @@ export function getProgramFormSetupState(
   };
 }
 
+export interface ProgramFormFieldRecord {
+  type?: string;
+}
+
+export function formHasCategorySelector(fields: ProgramFormFieldRecord[]): boolean {
+  return fields.some((field) => field.type === 'award_selector');
+}
+
 export function isProgramFormReadyForLive(
   forms: ProgramFormRecord[],
   activeFormId: string | null | undefined,

@@ -8,6 +8,7 @@ export const DASHBOARD_VIEW_PERMISSIONS: Record<string, string> = {
   'schedule-rounds': PERMISSIONS.MANAGE_PROGRAMS,
   submissions: PERMISSIONS.VIEW_SUBMISSIONS,
   judging: PERMISSIONS.VIEW_JUDGING,
+  'judge-category-mapping': PERMISSIONS.VIEW_JUDGING,
   awards: PERMISSIONS.MANAGE_PROGRAMS,
   templates: PERMISSIONS.MANAGE_FORMS,
   analytics: PERMISSIONS.VIEW_ANALYTICS,
