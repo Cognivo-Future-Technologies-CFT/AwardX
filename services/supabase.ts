@@ -666,7 +666,7 @@ export const programs = {
         event_types(name, icon),
         program_payment_configs(*),
         categories(count),
-        rounds(count),
+        rounds!rounds_program_id_fkey(count),
         submissions(count)
       `)
       .eq('organization_id', orgId)
@@ -684,7 +684,7 @@ export const programs = {
         *,
         event_types(*),
         categories(*),
-        rounds(*),
+        rounds!rounds_program_id_fkey(*),
         program_payment_configs(*),
         judging_criteria(*),
         submissions(count)
@@ -781,7 +781,7 @@ export const programs = {
         *,
         event_types(*),
         categories(*),
-        rounds(*),
+        rounds!rounds_program_id_fkey(*),
         program_payment_configs(*),
         judging_criteria(*),
         organization:organizations(id, name, logo_url, industry, website)
@@ -802,7 +802,7 @@ export const programs = {
         *,
         event_types(*),
         categories(*),
-        rounds(*),
+        rounds!rounds_program_id_fkey(*),
         program_payment_configs(*),
         judging_criteria(*),
         organization:organizations(id, name, logo_url, industry, website)
