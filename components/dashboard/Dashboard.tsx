@@ -9,7 +9,6 @@ import { DashboardOverview } from './DashboardOverview';
 import { FormBuilderView } from './FormBuilderView';
 import { SubmissionTable } from './SubmissionTable';
 import { JudgingView } from './JudgingView';
-import { JudgeCategoryMappingView } from './JudgeCategoryMappingView';
 import { SettingsView } from './SettingsView';
 import { TeamsView } from './TeamsView';
 import { AuditLogsView } from './AuditLogsView';
@@ -366,8 +365,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
       case 'judging':
         return <JudgingView activeEvent={activeEvent} />;
-      case 'judge-category-mapping':
-        return <JudgeCategoryMappingView activeEvent={activeEvent} />;
       case 'voting':
         return (
           <ScheduleRoundsView

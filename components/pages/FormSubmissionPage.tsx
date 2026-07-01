@@ -10,7 +10,6 @@ import { auth } from '../../services/supabase';
 import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
 import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
-import { getCategorySelectorLabels } from '../../lib/judgingType';
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
 import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles } from 'lucide-react';
 import { storage } from '../../services/supabase';
@@ -30,17 +29,14 @@ const defaultTheme: FormTheme = {
 const syncAwardSelectorOptions = (
   fields: FormField[],
   awardOptions: string[],
-  isAutoAssign = false,
 ): FormField[] => {
-  const labels = getCategorySelectorLabels(isAutoAssign);
   const options = awardOptions.length > 0 ? awardOptions : ['General'];
   return fields.map((field) =>
     field.type === 'award_selector'
       ? {
           ...field,
-          label: field.label || labels.defaultLabel,
-          placeholder: field.placeholder || labels.defaultPlaceholder,
-          required: isAutoAssign ? true : field.required,
+          label: field.label || 'Award Selection',
+          placeholder: field.placeholder || 'Select award category...',
           options,
         }
       : field,
@@ -344,7 +340,7 @@ export const FormSubmissionPage: React.FC = () => {
 
         const { data: programRow } = await supabase
           .from('programs')
-          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status, integration_sources, judging_type')
+          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status, integration_sources')
           .eq('id', form.program_id)
           .maybeSingle();
 
@@ -436,11 +432,7 @@ export const FormSubmissionPage: React.FC = () => {
             };
           });
           const pages = form.pages || [{ id: 'page-1', title: 'Page 1', order: 0 }];
-          const normalizedFields = syncAwardSelectorOptions(
-            mappedFields,
-            awardOptions,
-            programRow?.judging_type === 'auto_assign',
-          );
+          const normalizedFields = syncAwardSelectorOptions(mappedFields, awardOptions);
           setFormFields(normalizedFields);
 
           // Prefill identity fields where labels/types match and values are empty.
@@ -867,19 +859,13 @@ case 'award_selector': {
   const options = field.options || [];
 
   const groupedAwards = options.reduce((acc, option) => {
-    const parts = option.split(/\s*(?:→|->)\s*/).map((part) => part.trim());
-    const category = parts[0];
-    const award = parts.length > 1 ? parts.slice(1).join(' → ') : parts[0];
+    const [category, award] = option.split('->').map(v => v.trim());
 
     if (!acc[category]) {
       acc[category] = [];
     }
 
-    if (parts.length > 1) {
-      acc[category].push(award);
-    } else {
-      acc[category] = [category];
-    }
+    acc[category].push(award);
 
     return acc;
   }, {} as Record<string, string[]>);

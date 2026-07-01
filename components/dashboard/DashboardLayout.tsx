@@ -7,7 +7,7 @@ import {
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Mail, Settings2,
   UserCog, Edit, Workflow, Layout, Command, Globe, CheckCircle2, AlertCircle, AlertTriangle,
-  Award, UserCheck, Layers
+  Award, UserCheck
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,8 +26,7 @@ interface DashboardUser {
 }
 import { db as databaseService, programPages } from '../../services/database';
 import { queryKeys } from '../../services/queryKeys';
-import { getProgramFormSetupState, formHasCategorySelector } from '../../lib/programFormSetup';
-import { isAutoAssignJudging } from '../../lib/judgingType';
+import { getProgramFormSetupState } from '../../lib/programFormSetup';
 import { realtime, supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Modal } from '../Modal';
@@ -899,23 +898,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         ? `${rounds.length} round${rounds.length === 1 ? '' : 's'} configured.`
         : 'Add at least one round.';
 
-      const autoAssign = isAutoAssignJudging(activeEvent?.judgingType);
-
-      const judgesMetBase = judges.length > 0;
-      let judgesMet = judgesMetBase;
-      let judgesDetail = judgesMetBase
+      const judgesMet = judges.length > 0;
+      const judgesDetail = judgesMet
         ? `${judges.length} judge${judges.length === 1 ? '' : 's'} assigned.`
         : 'Invite at least one judge.';
-
-      if (autoAssign && judgesMetBase) {
-        const unmappedJudges = judges.filter((judge) => !(judge.categoryIds || []).length);
-        if (unmappedJudges.length > 0) {
-          judgesMet = false;
-          judgesDetail = `${unmappedJudges.length} judge${unmappedJudges.length === 1 ? '' : 's'} still need category assignments.`;
-        } else {
-          judgesDetail = `${judges.length} judge${judges.length === 1 ? '' : 's'} mapped to categories.`;
-        }
-      }
 
       const formSetup = getProgramFormSetupState(forms, activeFormId);
       let formMet = formSetup.status === 'ready';
@@ -926,9 +912,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         if (fields.length === 0) {
           formMet = false;
           formDetail = 'Add at least one field to the active submission form.';
-        } else if (autoAssign && !formHasCategorySelector(fields)) {
-          formMet = false;
-          formDetail = 'Add and publish a required Category Selector on the active submission form.';
         } else {
           formDetail = `${formSetup.activeForm.title || 'Active form'} has ${fields.length} field${
             fields.length === 1 ? '' : 's'
@@ -985,11 +968,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     () => [
       { id: 'schedule', navigateTo: 'schedule-rounds', ...publishRequirements.schedule },
       { id: 'rounds', navigateTo: 'schedule-rounds', ...publishRequirements.rounds },
-      { id: 'judges', navigateTo: isAutoAssignJudging(activeEvent?.judgingType) ? 'judge-category-mapping' : 'judging', ...publishRequirements.judges },
+      { id: 'judges', navigateTo: 'judging', ...publishRequirements.judges },
       { id: 'formBuilder', navigateTo: 'templates', ...publishRequirements.formBuilder },
       { id: 'nominationButton', navigateTo: 'program-details', ...publishRequirements.nominationButton },
     ],
-    [publishRequirements, activeEvent?.judgingType]
+    [publishRequirements]
   );
 
   const hasPublishBlockers = publishRequirementList.some((item) => !item.isMet);
@@ -1060,24 +1043,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   };
 
   // Define Nav items with Permissions
-  const leftNavItems = useMemo(() => {
-    const items = [
+  const leftNavItems = [
     { id: 'overview',          label: 'Overview',           icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
     { id: 'program-details',   label: 'Program Details',    icon: Edit,            permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule-rounds',   label: 'Schedule & Rounds',  icon: CalendarClock,   permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'broadcasts',        label: 'Broadcasts',         icon: Mail,            permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submissions',       label: 'Submissions',        icon: FileText,        permission: PERMISSIONS.VIEW_SUBMISSIONS },
     { id: 'judging',           label: 'Judging',            icon: Gavel,           permission: PERMISSIONS.VIEW_JUDGING },
-    ...(isAutoAssignJudging(activeEvent?.judgingType)
-      ? [{ id: 'judge-category-mapping', label: 'Judge Mapping', icon: Layers, permission: PERMISSIONS.VIEW_JUDGING }]
-      : []),
     { id: 'awards',            label: 'Awards',             icon: Trophy,          permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'certificates',      label: 'Certificates',       icon: Award,           permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'templates',         label: 'Form Builder',       icon: LayoutTemplate,  permission: PERMISSIONS.MANAGE_FORMS },
     { id: 'attendance',        label: 'Attendance',         icon: UserCheck,       permission: PERMISSIONS.MARK_ATTENDANCE },
-    ];
-    return items;
-  }, [activeEvent?.judgingType]);
+  ];
 
 
   const rightNavItems = [

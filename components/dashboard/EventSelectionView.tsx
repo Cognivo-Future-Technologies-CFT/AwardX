@@ -5,7 +5,7 @@ import {
    LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2,
    Rocket, GraduationCap, BookOpen, UserCheck, Palette, Users, UserPlus, Shield
 } from 'lucide-react';
-import { Program, EventType, Organization, Role, TeamMember, JudgingType } from '../../services/models';
+import { Program, EventType, Organization, Role, TeamMember } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
 import { sendTeamInviteEmail } from '../../services/email';
@@ -15,7 +15,6 @@ import { AppDatePicker } from '../ui/AppDateFields';
 import { todayDateString } from '../../lib/utils';
 import { Logo, LogoTitle } from '../Logo';
 import { toast } from 'sonner';
-import { JUDGING_TYPE_OPTIONS, DEFAULT_JUDGING_TYPE } from '../../lib/judgingType';
 interface UserData {
    name: string;
    avatar: string;
@@ -173,12 +172,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    const [events, setEvents] = useState<Program[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedType, setSelectedType] = useState<EventType | null>(null);
-   const [newEvent, setNewEvent] = useState({
-      title: '',
-      category: '',
-      deadline: '',
-      judgingType: DEFAULT_JUDGING_TYPE as JudgingType,
-   });
+   const [newEvent, setNewEvent] = useState({ title: '', category: '', deadline: '' });
    const [isLoading, setIsLoading] = useState(true);
    const [isRefreshing, setIsRefreshing] = useState(false);
    const [isCreating, setIsCreating] = useState(false);
@@ -458,7 +452,6 @@ if (!newEvent.deadline) {
          id: `temp-${Date.now()}`,
          title: eventData.title,
          category: eventData.category,
-         judgingType: eventData.judgingType,
          type: eventType,
          status: 'Draft',
          deadline: eventData.deadline,
@@ -469,17 +462,14 @@ if (!newEvent.deadline) {
       // Add optimistic event immediately
       setEvents(prev => [optimisticEvent, ...prev]);
       setIsModalOpen(false);
-      setNewEvent({ title: '', category: '', deadline: '', judgingType: DEFAULT_JUDGING_TYPE });
+      setNewEvent({ title: '', category: '', deadline: '' });
 
       try {
          // Ensure database is initialized before creating
          await databaseService.initialize();
 
          const created = await databaseService.addProgram({
-            title: eventData.title,
-            category: eventData.category,
-            judgingType: eventData.judgingType,
-            deadline: eventData.deadline,
+            ...eventData,
             type: eventType,
             status: 'Draft',
             paymentConfig: { enabled: false, provider: 'Stripe', currency: 'USD', fee: 0, connected: false }
@@ -1178,28 +1168,6 @@ if (!newEvent.deadline) {
                }`}
          >
             {industry}
-         </button>
-      ))}
-   </div>
-</div>
-<div>
-   <label className="block text-sm font-semibold text-slate-700 mb-3">
-      Judging Type <span className="text-red-500">*</span>
-   </label>
-   <div className="space-y-2">
-      {JUDGING_TYPE_OPTIONS.map((option) => (
-         <button
-            key={option.value}
-            type="button"
-            onClick={() => setNewEvent({ ...newEvent, judgingType: option.value })}
-            className={`w-full rounded-xl border px-4 py-3 text-left transition-[transform,border-color,background-color] duration-150 ease-out active:scale-[0.99] ${
-               newEvent.judgingType === option.value
-                  ? 'border-emerald-500 bg-emerald-50'
-                  : 'border-slate-200 bg-white hover:border-emerald-200'
-            }`}
-         >
-            <p className="text-sm font-semibold text-slate-900">{option.label}</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">{option.description}</p>
          </button>
       ))}
    </div>

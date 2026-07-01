@@ -25,8 +25,6 @@ import { fetchBackendJson } from './backendApi';
 import { Program, Organization, Category, Round, Submission, Judge, JudgeGroup, Role, Log, SocialAccount, ScheduledPost, TeamMember, EventType } from './models';
 import { getTemplateConfig } from './templateRoundConfigs';
 import { normalizeIntegrationSources } from '../lib/programIntegrations';
-import { resolveCategoryIdFromSelectorValue } from '../lib/resolveSubmissionCategory';
-import { isAutoAssignJudging } from '../lib/judgingType';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
 import { isDemoMode } from './demoMode';
 import * as demoDb from './demoDatabase';
@@ -779,7 +777,6 @@ class DatabaseService {
       id: program.id,
       title: program.title,
       category: program.industry_category || 'General',
-      judgingType: program.judging_type === 'auto_assign' ? 'auto_assign' : 'parallel',
       type: (program.event_types?.name || 'Other') as Program['type'],
       status: this.mapStatus(program.status) as 'Active' | 'Draft' | 'Completed',
       deadline: program.deadline ? new Date(program.deadline).toISOString().split('T')[0] : '',
@@ -864,7 +861,6 @@ class DatabaseService {
       title: program.title,
       description: program.description || '',
       industry_category: program.category,
-      judging_type: program.judgingType === 'auto_assign' ? 'auto_assign' : 'parallel',
       deadline: program.deadline || undefined,
       event_type_id: eventTypeId,
     });
@@ -993,7 +989,6 @@ class DatabaseService {
       description: program.description,
       cover_image_url: program.coverImageUrl,
       industry_category: program.category,
-      judging_type: program.judgingType === 'auto_assign' ? 'auto_assign' : 'parallel',
       visibility: program.visibility?.toLowerCase(),
       kyc_enabled: program.kycEnabled ?? false,
       kyc_provider: program.kycProvider || 'didit',
@@ -2773,38 +2768,6 @@ class DatabaseService {
       throw new Error(error?.message || 'Failed to submit form');
     }
 
-    const submissionId = (data as any).id;
-
-    // Resolve Category/Award Selector → submissions.category_id
-    try {
-      const { data: formFields } = await supabase
-        .from('program_form_fields')
-        .select('id, type')
-        .eq('form_id', formId);
-
-      const selectorField = (formFields || []).find((field: any) => field.type === 'award_selector');
-      const selectorValue = selectorField ? formData[selectorField.id] : null;
-
-      if (selectorValue) {
-        const categories = await this.getCategories(form.program_id);
-        const categoryId = resolveCategoryIdFromSelectorValue(categories, String(selectorValue));
-
-        if (categoryId) {
-          await supabase
-            .from('submissions')
-            .update({ category_id: categoryId })
-            .eq('id', submissionId);
-
-          const program = await this.getProgramById(form.program_id);
-          if (program && isAutoAssignJudging(program.judgingType)) {
-            await this.assignCategoryJudgesToSubmission(form.program_id, submissionId, categoryId);
-          }
-        }
-      }
-    } catch (categoryError) {
-      console.warn('[submitFormResponse] Failed to resolve submission category:', categoryError);
-    }
-
     // Backfill applicant identity from profile if needed.
     if (profile?.data && (!applicantName || !applicantEmail)) {
       await supabase
@@ -2826,14 +2789,14 @@ class DatabaseService {
     });
 
     // Auto-enroll submission in the first round of the pipeline
-    const submissionIdForEnrollment = (data as any).id;
+    const submissionId = (data as any).id;
     try {
       await fetchBackendJson<{ ok: boolean }>(
         `/api/execution/programs/${encodeURIComponent(form.program_id)}/enroll-submission`,
         {
           method: 'POST',
           requireAuth: true,
-          body: { submissionId: submissionIdForEnrollment },
+          body: { submissionId },
           errorPrefix: 'Round API',
         },
       );
@@ -2842,100 +2805,6 @@ class DatabaseService {
     }
 
     return data;
-  }
-
-  async assignCategoryJudgesToSubmission(
-    programId: string,
-    submissionId: string,
-    categoryId: string,
-  ): Promise<void> {
-    if (!supabase) throw new Error('Supabase not configured');
-
-    const { data: categoriesData, error: categoriesError } = await supabase
-      .from('categories')
-      .select('id, parent_id')
-      .eq('program_id', programId);
-
-    if (categoriesError) {
-      throw new Error(categoriesError.message || 'Failed to load categories');
-    }
-
-    const categories = categoriesData || [];
-    const parentByChild = new Map<string, string | null>();
-    categories.forEach((category: any) => {
-      parentByChild.set(category.id, category.parent_id || null);
-    });
-
-    const matchingCategoryIds = new Set<string>([categoryId]);
-    let cursor: string | null | undefined = categoryId;
-    while (cursor) {
-      const parentId = parentByChild.get(cursor);
-      if (!parentId || matchingCategoryIds.has(parentId)) break;
-      matchingCategoryIds.add(parentId);
-      cursor = parentId;
-    }
-
-    const { data: judgeAssignments, error: judgeAssignmentsError } = await supabase
-      .from('judge_category_assignments')
-      .select('judge_id, category_id, judges!inner(program_id, status)')
-      .eq('judges.program_id', programId)
-      .in('category_id', Array.from(matchingCategoryIds));
-
-    if (judgeAssignmentsError) {
-      throw new Error(judgeAssignmentsError.message || 'Failed to load category judges');
-    }
-
-    const judgeIds = Array.from(
-      new Set(
-        (judgeAssignments || [])
-          .filter((row: any) => String(row.judges?.status || '').toLowerCase() !== 'declined')
-          .map((row: any) => row.judge_id)
-          .filter(Boolean),
-      ),
-    );
-
-    if (judgeIds.length === 0) return;
-
-    const rows = judgeIds.map((judgeId) => ({
-      submission_id: submissionId,
-      judge_id: judgeId,
-      status: 'pending',
-    }));
-
-    const { error: upsertError } = await supabase
-      .from('submission_judges')
-      .upsert(rows, { onConflict: 'submission_id,judge_id' });
-
-    if (upsertError) {
-      throw new Error(upsertError.message || 'Failed to assign category judges');
-    }
-  }
-
-  async saveJudgeCategoryMapping(
-    programId: string,
-    mapping: Record<string, string[]>,
-  ): Promise<void> {
-    const judges = await this.getJudges(programId);
-    const judgeIds = new Set(judges.map((judge) => judge.id));
-
-    const judgeToCategories = new Map<string, string[]>();
-    judges.forEach((judge) => judgeToCategories.set(judge.id, []));
-
-    Object.entries(mapping).forEach(([categoryId, assignedJudgeIds]) => {
-      assignedJudgeIds.forEach((judgeId) => {
-        if (!judgeIds.has(judgeId)) return;
-        const current = judgeToCategories.get(judgeId) || [];
-        if (!current.includes(categoryId)) {
-          judgeToCategories.set(judgeId, [...current, categoryId]);
-        }
-      });
-    });
-
-    await Promise.all(
-      Array.from(judgeToCategories.entries()).map(([judgeId, categoryIds]) =>
-        this.updateJudgeCategoryAssignments(judgeId, programId, categoryIds),
-      ),
-    );
   }
 
   // Stats

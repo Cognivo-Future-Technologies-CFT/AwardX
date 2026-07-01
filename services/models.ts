@@ -43,13 +43,10 @@ export interface Organization {
   createdAt?: string;
 }
 
-export type JudgingType = 'parallel' | 'auto_assign';
-
 export interface Program {
   id: string;
   title: string;
   category: string; // Industry category (Design, Tech, etc.)
-  judgingType?: JudgingType;
   type: EventType; // The strategic type (Award, Grant, etc.)
   status: 'Active' | 'Draft' | 'Completed';
   deadline: string;
