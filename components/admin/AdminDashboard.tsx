@@ -1,12 +1,39 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ChevronRight } from 'lucide-react';
+import { preRegistrationService } from '../../services/preRegistration';
+import { adminService } from '../../services/adminService';
 
 export const AdminDashboard: React.FC = () => {
+  const dashboardStatsQuery = useQuery({
+    queryKey: ['admin-dashboard-stats'],
+    queryFn: () => adminService.getDashboardStats(),
+    staleTime: 60_000,
+  });
+  const dashboardStats = dashboardStatsQuery.data;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-slate-900 font-display tracking-tight">Admin Dashboard</h1>
       </div>
       
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Total System Users</h3>
+          <p className="text-3xl font-bold text-slate-900">{dashboardStats?.totalUsers ?? '--'}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Active Organizations</h3>
+          <p className="text-3xl font-bold text-slate-900">{dashboardStats?.activeOrganizations ?? '--'}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Platform Revenue</h3>
+          <p className="text-3xl font-bold text-slate-900">
+            {dashboardStats ? `$${dashboardStats.platformRevenue}` : '--'}
+          </p>
+        </div>
+      </div>
 
       <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center">
         <h2 className="text-lg font-bold text-slate-900 mb-2">Welcome to the AwardX Platform Admin</h2>

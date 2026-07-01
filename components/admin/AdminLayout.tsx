@@ -53,37 +53,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
           <div className="flex items-center gap-3 overflow-hidden">
             <Logo size="sm" className="shrink-0" />
-            <AnimatePresence>
-              {isSidebarExpanded && (
-                <motion.div
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: "auto" }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="flex flex-col whitespace-nowrap overflow-hidden"
-                >
-                  <span className="text-[10px] font-bold tracking-widest text-indigo-500 uppercase leading-none mt-0.5">AwardX</span>
-                  <span className="text-sm font-bold text-slate-900 leading-tight tracking-tight">Platform Admin</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'w-32 opacity-100' : 'w-0 opacity-0'}`}>
+              <span className="text-[10px] font-bold tracking-widest text-indigo-500 uppercase leading-none mt-0.5">AwardX</span>
+              <span className="text-sm font-bold text-slate-900 leading-tight tracking-tight">Platform Admin</span>
+            </div>
           </div>
         </div>
 
         <div className="flex-1 py-8 px-4 space-y-2 overflow-y-auto overflow-x-hidden no-scrollbar">
           
-          <div className="mb-2">
-            <AnimatePresence>
-              {isSidebarExpanded && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="px-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 whitespace-nowrap">Management</div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          <div className={`overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'h-6 opacity-100 mb-2' : 'h-0 opacity-0 mb-0'}`}>
+            <div className="px-4 text-[11px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Management</div>
           </div>
 
           <div className="space-y-1.5">
@@ -136,19 +116,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
           <div className={`flex items-center ${!isSidebarExpanded ? 'justify-center' : 'gap-3'} p-3 rounded-2xl bg-indigo-50/50 border border-indigo-100/50 transition-all duration-300`}>
              <ShieldAlert className="w-5 h-5 text-indigo-500 shrink-0" />
-             <AnimatePresence>
-               {isSidebarExpanded && (
-                 <motion.div
-                   initial={{ opacity: 0, width: 0 }}
-                   animate={{ opacity: 1, width: "auto" }}
-                   exit={{ opacity: 0, width: 0 }}
-                   className="flex flex-col min-w-0 overflow-hidden whitespace-nowrap"
-                 >
-                   <span className="text-xs font-bold text-indigo-900 truncate">Super Admin</span>
-                   <span className="text-[10px] text-indigo-500/80 font-medium truncate">Full Access</span>
-                 </motion.div>
-               )}
-             </AnimatePresence>
+             <div className={`flex flex-col min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${isSidebarExpanded ? 'w-24 opacity-100' : 'w-0 opacity-0'}`}>
+               <span className="text-xs font-bold text-indigo-900 truncate">Super Admin</span>
+               <span className="text-[10px] text-indigo-500/80 font-medium truncate">Full Access</span>
+             </div>
           </div>
         </div>
       </aside>
