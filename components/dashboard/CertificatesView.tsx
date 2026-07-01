@@ -51,11 +51,9 @@ interface NamePosition {
   fontFamily: string;
 }
 
-interface CertificateParticipantOverride {
-  submission_id: string;
-  round_label: string | null;
-  rounds_cleared: number | null;
-  total_rounds: number | null;
+interface CertificateRoundLabel {
+  round_id: string;
+  certificate_display_name: string;
   updated_at: string;
 }
 
@@ -143,28 +141,31 @@ function getRoundNarrative(participant: ParticipantCertData, rounds: Round[]): {
   };
 }
 
-function getParticipantRoundLabel(participant: ParticipantCertData, rounds: Round[]): string {
+function getParticipantActiveRound(participant: ParticipantCertData, rounds: Round[]): Round | undefined {
   if (participant.certificateType === 'winner') {
-    const finalRound = rounds[rounds.length - 1];
-    return finalRound?.title || 'Winner';
+    return rounds[rounds.length - 1];
   }
-
   if (participant.certificateType === 'round_advance') {
-    if (participant.eliminatedAtRound) return participant.eliminatedAtRound;
     const completedRounds = rounds.slice(0, Math.min(participant.roundsCleared, rounds.length));
-    const lastCompletedRound = completedRounds[completedRounds.length - 1];
-    return lastCompletedRound?.title || 'Round Advance';
+    return completedRounds[completedRounds.length - 1];
   }
-
-  const firstRound = rounds[0];
-  return firstRound?.title || 'Participation';
+  return rounds[0];
 }
 
-function getCertificateSubtitle(participant: ParticipantCertData, rounds: Round[], roundLabelOverride?: string): string {
+function getCertificateSubtitle(participant: ParticipantCertData, rounds: Round[], roundLabelsMap: Map<string, string>): string {
   if (participant.certificateType === 'winner') return 'OF EXCELLENCE';
   if (participant.certificateType === 'participation') return 'OF PARTICIPATION';
 
-  const roundLabel = roundLabelOverride?.trim() || getParticipantRoundLabel(participant, rounds);
+  const activeRound = getParticipantActiveRound(participant, rounds);
+  let roundLabel = activeRound?.title || 'Round Advance';
+
+  if (activeRound) {
+    const customLabel = roundLabelsMap.get(activeRound.id);
+    if (customLabel?.trim()) {
+      roundLabel = customLabel.trim();
+    }
+  }
+
   return `OF ${roundLabel.toUpperCase()}`;
 }
 
@@ -176,12 +177,10 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const [selectedParticipant, setSelectedParticipant] = useState<ParticipantCertData | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isDelivering, setIsDelivering] = useState(false);
-  const [isSavingOverride, setIsSavingOverride] = useState(false);
   const [showTemplateSetup, setShowTemplateSetup] = useState(false);
-  const [editingRoundFor, setEditingRoundFor] = useState<ParticipantCertData | null>(null);
-  const [roundLabelInput, setRoundLabelInput] = useState('');
-  const [roundsClearedInput, setRoundsClearedInput] = useState('');
-  const [totalRoundsInput, setTotalRoundsInput] = useState('');
+  const [showRoundLabelsModal, setShowRoundLabelsModal] = useState(false);
+  const [savingRoundId, setSavingRoundId] = useState<string | null>(null);
+  const [editingLabelInputs, setEditingLabelInputs] = useState<Record<string, string>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -256,15 +255,15 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     enabled: !!activeEvent?.id,
   });
 
-  const overridesQuery = useQuery({
-    queryKey: ['certificate-overrides', activeEvent?.id],
+  const roundLabelsQuery = useQuery({
+    queryKey: ['certificate-round-labels', activeEvent?.id],
     queryFn: async () => {
-      if (!activeEvent?.id) return [] as CertificateParticipantOverride[];
-      const res = await fetchBackendJson<{ overrides: CertificateParticipantOverride[] }>(
-        `/api/certificates/${activeEvent.id}/overrides`,
+      if (!activeEvent?.id) return [] as CertificateRoundLabel[];
+      const res = await fetchBackendJson<{ labels: CertificateRoundLabel[] }>(
+        `/api/certificates/${activeEvent.id}/certificate-round-labels`,
         { requireAuth: true }
       );
-      return res.overrides || [];
+      return res.labels || [];
     },
     enabled: !!activeEvent?.id,
   });
@@ -277,13 +276,13 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     return map;
   }, [deliveriesQuery.data]);
 
-  const overridesMap = React.useMemo(() => {
-    const map = new Map<string, CertificateParticipantOverride>();
-    for (const row of overridesQuery.data || []) {
-      map.set(row.submission_id, row);
+  const roundLabelsMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of roundLabelsQuery.data || []) {
+      map.set(row.round_id, row.certificate_display_name);
     }
     return map;
-  }, [overridesQuery.data]);
+  }, [roundLabelsQuery.data]);
 
   const certificateData: ParticipantCertData[] = React.useMemo(() => {
     const submissions = submissionsQuery.data || [];
@@ -370,93 +369,53 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     }));
   };
 
-  const getEffectiveParticipant = useCallback((participant: ParticipantCertData): ParticipantCertData => {
-    const override = overridesMap.get(participant.submissionId);
-    if (!override) return participant;
-    return {
-      ...participant,
-      roundsCleared: override.rounds_cleared ?? participant.roundsCleared,
-      totalRounds: override.total_rounds ?? participant.totalRounds,
-    };
-  }, [overridesMap]);
-
-  const getEffectiveRoundLabel = useCallback((participant: ParticipantCertData) => {
-    const override = overridesMap.get(participant.submissionId);
-    if (override?.round_label?.trim()) return override.round_label.trim();
-    return getParticipantRoundLabel(getEffectiveParticipant(participant), roundsQuery.data || []);
-  }, [getEffectiveParticipant, overridesMap, roundsQuery.data]);
-
-  const openRoundLabelEditor = (participant: ParticipantCertData) => {
-    const effectiveParticipant = getEffectiveParticipant(participant);
-    setEditingRoundFor(participant);
-    setRoundLabelInput(getEffectiveRoundLabel(participant));
-    setRoundsClearedInput(String(effectiveParticipant.roundsCleared));
-    setTotalRoundsInput(String(effectiveParticipant.totalRounds));
-  };
-
-  const saveRoundOverride = async () => {
-    if (!editingRoundFor || !activeEvent?.id) return;
-    const parseNonNegative = (value: string): number | null => {
-      const trimmed = value.trim();
-      if (!trimmed) return null;
-      const parsed = Number.parseInt(trimmed, 10);
-      if (!Number.isFinite(parsed) || parsed < 0) return Number.NaN;
-      return parsed;
-    };
-
-    const roundsCleared = parseNonNegative(roundsClearedInput);
-    const totalRounds = parseNonNegative(totalRoundsInput);
-
-    if (Number.isNaN(roundsCleared) || Number.isNaN(totalRounds)) {
-      toast.error('Rounds values must be non-negative integers');
+  const handleSaveRoundLabel = async (roundId: string) => {
+    if (!activeEvent?.id) return;
+    const label = editingLabelInputs[roundId]?.trim();
+    if (!label) {
+      toast.error('Label cannot be empty');
       return;
     }
-    if (roundsCleared !== null && totalRounds !== null && roundsCleared > totalRounds) {
-      toast.error('Cleared rounds cannot be greater than total rounds');
-      return;
-    }
-
-    setIsSavingOverride(true);
+    setSavingRoundId(roundId);
     try {
-      await fetchBackendJson(`/api/certificates/${activeEvent.id}/overrides/${editingRoundFor.submissionId}`, {
+      await fetchBackendJson(`/api/certificates/${activeEvent.id}/certificate-round-labels/${roundId}`, {
         method: 'PUT',
         requireAuth: true,
-        body: {
-          roundLabel: roundLabelInput.trim() || null,
-          roundsCleared,
-          totalRounds,
-        },
+        body: { certificateDisplayName: label },
       });
-      await queryClient.invalidateQueries({ queryKey: ['certificate-overrides', activeEvent.id] });
-      setEditingRoundFor(null);
-      toast.success('Certificate override saved');
+      await queryClient.invalidateQueries({ queryKey: ['certificate-round-labels', activeEvent.id] });
+      toast.success('Certificate round label saved');
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to save override');
+      toast.error(err?.message || 'Failed to save round label');
     } finally {
-      setIsSavingOverride(false);
+      setSavingRoundId(null);
     }
   };
 
-  const resetRoundOverride = async () => {
-    if (!editingRoundFor || !activeEvent?.id) return;
-    setIsSavingOverride(true);
+  const handleResetRoundLabel = async (roundId: string) => {
+    if (!activeEvent?.id) return;
+    setSavingRoundId(roundId);
     try {
-      await fetchBackendJson(`/api/certificates/${activeEvent.id}/overrides/${editingRoundFor.submissionId}`, {
+      await fetchBackendJson(`/api/certificates/${activeEvent.id}/certificate-round-labels/${roundId}`, {
         method: 'DELETE',
         requireAuth: true,
       });
-      await queryClient.invalidateQueries({ queryKey: ['certificate-overrides', activeEvent.id] });
-      setEditingRoundFor(null);
-      toast.success('Reset to schedule defaults');
+      await queryClient.invalidateQueries({ queryKey: ['certificate-round-labels', activeEvent.id] });
+      
+      setEditingLabelInputs(prev => {
+        const next = { ...prev };
+        delete next[roundId];
+        return next;
+      });
+      toast.success('Reset to workflow round name');
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to reset override');
+      toast.error(err?.message || 'Failed to reset round label');
     } finally {
-      setIsSavingOverride(false);
+      setSavingRoundId(null);
     }
   };
 
   const generateCertificateDataUrl = (participant: ParticipantCertData): string => {
-    const effectiveParticipant = getEffectiveParticipant(participant);
     const canvas = canvasRef.current;
     if (!canvas) return '';
     const ctx = canvas.getContext('2d');
@@ -472,11 +431,11 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       ctx.fillStyle = namePosition.color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(effectiveParticipant.applicantName, x, y);
+      ctx.fillText(participant.applicantName, x, y);
     } else {
       canvas.width = 1120;
       canvas.height = 800;
-      drawBuiltinCertificate(ctx, canvas, effectiveParticipant);
+      drawBuiltinCertificate(ctx, canvas, participant);
     }
     return canvas.toDataURL('image/png');
   };
@@ -484,7 +443,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const drawBuiltinCertificate = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, p: ParticipantCertData) => {
     const rounds = roundsQuery.data || [];
     const narrative = getRoundNarrative(p, rounds);
-    const subtitle = getCertificateSubtitle(p, rounds, overridesMap.get(p.submissionId)?.round_label || undefined);
+    const subtitle = getCertificateSubtitle(p, rounds, roundLabelsMap);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = p.certificateType === 'winner' ? '#d97706' : '#6366f1';
@@ -524,20 +483,19 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const handleEmailOne = async (participant: ParticipantCertData) => {
     if (!participant.applicantEmail) { toast.error('No email address for this participant'); return; }
     if (!activeEvent?.id) return;
-    const effectiveParticipant = getEffectiveParticipant(participant);
     setIsSending(true);
     try {
-      const dataUrl = generateCertificateDataUrl(effectiveParticipant);
+      const dataUrl = generateCertificateDataUrl(participant);
       await fetchBackendJson<{ sent: number }>(`/api/certificates/${activeEvent.id}/send`, {
         method: 'POST',
         requireAuth: true,
         body: { recipients: [{
-          email: effectiveParticipant.applicantEmail,
-          name: effectiveParticipant.applicantName,
-          submissionId: effectiveParticipant.submissionId,
-          certificateType: effectiveParticipant.certificateType,
-          roundsCleared: effectiveParticipant.roundsCleared,
-          totalRounds: effectiveParticipant.totalRounds,
+          email: participant.applicantEmail,
+          name: participant.applicantName,
+          submissionId: participant.submissionId,
+          certificateType: participant.certificateType,
+          roundsCleared: participant.roundsCleared,
+          totalRounds: participant.totalRounds,
           certificateDataUrl: dataUrl,
         }] },
       });
@@ -576,15 +534,14 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       for (let i = 0; i < withEmail.length; i += batchSize) {
         const batch = withEmail.slice(i, i + batchSize);
         const recipients = batch.map((p) => {
-          const effectiveParticipant = getEffectiveParticipant(p);
           return {
-            email: effectiveParticipant.applicantEmail!,
-            name: effectiveParticipant.applicantName,
-            submissionId: effectiveParticipant.submissionId,
-            certificateType: effectiveParticipant.certificateType,
-            roundsCleared: effectiveParticipant.roundsCleared,
-            totalRounds: effectiveParticipant.totalRounds,
-            certificateDataUrl: generateCertificateDataUrl(effectiveParticipant),
+            email: p.applicantEmail!,
+            name: p.applicantName,
+            submissionId: p.submissionId,
+            certificateType: p.certificateType,
+            roundsCleared: p.roundsCleared,
+            totalRounds: p.totalRounds,
+            certificateDataUrl: generateCertificateDataUrl(p),
           };
         });
 
@@ -637,7 +594,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     return <div className="flex items-center justify-center h-64 text-slate-500">Select a program to generate certificates.</div>;
   }
 
-  const isLoading = roundsQuery.isLoading || submissionsQuery.isLoading || roundSubmissionsQuery.isLoading || overridesQuery.isLoading;
+  const isLoading = roundsQuery.isLoading || submissionsQuery.isLoading || roundSubmissionsQuery.isLoading || roundLabelsQuery.isLoading;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -663,6 +620,21 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
             title="Refresh participant data"
           >
             Refresh
+          </button>
+          <button
+            onClick={() => {
+              const initial: Record<string, string> = {};
+              for (const round of roundsQuery.data || []) {
+                const existing = roundLabelsMap.get(round.id);
+                if (existing) initial[round.id] = existing;
+              }
+              setEditingLabelInputs(initial);
+              setShowRoundLabelsModal(true);
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
+            Manage Round Labels
           </button>
           <button
             onClick={() => setShowTemplateSetup(true)}
@@ -719,8 +691,15 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
         <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
           {filtered.map((p) => {
             const delivery = deliveredMap.get(p.submissionId);
-            const effectiveParticipant = getEffectiveParticipant(p);
-            const roundLabel = getEffectiveRoundLabel(p);
+            const activeRound = getParticipantActiveRound(p, roundsQuery.data || []);
+            let roundLabel = activeRound?.title || 'Round Advance';
+            if (activeRound) {
+              const custom = roundLabelsMap.get(activeRound.id);
+              if (custom?.trim()) roundLabel = custom.trim();
+            }
+            if (p.certificateType === 'winner') roundLabel = 'Winner';
+            if (p.certificateType === 'participation') roundLabel = 'Participation';
+
             return (
             <div
               key={p.submissionId}
@@ -742,17 +721,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
                     <CheckCircle className="w-3.5 h-3.5" /> Delivered
                   </span>
                 )}
-                <span className="text-xs text-slate-500">{effectiveParticipant.roundsCleared}/{effectiveParticipant.totalRounds} rounds</span>
+                <span className="text-xs text-slate-500">{p.roundsCleared}/{p.totalRounds} rounds</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-xs font-semibold border max-w-[260px] inline-flex items-center gap-1 truncate cursor-pointer ${getCertificateColor(p.certificateType)}`}
+                  className={`px-2 py-0.5 rounded-full text-xs font-semibold border max-w-[260px] inline-flex items-center gap-1 truncate ${getCertificateColor(p.certificateType)}`}
                   title={roundLabel}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openRoundLabelEditor(p);
-                  }}
                 >
                   <span className="truncate">{roundLabel}</span>
-                  <Pencil className="w-3 h-3 opacity-70 shrink-0" />
                 </span>
               </div>
             </div>
@@ -764,7 +738,6 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       {/* Certificate Preview Modal */}
       <Modal isOpen={!!selectedParticipant} onClose={() => setSelectedParticipant(null)} title="Certificate Preview">
         {selectedParticipant && (() => {
-          const effectiveSelected = getEffectiveParticipant(selectedParticipant);
           const delivery = deliveredMap.get(selectedParticipant.submissionId);
           const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
           const verifyUrl = delivery ? `${siteUrl}/certificates/verify/${delivery.verificationCode}` : null;
@@ -772,12 +745,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           <div className="space-y-4">
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <CertificatePreviewCanvas
-                participant={effectiveSelected}
+                participant={selectedParticipant}
                 templateImage={templateImage}
                 namePosition={namePosition}
                 programTitle={activeEvent?.title || ''}
                 rounds={roundsQuery.data || []}
-                roundLabelOverride={overridesMap.get(selectedParticipant.submissionId)?.round_label || undefined}
+                roundLabelsMap={roundLabelsMap}
               />
             </div>
             <div className="text-sm text-slate-600">
@@ -823,57 +796,74 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       </Modal>
 
       <Modal
-        isOpen={!!editingRoundFor}
-        onClose={() => setEditingRoundFor(null)}
-        title={editingRoundFor ? `Edit Certificate Values - ${editingRoundFor.applicantName}` : 'Edit Certificate Values'}
+        isOpen={showRoundLabelsModal}
+        onClose={() => setShowRoundLabelsModal(false)}
+        title="Manage Certificate Round Labels"
       >
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">Set custom round label and rounds count for this participant. Leave fields empty to use schedule defaults.</p>
-          <input
-            value={roundLabelInput}
-            onChange={(e) => setRoundLabelInput(e.target.value)}
-            placeholder="e.g. Public View Round"
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-            disabled={isSavingOverride}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Rounds Cleared</label>
-              <input
-                type="number"
-                min={0}
-                value={roundsClearedInput}
-                onChange={(e) => setRoundsClearedInput(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                disabled={isSavingOverride}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 block mb-1">Total Rounds</label>
-              <input
-                type="number"
-                min={0}
-                value={totalRoundsInput}
-                onChange={(e) => setTotalRoundsInput(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                disabled={isSavingOverride}
-              />
-            </div>
+          <p className="text-sm text-slate-600 mb-4">
+            Customize how round names appear on certificates. This terminology will only be used inside the Certificates module, leaving your internal Schedule workflow unchanged.
+          </p>
+          <div className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-100 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 font-semibold text-slate-700">Workflow Round</th>
+                  <th className="px-4 py-3 font-semibold text-slate-700">Certificate Display Name</th>
+                  <th className="px-4 py-3 font-semibold text-slate-700 w-24">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {(roundsQuery.data || []).map(round => {
+                  const isSaving = savingRoundId === round.id;
+                  const currentInput = editingLabelInputs[round.id] ?? round.title;
+                  const hasOverride = roundLabelsMap.has(round.id);
+                  const isModified = currentInput.trim() !== (roundLabelsMap.get(round.id) || round.title);
+                  
+                  return (
+                    <tr key={round.id} className="bg-white">
+                      <td className="px-4 py-3 font-medium text-slate-900">{round.title}</td>
+                      <td className="px-4 py-3">
+                        <input
+                          type="text"
+                          value={currentInput}
+                          onChange={(e) => setEditingLabelInputs(prev => ({ ...prev, [round.id]: e.target.value }))}
+                          placeholder={round.title}
+                          className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20"
+                          disabled={isSaving}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        {isModified ? (
+                          <button
+                            onClick={() => handleSaveRoundLabel(round.id)}
+                            disabled={isSaving}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                        ) : hasOverride ? (
+                          <button
+                            onClick={() => handleResetRoundLabel(round.id)}
+                            disabled={isSaving}
+                            className="text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                          >
+                            Reset
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex justify-end pt-2">
             <button
-              onClick={resetRoundOverride}
-              disabled={isSavingOverride}
-              className="flex-1 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              onClick={() => setShowRoundLabelsModal(false)}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
             >
-              Reset
-            </button>
-            <button
-              onClick={saveRoundOverride}
-              disabled={isSavingOverride}
-              className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
-            >
-              {isSavingOverride ? 'Saving...' : 'Save'}
+              Done
             </button>
           </div>
         </div>
@@ -997,8 +987,8 @@ const CertificatePreviewCanvas: React.FC<{
   namePosition: NamePosition;
   programTitle: string;
   rounds: Round[];
-  roundLabelOverride?: string;
-}> = ({ participant, templateImage, namePosition, programTitle, rounds, roundLabelOverride }) => {
+  roundLabelsMap: Map<string, string>;
+}> = ({ participant, templateImage, namePosition, programTitle, rounds, roundLabelsMap }) => {
   const ref = useRef<HTMLCanvasElement>(null);
 
   React.useEffect(() => {
@@ -1022,7 +1012,7 @@ const CertificatePreviewCanvas: React.FC<{
       ctx.fillText(participant.applicantName, x, y);
     } else {
       const narrative = getRoundNarrative(participant, rounds);
-      const subtitle = getCertificateSubtitle(participant, rounds, roundLabelOverride);
+      const subtitle = getCertificateSubtitle(participant, rounds, roundLabelsMap);
       canvas.width = 560;
       canvas.height = 400;
       const s = 0.5;
@@ -1048,7 +1038,7 @@ const CertificatePreviewCanvas: React.FC<{
       ctx.font = '10px Georgia, serif'; ctx.fillStyle = '#94a3b8';
       ctx.fillText(`Issued: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, canvas.width / 2, 340);
     }
-  }, [participant, templateImage, namePosition, programTitle, rounds, roundLabelOverride]);
+  }, [participant, templateImage, namePosition, programTitle, rounds, roundLabelsMap]);
 
   return <canvas ref={ref} className="w-full" />;
 };

@@ -4,9 +4,9 @@
  * - POST /:programId/send — email certificates, record delivery with verification codes
  * - GET /verify/:code — public verification page (renders certificate on demand)
  * - GET /:programId/deliveries — list delivery statuses for a program
- * - GET /:programId/overrides — list participant override values for certificates
- * - PUT /:programId/overrides/:submissionId — upsert participant override values
- * - DELETE /:programId/overrides/:submissionId — remove participant override values
+ * - GET /:programId/certificate-round-labels — list global certificate display labels for rounds
+ * - PUT /:programId/certificate-round-labels/:roundId — upsert a global certificate display label for a round
+ * - DELETE /:programId/certificate-round-labels/:roundId — remove a global certificate display label
  */
 
 import { Router, Request, Response } from 'express';
@@ -133,85 +133,66 @@ router.get('/:programId/deliveries', requireAuth, requireProgramAccess('programI
 });
 
 /**
- * GET /:programId/overrides
- * Returns participant-level certificate overrides for round label and round counts.
+ * GET /:programId/certificate-round-labels
+ * Returns global certificate display labels for rounds.
  */
-router.get('/:programId/overrides', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
+router.get('/:programId/certificate-round-labels', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
 	const { programId } = req.params;
 	const supabase = getSupabaseAdmin();
 
 	const { data, error } = await supabase
-		.from('certificate_participant_overrides')
-		.select('submission_id, round_label, rounds_cleared, total_rounds, updated_at')
-		.eq('program_id', programId)
-		.order('updated_at', { ascending: false });
+		.from('certificate_round_display_labels')
+		.select('round_id, certificate_display_name, updated_at')
+		.eq('program_id', programId);
 
 	if (error) return res.status(500).json({ error: error.message });
-	return res.json({ overrides: data || [] });
+	return res.json({ labels: data || [] });
 });
 
 /**
- * PUT /:programId/overrides/:submissionId
- * Body: { roundLabel?: string, roundsCleared?: number, totalRounds?: number }
+ * PUT /:programId/certificate-round-labels/:roundId
+ * Body: { certificateDisplayName: string }
  */
-router.put('/:programId/overrides/:submissionId', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
-	const { programId, submissionId } = req.params;
+router.put('/:programId/certificate-round-labels/:roundId', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
+	const { programId, roundId } = req.params;
 	const supabase = getSupabaseAdmin();
 
-	const roundLabel = typeof req.body?.roundLabel === 'string' ? req.body.roundLabel.trim() : null;
-	const roundsClearedRaw = req.body?.roundsCleared;
-	type NumericLike = number | string | null | undefined;
-	const toNullableInt = (value: NumericLike): number | null => {
-		if (value === null || value === undefined || value === '') return null;
-		const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
-		if (!Number.isFinite(parsed) || parsed < 0) return null;
-		return Math.floor(parsed);
-	};
+	const certificateDisplayName = typeof req.body?.certificateDisplayName === 'string' ? req.body.certificateDisplayName.trim() : null;
 
-	const roundsCleared = toNullableInt(roundsClearedRaw);
-	const totalRounds = toNullableInt(req.body?.totalRounds);
-
-	if (!submissionId) return res.status(400).json({ error: 'submissionId is required' });
-	if (roundsClearedRaw !== undefined && roundsCleared === null) return res.status(400).json({ error: 'roundsCleared must be a non-negative integer' });
-	if (req.body?.totalRounds !== undefined && totalRounds === null) return res.status(400).json({ error: 'totalRounds must be a non-negative integer' });
-	if (roundsCleared !== null && totalRounds !== null && roundsCleared > totalRounds) {
-		return res.status(400).json({ error: 'roundsCleared cannot be greater than totalRounds' });
-	}
+	if (!roundId) return res.status(400).json({ error: 'roundId is required' });
+	if (!certificateDisplayName) return res.status(400).json({ error: 'certificateDisplayName is required' });
 
 	const payload = {
 		program_id: programId,
-		submission_id: submissionId,
-		round_label: roundLabel && roundLabel.length ? roundLabel : null,
-		rounds_cleared: roundsCleared,
-		total_rounds: totalRounds,
-		updated_by: req.user?.id || null,
+		round_id: roundId,
+		certificate_display_name: certificateDisplayName,
 	};
 
 	const { data, error } = await supabase
-		.from('certificate_participant_overrides')
-		.upsert(payload, { onConflict: 'program_id,submission_id' })
-		.select('submission_id, round_label, rounds_cleared, total_rounds, updated_at')
+		.from('certificate_round_display_labels')
+		.upsert(payload, { onConflict: 'program_id,round_id' })
+		.select('round_id, certificate_display_name, updated_at')
 		.single();
 
 	if (error) return res.status(500).json({ error: error.message });
-	return res.json({ override: data });
+	return res.json({ label: data });
 });
 
 /**
- * DELETE /:programId/overrides/:submissionId
- * Removes participant override and falls back to schedule-derived values.
+ * DELETE /:programId/certificate-round-labels/:roundId
+ * Removes the global certificate display label for a round.
  */
-router.delete('/:programId/overrides/:submissionId', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
-	const { programId, submissionId } = req.params;
+router.delete('/:programId/certificate-round-labels/:roundId', requireAuth, requireProgramAccess('programId'), async (req: AuthenticatedRequest, res) => {
+	const { programId, roundId } = req.params;
 	const supabase = getSupabaseAdmin();
 
-	if (!submissionId) return res.status(400).json({ error: 'submissionId is required' });
+	if (!roundId) return res.status(400).json({ error: 'roundId is required' });
 
 	const { error } = await supabase
-		.from('certificate_participant_overrides')
+		.from('certificate_round_display_labels')
 		.delete()
 		.eq('program_id', programId)
-		.eq('submission_id', submissionId);
+		.eq('round_id', roundId);
 
 	if (error) return res.status(500).json({ error: error.message });
 	return res.json({ ok: true });
@@ -241,32 +222,36 @@ router.get('/verify/:code', async (req: Request, res: Response) => {
 		.eq('id', data.program_id)
 		.maybeSingle();
 
-	// Get override round label
-	const { data: override } = await supabase
-		.from('certificate_participant_overrides')
-		.select('round_label')
-		.eq('submission_id', data.submission_id)
-		.maybeSingle();
+	let roundTitle = null;
 
-	let roundTitle = override?.round_label?.trim();
-	if (!roundTitle) {
-		const { data: rounds } = await supabase
-			.from('rounds')
-			.select('title')
-			.eq('program_id', data.program_id)
-			.order('sort_order', { ascending: true });
-			
-		if (rounds && rounds.length > 0) {
-			if (data.certificate_type === 'winner') {
-				roundTitle = rounds[rounds.length - 1].title;
-			} else if (data.certificate_type === 'round_advance') {
-				const clearedCount = Math.min(data.rounds_cleared, rounds.length);
-				if (clearedCount > 0) {
-					roundTitle = rounds[clearedCount - 1].title;
-				}
-			} else {
-				roundTitle = rounds[0].title;
+	const { data: rounds } = await supabase
+		.from('rounds')
+		.select('id, title')
+		.eq('program_id', data.program_id)
+		.order('sort_order', { ascending: true });
+		
+	if (rounds && rounds.length > 0) {
+		let activeRound = null;
+		if (data.certificate_type === 'winner') {
+			activeRound = rounds[rounds.length - 1];
+		} else if (data.certificate_type === 'round_advance') {
+			const clearedCount = Math.min(data.rounds_cleared, rounds.length);
+			if (clearedCount > 0) {
+				activeRound = rounds[clearedCount - 1];
 			}
+		} else {
+			activeRound = rounds[0];
+		}
+
+		if (activeRound) {
+			const { data: globalLabel } = await supabase
+				.from('certificate_round_display_labels')
+				.select('certificate_display_name')
+				.eq('program_id', data.program_id)
+				.eq('round_id', activeRound.id)
+				.maybeSingle();
+
+			roundTitle = globalLabel?.certificate_display_name || activeRound.title;
 		}
 	}
 
