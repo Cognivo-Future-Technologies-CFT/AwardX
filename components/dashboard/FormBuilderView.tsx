@@ -9,6 +9,7 @@ import { Save, CheckCircle2, XCircle, X, Link2, Copy, Check, Layout, Settings, A
 import { FloatingPanelToggle } from './formBuilder/FloatingPanelToggle';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { isAutoAssignJudging, getCategorySelectorLabels } from '../../lib/judgingType';
 
 interface FormBuilderViewProps {
   activeEvent: Program | null;
@@ -38,14 +39,17 @@ const hasAwardSelectorField = (fields: FormField[]) =>
 const syncAwardSelectorOptions = (
   fields: FormField[],
   awardOptions: string[],
+  isAutoAssign: boolean,
 ): FormField[] => {
+  const labels = getCategorySelectorLabels(isAutoAssign);
   const options = awardOptions.length > 0 ? awardOptions : ['General'];
   return fields.map((field) =>
     field.type === 'award_selector'
       ? {
           ...field,
-          label: field.label || 'Award Selection',
-          placeholder: field.placeholder || 'Select award category...',
+          label: field.label || labels.defaultLabel,
+          placeholder: field.placeholder || labels.defaultPlaceholder,
+          required: isAutoAssign ? true : field.required,
           options,
         }
       : field,
@@ -82,6 +86,8 @@ const mapFormFieldToDbPayload = (f: FormField, idx: number) => ({
 
 export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent }) => {
   const queryClient = useQueryClient();
+  const isAutoAssign = isAutoAssignJudging(activeEvent?.judgingType);
+  const selectorLabels = getCategorySelectorLabels(isAutoAssign);
   const [savedForms, setSavedForms] = useState<SavedForm[]>([]);
   const [currentForm, setCurrentForm] = useState<FormField[]>([]);
   const [currentPages, setCurrentPages] = useState<FormPage[]>([]);
@@ -212,7 +218,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const persistExistingForm = async (fields: FormField[], pages: FormPage[], theme: FormTheme) => {
     if (!selectedFormId) return;
 
-    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
+    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions, isAutoAssign);
     setCurrentForm(normalizedFields);
     setCurrentPages(pages);
     setCurrentTheme(theme);
@@ -239,7 +245,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     const targetForm = savedForms.find((form) => form.id === selectedFormId);
     if (!targetForm) return;
 
-    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
+    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions, isAutoAssign);
     setSaveMessage(null);
     try {
       await db.updateForm(selectedFormId, { pages, theme, is_active: !targetForm.isActive });
@@ -267,12 +273,20 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     theme: FormTheme,
     intent: PendingFormSave['intent'],
   ) => {
-    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
+    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions, isAutoAssign);
     setCurrentForm(normalizedFields);
     setCurrentPages(pages);
     setCurrentTheme(theme);
 
     if (!hasAwardSelectorField(normalizedFields)) {
+      if (isAutoAssign) {
+        setSaveMessage({
+          type: 'error',
+          text: selectorLabels.missingFieldMessage,
+        });
+        setTimeout(() => setSaveMessage(null), 6000);
+        return;
+      }
       setPendingSave({ fields: normalizedFields, pages, theme, intent });
       setAwardSelectorWarningOpen(true);
       return;
@@ -338,7 +352,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       });
 
       await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
-      const normalizedFields = syncAwardSelectorOptions(currentForm, awardOptions);
+      const normalizedFields = syncAwardSelectorOptions(currentForm, awardOptions, isAutoAssign);
       await db.replaceFormFields((newForm as any).id, normalizedFields.map(mapFormFieldToDbPayload));
 
       setFormName('');
@@ -356,7 +370,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   };
 
   const handleLoadForm = (form: SavedForm) => {
-    const normalizedFields = syncAwardSelectorOptions(form.fields, awardOptions);
+    const normalizedFields = syncAwardSelectorOptions(form.fields, awardOptions, isAutoAssign);
     setCurrentForm(normalizedFields);
     setCurrentPages(form.pages || []);
     setCurrentTheme(form.theme);
@@ -491,6 +505,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               onElementsPanelOpenChange={setElementsPanelOpen}
               onPropertiesPanelOpenChange={setPropertiesPanelOpen}
               awardOptions={awardOptions}
+              isAutoAssignJudging={isAutoAssign}
             />
           ) : null}
         </div>
@@ -532,17 +547,14 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
           setAwardSelectorWarningOpen(false);
           setPendingSave(null);
         }}
-        title="No award selector"
+        title={selectorLabels.missingFieldTitle}
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
             <div className="space-y-1 text-sm">
-              <p className="font-semibold">Applicants won&apos;t be able to choose an award category.</p>
-              <p className="text-amber-900/80">
-                This form does not include an Award Selector field. Submissions may be harder to
-                route to the right category unless you assign awards manually later.
-              </p>
+              <p className="font-semibold">Applicants won&apos;t be able to choose a category.</p>
+              <p className="text-amber-900/80">{selectorLabels.missingFieldMessage}</p>
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-2">
