@@ -3,6 +3,7 @@ import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { encryptValue, decryptValue } from '../utils/crypto.js';
 import { logAuditAction } from '../utils/audit.js';
+import { Resend } from 'resend';
 
 const router = Router();
 
@@ -164,6 +165,32 @@ router.put('/users/:userId/grant-super-admin', async (req: AuthenticatedRequest,
     if (updateError) throw updateError;
     
     await logAuditAction(actorId, `Granted Super Admin Access to user ${userId}`, 'SUPER_ADMIN', 'USER', userId, 'Action: Grant');
+
+    // Fetch the user's email to notify them
+    const { data: emailsData } = await supabase.rpc('get_user_emails', { user_ids: [userId] });
+    const userEmail = emailsData?.[0]?.email;
+
+    if (userEmail && process.env.RESEND_API_KEY && process.env.RESEND_FROM) {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: process.env.RESEND_FROM,
+        to: userEmail,
+        subject: 'Super Admin Access Granted - AwardX',
+        html: `
+          <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #4f46e5;">Super Admin Access Granted</h2>
+            <p>Hello,</p>
+            <p>You have been granted <strong>Super Admin</strong> privileges on AwardX.</p>
+            <p>You now have full access to manage the entire platform, including organizations, billing, programs, API keys, and system settings.</p>
+            <p>Please use these privileges responsibly.</p>
+            <div style="margin: 30px 0;">
+              <a href="${process.env.VITE_SITE_URL}/admin" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Access Admin Dashboard</a>
+            </div>
+            <p>Best regards,<br/>The AwardX System</p>
+          </div>
+        `
+      }).catch(err => console.error('Failed to send super admin grant email:', err));
+    }
 
     res.json({ success: true });
   } catch (err: any) {
