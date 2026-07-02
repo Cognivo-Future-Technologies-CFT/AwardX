@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
 
     const { data: paymentConfig, error: paymentConfigError } = await supabase
       .from('program_payment_configs')
-      .select('enabled, fee_amount, currency, provider')
+      .select('enabled, fee_amount, currency, provider, public_key, secret_key_encrypted')
       .eq('program_id', effectiveProgramId)
       .maybeSingle();
 
@@ -110,8 +110,8 @@ export default async function handler(req: any, res: any) {
       : '/dashboard?payment=cancelled';
 
     if (provider === 'razorpay') {
-      const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
-      const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
+      const razorpayKeyId = paymentConfig.public_key || process.env.RAZORPAY_KEY_ID || '';
+      const razorpayKeySecret = paymentConfig.secret_key_encrypted || process.env.RAZORPAY_KEY_SECRET || '';
       if (!razorpayKeyId || !razorpayKeySecret) {
         res.status(500).json({ error: 'RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET not configured' });
         return;

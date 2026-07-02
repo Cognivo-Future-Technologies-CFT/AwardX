@@ -15,33 +15,15 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const razorpaySecret = process.env.RAZORPAY_KEY_SECRET || '';
-  if (!razorpaySecret) {
-    res.status(500).json({ error: 'RAZORPAY_KEY_SECRET not configured' });
-    return;
-  }
-
   const { submissionId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
 
   try {
-    const signaturePayload = `${razorpayOrderId}|${razorpayPaymentId}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', razorpaySecret)
-      .update(signaturePayload)
-      .digest('hex');
-
-    if (expectedSignature !== razorpaySignature) {
-      logWarn('payments.razorpay_verify.signature_mismatch', { submissionId, razorpayOrderId });
-      res.status(400).json({ error: 'Invalid payment signature' });
-      return;
-    }
-
     const supabase = createSupabaseAdmin();
 
-    // Verify that the submission's stored payment_id matches the Razorpay order
+    // Verify that the submission exists and retrieve its program_id
     const { data: submission, error: submissionError } = await supabase
       .from('submissions')
-      .select('id, payment_id')
+      .select('id, payment_id, program_id')
       .eq('id', submissionId)
       .maybeSingle();
 
@@ -58,6 +40,31 @@ export default async function handler(req: any, res: any) {
         received: razorpayOrderId,
       });
       res.status(400).json({ error: 'Razorpay order ID does not match the submission' });
+      return;
+    }
+
+    // Resolve the program's specific Razorpay config
+    const { data: paymentConfig } = await supabase
+      .from('program_payment_configs')
+      .select('secret_key_encrypted')
+      .eq('program_id', submission.program_id)
+      .maybeSingle();
+
+    const razorpaySecret = paymentConfig?.secret_key_encrypted || process.env.RAZORPAY_KEY_SECRET || '';
+    if (!razorpaySecret) {
+      res.status(500).json({ error: 'RAZORPAY_KEY_SECRET not configured' });
+      return;
+    }
+
+    const signaturePayload = `${razorpayOrderId}|${razorpayPaymentId}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', razorpaySecret)
+      .update(signaturePayload)
+      .digest('hex');
+
+    if (expectedSignature !== razorpaySignature) {
+      logWarn('payments.razorpay_verify.signature_mismatch', { submissionId, razorpayOrderId });
+      res.status(400).json({ error: 'Invalid payment signature' });
       return;
     }
 
