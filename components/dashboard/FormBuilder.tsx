@@ -29,6 +29,9 @@ export interface FormField {
     min?: number;
     max?: number;
     pattern?: string;
+    allowedExtensions?: string;
+    maxFileSize?: number;
+    maxFiles?: number;
   };
 }
 
@@ -872,6 +875,55 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                                 ? 'Category options are synced from program categories. This field is required for Auto Assign Judging.'
                                 : 'Award options are synced from program award categories. Toggle REQ/OPT to make this field required or optional.'}
                             </p>
+                          </div>
+                        )}
+                        {field.type === 'file' && (
+                          <div className="space-y-3 pt-2 border-t border-slate-100">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">File Configuration</span>
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Allowed Extensions</label>
+                              <input
+                                value={field.validation?.allowedExtensions || ''}
+                                onChange={e => updateField(field.id, {
+                                  validation: { ...field.validation, allowedExtensions: e.target.value }
+                                })}
+                                className="w-full p-2 border border-slate-200 rounded-lg text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                placeholder=".pdf, .doc, .docx, .zip"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Max File Size (MB)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={field.validation?.maxFileSize || ''}
+                                onChange={e => updateField(field.id, {
+                                  validation: { ...field.validation, maxFileSize: e.target.value ? parseInt(e.target.value, 10) : undefined }
+                                })}
+                                className="w-full p-2 border border-slate-200 rounded-lg text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                placeholder="20"
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {field.type === 'image' && (
+                          <div className="space-y-3 pt-2 border-t border-slate-100">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Image Configuration</span>
+                            <div>
+                              <label className="text-xs font-medium text-slate-600 block mb-1">Max Image Size (MB)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={field.validation?.maxFileSize || ''}
+                                onChange={e => updateField(field.id, {
+                                  validation: { ...field.validation, maxFileSize: e.target.value ? parseInt(e.target.value, 10) : undefined }
+                                })}
+                                className="w-full p-2 border border-slate-200 rounded-lg text-xs text-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                                placeholder="10"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>

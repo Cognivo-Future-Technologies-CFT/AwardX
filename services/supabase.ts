@@ -2753,24 +2753,35 @@ export const storage = {
     return { url: null, path: null, bucket, error };
   },
 
-  uploadSubmissionFile: async (file: File, submissionId: string) => {
-    if (!supabase) {
-      return { path: null, bucket: null, error: { message: 'Supabase is not configured.' } };
-    }
+  uploadSubmissionFile: async (file: File, submissionId: string, formId?: string, fieldId?: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('submissionId', submissionId);
+      if (formId) formData.append('formId', formId);
+      if (fieldId) formData.append('fieldId', fieldId);
 
-    const bucket = import.meta.env.VITE_STORAGE_BUCKET_SUBMISSIONS || 'media';
-    const fileExt = file.name.split('.').pop();
-    const fileName = `submissions/${submissionId}/${Date.now()}-${file.name}`;
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file, {
-        contentType: file.type || undefined,
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const token = await supabase?.auth.getSession().then((res) => res.data.session?.access_token);
+      
+      const response = await fetch(`${API_URL}/api/uploads/submission-file`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: formData,
       });
 
-    if (data) {
-      return { path: data.path, bucket, error: null };
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      return { path: result.path, bucket: result.bucket, error: null };
+    } catch (err: any) {
+      console.error('Upload Error:', err);
+      return { path: null, bucket: null, error: err };
     }
-    return { path: null, bucket, error };
   },
 
   uploadProgramPageAsset: async (file: File, programId: string, sectionType?: string, fieldKey?: string) => {

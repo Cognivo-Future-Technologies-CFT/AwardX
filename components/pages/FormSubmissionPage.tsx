@@ -1001,26 +1001,48 @@ case 'award_selector': {
       case 'file': {
         const fileState: { name?: string; url?: string; uploading?: boolean; error?: string } =
           typeof value === 'object' && value !== null ? value : {};
+          
+        const maxMB = field.validation?.maxFileSize || 20;
+        const allowedExts = field.validation?.allowedExtensions || '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip';
+        const displayExts = allowedExts.split(',').map(e => e.trim().replace('.', '').toUpperCase()).join(', ');
+
         return (
           <div className="relative space-y-3">
             <input
               type="file"
               id={`file-${field.id}`}
               className="sr-only"
+              accept={allowedExts}
               required={field.required && !fileState.url}
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                handleInputChange(field.id, { name: file.name, uploading: true });
+
+                // Client-side validation
+                if (file.size > maxMB * 1024 * 1024) {
+                  toast.error(`File exceeds maximum size of ${maxMB}MB.`);
+                  handleInputChange(field.id, { error: `File exceeds maximum size of ${maxMB}MB.` });
+                  return;
+                }
+                
+                const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+                const allowedList = allowedExts.split(',').map(ext => ext.trim().toLowerCase());
+                if (!allowedList.some(ext => file.name.toLowerCase().endsWith(ext))) {
+                  toast.error(`Invalid file type. Only ${displayExts} are allowed.`);
+                  handleInputChange(field.id, { error: `Invalid file type. Only ${displayExts} are allowed.` });
+                  return;
+                }
+
+                handleInputChange(field.id, { name: file.name, uploading: true, error: undefined });
                 const tempId = `temp-${Date.now()}`;
-                const { path, bucket, error } = await storage.uploadSubmissionFile(file, tempId);
+                const { path, bucket, error } = await storage.uploadSubmissionFile(file, tempId, formId, field.id);
                 if (error || !path) {
                   handleInputChange(field.id, { error: (error as any)?.message || 'Upload failed' });
                   toast.error('File upload failed: ' + ((error as any)?.message || 'Unknown error'));
                   return;
                 }
                 const { data: urlData } = (supabase as any).storage.from(bucket || 'media').getPublicUrl(path);
-                handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path });
+                handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path, error: undefined });
               }}
             />
             {!fileState.url && !fileState.uploading && (
@@ -1036,7 +1058,8 @@ case 'award_selector': {
                     {field.placeholder || 'Upload Supporting Files'}
                   </p>
                   <p className="text-sm text-slate-500 mt-1">Drop files or click to upload</p>
-                  <p className="text-xs text-slate-400 mt-2">SVG, PNG, JPG, PDF or GIF (max 10 MB)</p>
+                  <p className="text-xs text-slate-400 mt-2">Accepted formats: {displayExts}</p>
+                  <p className="text-xs text-slate-400 mt-1">Maximum size: {maxMB} MB</p>
                 </div>
                 {fileState.error && (
                   <p className="text-xs text-red-500">{fileState.error}</p>
@@ -1100,26 +1123,42 @@ case 'award_selector': {
           error?: string;
         } = typeof value === 'object' && value !== null ? value : {};
 
+        const maxMB = field.validation?.maxFileSize || 10;
+        const displayExts = 'JPG, JPEG, PNG, WEBP, GIF, SVG';
+
         return (
           <div className="relative space-y-3">
             <input
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,.gif,.svg,image/*"
               id={`image-${field.id}`}
               className="sr-only"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
 
+                if (!file.type.startsWith('image/')) {
+                  toast.error(`Invalid file type. Only ${displayExts} are allowed.`);
+                  handleInputChange(field.id, { error: `Invalid file type. Only ${displayExts} are allowed.` });
+                  return;
+                }
+
+                if (file.size > maxMB * 1024 * 1024) {
+                  toast.error(`This file exceeds the maximum upload size of ${maxMB} MB.`);
+                  handleInputChange(field.id, { error: `This file exceeds the maximum upload size of ${maxMB} MB.` });
+                  return;
+                }
+
                 handleInputChange(field.id, {
                   name: file.name,
                   uploading: true,
+                  error: undefined,
                 });
 
                 const tempId = `temp-${Date.now()}`;
 
                 const { path, bucket, error } =
-                  await storage.uploadSubmissionFile(file, tempId);
+                  await storage.uploadSubmissionFile(file, tempId, formId, field.id);
 
                 if (error || !path) {
                   handleInputChange(field.id, {
@@ -1142,6 +1181,7 @@ case 'award_selector': {
                 handleInputChange(field.id, {
                   name: file.name,
                   url: urlData?.publicUrl || path,
+                  error: undefined,
                 });
               }}
             />
@@ -1155,8 +1195,12 @@ case 'award_selector': {
                   <ImageIcon className="w-7 h-7 text-emerald-600" />
                 </div>
                 <div className="text-center">
-                  <p className="text-base font-semibold text-slate-800">Upload image, or drag and drop</p>
-                  <p className="text-xs text-slate-400 mt-2">PNG, JPG, JPEG, SVG, WEBP</p>
+                  <p className="text-base font-semibold text-slate-800">
+                    {field.placeholder || 'Upload an image'}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-1">Drop image or click to upload</p>
+                  <p className="text-xs text-slate-400 mt-2">Accepted formats: {displayExts}</p>
+                  <p className="text-xs text-slate-400 mt-1">Maximum size: {maxMB} MB</p>
                 </div>
                 {imageState.error && (
                   <p className="text-xs text-red-500">{imageState.error}</p>

@@ -21,6 +21,7 @@ import scoresRouter from './scores.js';
 import announcementsRouter from './announcements.js';
 import certificatesRouter from './certificates.js';
 import attendanceRouter from './attendance.js';
+import uploadsRouter from './uploads.js';
 
 const router = Router();
 
@@ -46,5 +47,6 @@ router.use('/scores', scoresRouter);
 router.use('/announcements', announcementsRouter);
 router.use('/certificates', certificatesRouter);
 router.use('/attendance', attendanceRouter);
+router.use('/uploads', uploadsRouter);
 
 export default router;
