@@ -499,7 +499,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           certificateDataUrl: dataUrl,
         }] },
       });
-      toast.success(`Certificate emailed to ${effectiveParticipant.applicantEmail}`);
+      toast.success(`Certificate emailed to ${participant.applicantEmail}`);
       queryClient.invalidateQueries({ queryKey: ['certificate-deliveries', activeEvent.id] });
     } catch (err: any) {
       toast.error(err?.message || 'Failed to send email');

@@ -1,46 +1,92 @@
+import { fetchBackendJson } from './backendApi';
 import { getSupabaseClient } from './supabaseClient';
 
 export interface AdminSystemUser {
   id: string;
   full_name: string | null;
+  email: string | null;
   is_super_admin: boolean;
   created_at: string;
   organizations?: { organization: { name: string } }[];
+  super_admin_granted_at?: string;
+  granted_by_user?: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+  };
+}
+
+export interface ApiKey {
+  id: string;
+  provider: string;
+  is_active: boolean;
+  updated_at: string;
+  updated_by: {
+    full_name: string | null;
+  } | null;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id: string | null;
+  action: string;
+  action_type: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  details: string | null;
+  user_name: string | null;
+  user_avatar: string | null;
+  created_at: string;
+}
+
+export interface AuditLogsResponse {
+  data: AuditLog[];
+  metadata: {
+    total: number;
+    page: number;
+    limit: number;
+  };
 }
 
 export const adminService = {
-  async getSystemUsers(): Promise<AdminSystemUser[]> {
-    const supabase = getSupabaseClient();
-    if (!supabase) throw new Error('Supabase is not configured');
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        id,
-        full_name,
-        is_super_admin,
-        created_at,
-        organizations:organization_members(organization:organizations(name))
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    
-    // Type assertion because Supabase types might not perfectly map the join in all cases,
-    // but this query is valid standard Supabase relational query.
-    return (data as unknown) as AdminSystemUser[];
+  async searchUsers(query: string): Promise<AdminSystemUser[]> {
+    if (!query.trim()) return [];
+    return fetchBackendJson<AdminSystemUser[]>(`/api/admin/users/search?q=${encodeURIComponent(query)}`, { requireAuth: true });
   },
 
-  async setSuperAdminStatus(userId: string, isSuperAdmin: boolean): Promise<void> {
-    const supabase = getSupabaseClient();
-    if (!supabase) throw new Error('Supabase is not configured');
+  async getSuperAdmins(): Promise<AdminSystemUser[]> {
+    return fetchBackendJson<AdminSystemUser[]>('/api/admin/super-admins', { requireAuth: true });
+  },
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_super_admin: isSuperAdmin })
-      .eq('id', userId);
+  async grantSuperAdmin(userId: string): Promise<void> {
+    await fetchBackendJson(`/api/admin/users/${userId}/grant-super-admin`, { method: 'PUT', requireAuth: true });
+  },
 
-    if (error) throw error;
+  async revokeSuperAdmin(userId: string): Promise<void> {
+    await fetchBackendJson(`/api/admin/users/${userId}/revoke-super-admin`, { method: 'DELETE', requireAuth: true });
+  },
+
+  async getApiKeys(): Promise<ApiKey[]> {
+    return fetchBackendJson<ApiKey[]>('/api/admin/api-keys', { requireAuth: true });
+  },
+
+  async updateApiKey(provider: string, apiKey: string, isActive: boolean = true): Promise<{ success: boolean; data: any }> {
+    return fetchBackendJson('/api/admin/api-keys', {
+      method: 'POST',
+      requireAuth: true,
+      body: JSON.stringify({ provider, apiKey, isActive })
+    });
+  },
+
+  async getAuditLogs(page: number = 1, limit: number = 50, actionType?: string, search?: string): Promise<AuditLogsResponse> {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString()
+    });
+    if (actionType) params.append('action_type', actionType);
+    if (search) params.append('search', search);
+
+    return fetchBackendJson<AuditLogsResponse>(`/api/admin/audit-logs?${params.toString()}`, { requireAuth: true });
   },
 
   async getDashboardStats() {

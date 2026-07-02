@@ -10,6 +10,7 @@ import {
 	deleteCacheByPrefix,
 	wrapWithCache,
 } from '../cache/redisCache.js';
+import { logAuditAction } from '../utils/audit.js';
 
 const router = Router();
 
@@ -268,6 +269,8 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res) => {
 			return res.status(500).json({ error: error?.message || 'Failed to create program' });
 		}
 
+		await logAuditAction(userId, `Created Program: ${data.title}`, 'PROGRAM', 'PROGRAM', data.id, `Organization ID: ${organization_id}`);
+
 		await deleteCacheByPrefix(cacheKeys.programsByOrg(organization_id));
 		await deleteCache(cacheKeys.programsAll());
 
@@ -333,6 +336,8 @@ router.put('/:id', requireAuth, requireProgramAccess('id'), async (req: Authenti
 			return res.status(500).json({ error: error?.message || 'Failed to update program' });
 		}
 
+		await logAuditAction(userId, `Updated Program: ${data.title}`, 'PROGRAM', 'PROGRAM', data.id, 'Updated details');
+
 		const affectedOrgIds = new Set<string>();
 		if (existingProgram?.organization_id) {
 			affectedOrgIds.add(existingProgram.organization_id);
@@ -390,6 +395,8 @@ router.delete('/:id', requireAuth, requireProgramAccess('id'), async (req: Authe
 		if (error) {
 			return res.status(500).json({ error: error.message || 'Failed to delete program' });
 		}
+
+		await logAuditAction(userId, `Deleted Program: ${existingProgram.id}`, 'PROGRAM', 'PROGRAM', id, 'Action: Delete');
 
 		await Promise.all([
 			deleteCache(cacheKeys.program(id)),

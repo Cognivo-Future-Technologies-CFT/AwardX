@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRouter from './auth.js';
+import adminRouter from './admin.js';
 import organizationsRouter from './organizations.js';
 import overviewPageRouter from './overviewPage.js';
 import programsRouter from './programs.js';
@@ -24,6 +25,7 @@ import attendanceRouter from './attendance.js';
 const router = Router();
 
 router.use('/auth', authRouter);
+router.use('/admin', adminRouter);
 router.use('/organizations', organizationsRouter);
 router.use('/overview', overviewPageRouter);
 router.use('/programs', programCategoriesRouter);

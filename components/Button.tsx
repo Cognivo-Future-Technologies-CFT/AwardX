@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, HTMLMotionProps, useReducedMotion } from 'framer-motion';
 
 interface ButtonProps extends HTMLMotionProps<"button"> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'white';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'white' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   children: React.ReactNode;
 }
@@ -23,7 +23,8 @@ export const Button: React.FC<ButtonProps> = ({
     secondary: "bg-muted text-foreground border border-border hover:bg-accent",
     outline: "border border-border text-foreground bg-background hover:bg-accent",
     ghost: "text-slate-600 hover:text-slate-900 hover:bg-accent",
-    white: "bg-card text-card-foreground border border-border shadow-sm hover:bg-secondary hover:shadow-md"
+    white: "bg-card text-card-foreground border border-border shadow-sm hover:bg-secondary hover:shadow-md",
+    danger: "bg-red-500 text-white border border-red-600 shadow-[0_1px_0_rgba(255,255,255,0.2)_inset,0_2px_8px_-2px_rgba(220,38,38,0.4)] hover:bg-red-400 hover:border-red-500 hover:shadow-[0_1px_0_rgba(255,255,255,0.3)_inset,0_6px_18px_-4px_rgba(220,38,38,0.5)] active:shadow-[0_1px_0_rgba(255,255,255,0.2)_inset,0_1px_4px_-2px_rgba(220,38,38,0.4)]"
   };
 
   const sizes = {

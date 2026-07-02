@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { Settings, Shield, Webhook, Key, Mail, Bell } from 'lucide-react';
+import { Settings, Shield, Key, Bell } from 'lucide-react';
 import { UserManagement } from './UserManagement';
+import { ApiKeysManagement } from './ApiKeysManagement';
+import { AuditLogsView } from './AuditLogsView';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const AdminSettings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'users' | 'flags' | 'api' | 'email' | 'audit'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'api' | 'audit'>('users');
 
   const tabs = [
-    { id: 'users', label: 'System Users', icon: Shield },
-    { id: 'flags', label: 'Feature Flags', icon: Webhook },
+    { id: 'users', label: 'Super Admin Access', icon: Shield },
     { id: 'api', label: 'API Keys', icon: Key },
-    { id: 'email', label: 'Email Config', icon: Mail },
     { id: 'audit', label: 'Audit Logs', icon: Bell },
   ] as const;
 
@@ -70,25 +70,31 @@ export const AdminSettings: React.FC = () => {
             </motion.div>
           )}
 
-          {activeTab !== 'users' && (
+          {activeTab === 'api' && (
             <motion.div
-              key="placeholder"
+              key="api"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="py-20 text-center bg-white rounded-2xl border border-slate-200 border-dashed"
             >
-              <Settings className="w-10 h-10 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Module Not Configured</h3>
-              <p className="text-slate-500 max-w-sm mx-auto">
-                This settings module is reserved for future expansion and is currently inactive.
-              </p>
+              <ApiKeysManagement />
+            </motion.div>
+          )}
+
+          {activeTab === 'audit' && (
+            <motion.div
+              key="audit"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AuditLogsView />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-
     </div>
   );
 };

@@ -9,6 +9,7 @@ import {
 	deleteCacheByPrefix,
 	wrapWithCache,
 } from '../cache/redisCache.js';
+import { logAuditAction } from '../utils/audit.js';
 
 const router = Router();
 
@@ -155,6 +156,9 @@ router.post('/', requireAuth, async (req, res) => {
 			return res.status(500).json({ error: error?.message || 'Failed to create organization' });
 		}
 
+		// Log audit
+		await logAuditAction((req as AuthenticatedRequest).userId!, `Created Organization: ${data.name}`, 'ORGANIZATION', 'ORGANIZATION', data.id, `Slug: ${data.slug}`);
+
 		await deleteCache(cacheKeys.org(data.id));
 		return res.status(201).json({ data });
 	} catch (error: any) {
@@ -201,6 +205,9 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res) => {
 		if (error || !data) {
 			return res.status(500).json({ error: error?.message || 'Failed to update organization' });
 		}
+
+		// Log audit
+		await logAuditAction(req.userId!, `Updated Organization: ${data.name}`, 'ORGANIZATION', 'ORGANIZATION', data.id, 'Updated details');
 
 		await Promise.all([
 			deleteCache(cacheKeys.org(id)),
