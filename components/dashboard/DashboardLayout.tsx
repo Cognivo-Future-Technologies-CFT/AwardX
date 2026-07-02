@@ -1319,6 +1319,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onBackToHub={onSwitchEvent}
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
+            onNotificationClick={(notification) => {
+              if (notification.programId) {
+                const targetProgram = allProgramsQuery.data?.find(p => p.id === notification.programId);
+                if (targetProgram) {
+                  onSelectProgram(targetProgram);
+                }
+              }
+            }}
             onMarkAllRead={async () => {
               if (!supabase) return;
               const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);

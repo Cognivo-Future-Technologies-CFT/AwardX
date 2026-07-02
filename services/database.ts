@@ -56,6 +56,7 @@ export interface DashboardNotification {
   body: string;
   isRead: boolean;
   programId: string | null;
+  organizationId: string | null;
   createdAt: string;
 }
 
@@ -2437,21 +2438,23 @@ class DatabaseService {
     programId?: string;
     limit?: number;
     unreadOnly?: boolean;
+    global?: boolean;
   }): Promise<DashboardNotification[]> {
     if (isDemoMode()) return demoDb.getDemoNotifications();
 
     if (!supabase) return [];
 
     try {
-      const orgId = await getCurrentOrgId();
-      if (!orgId) return [];
-
-      const userId = await getCurrentUserId();
       let query = supabase
         .from('notifications')
         .select('*')
-        .eq('organization_id', orgId)
         .order('created_at', { ascending: false });
+
+      if (!options?.global) {
+        const orgId = await getCurrentOrgId();
+        if (!orgId) return [];
+        query = query.eq('organization_id', orgId);
+      }
 
       if (options?.programId) {
         query = query.eq('program_id', options.programId);
@@ -2459,11 +2462,6 @@ class DatabaseService {
 
       if (options?.unreadOnly) {
         query = query.eq('is_read', false);
-      }
-
-      // Show org-wide notifications plus user-specific notifications.
-      if (userId) {
-        query = query.or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`);
       }
 
       if (options?.limit) {
@@ -2480,6 +2478,7 @@ class DatabaseService {
         body: n.body || '',
         isRead: !!n.is_read,
         programId: n.program_id || null,
+        organizationId: n.organization_id || null,
         createdAt: n.created_at || new Date().toISOString(),
       }));
     } catch {
@@ -2507,7 +2506,6 @@ class DatabaseService {
       const orgId = await getCurrentOrgId();
       if (!orgId) return;
 
-      const userId = await getCurrentUserId();
       let query = supabase
         .from('notifications')
         .update({ is_read: true, read_at: new Date().toISOString() })
@@ -2516,10 +2514,6 @@ class DatabaseService {
 
       if (programId) {
         query = query.eq('program_id', programId);
-      }
-
-      if (userId) {
-        query = query.or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`);
       }
 
       await query;

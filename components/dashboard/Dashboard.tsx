@@ -97,9 +97,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     navigate('/dashboard');
   }, [navigate]);
 
-  const handleSwitchOrganization = useCallback(() => {
+  const handleSwitchOrganization = useCallback(async () => {
     setActiveEvent(null);
     setActiveOrganization(null);
+    await databaseService.setActiveOrganization(null);
     navigate('/dashboard');
   }, [navigate]);
 

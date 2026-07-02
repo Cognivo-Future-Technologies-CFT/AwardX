@@ -673,7 +673,15 @@ if (!newEvent.deadline) {
                               ) : notifications.map((n) => (
                                  <div
                                     key={n.id}
-                                    onClick={() => !n.isRead && handleMarkRead(n.id)}
+                                    onClick={() => {
+                                       if (!n.isRead) handleMarkRead(n.id);
+                                       if (n.programId) {
+                                          const targetEvent = events.find(e => e.id === n.programId);
+                                          if (targetEvent) {
+                                             onSelectEvent(targetEvent);
+                                          }
+                                       }
+                                    }}
                                     className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${!n.isRead ? 'bg-emerald-50/40' : ''}`}
                                  >
                                     <div className="flex items-start gap-3">

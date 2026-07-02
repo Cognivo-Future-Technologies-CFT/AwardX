@@ -49,6 +49,7 @@ interface NotificationItem {
   body?: string
   isRead: boolean
   createdAt: string
+  programId?: string | null
 }
 
 interface NavigationMenuFourProps {
@@ -67,6 +68,7 @@ interface NavigationMenuFourProps {
   notifications?: NotificationItem[]
   onMarkAllRead?: () => void
   onMarkRead?: (id: string) => void
+  onNotificationClick?: (notification: NotificationItem) => void
 }
 
 const defaultNavigationLinks: HeaderNavigationLink[] = [
@@ -123,6 +125,7 @@ export default function NavigationMenuFour({
   notifications = [],
   onMarkAllRead,
   onMarkRead,
+  onNotificationClick,
 }: NavigationMenuFourProps) {
   const hasNavigationLinks = navigationLinks.length > 0;
 
@@ -314,7 +317,7 @@ export default function NavigationMenuFour({
               <span className="text-xs capitalize text-muted-foreground">{currentView}</span>
             </div>
             {hasNavigationLinks && (
-              <div className="hidden 2xl:block">
+              <div className="hidden lg:block">
                 <NavigationMenu>
                   <NavigationMenuList>
                     {navigationLinks.map((link, index) => (
@@ -475,7 +478,14 @@ export default function NavigationMenuFour({
                       "p-4 hover:bg-slate-50 transition-colors cursor-pointer",
                       !n.isRead && "bg-indigo-50/30"
                     )}
-                    onClick={() => !n.isRead && onMarkRead?.(n.id)}
+                    onClick={() => {
+                      if (!n.isRead) {
+                        onMarkRead?.(n.id);
+                      }
+                      if (onNotificationClick) {
+                        onNotificationClick(n);
+                      }
+                    }}
                   >
                     <div className="flex items-start gap-3">
                       {!n.isRead && <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0" />}

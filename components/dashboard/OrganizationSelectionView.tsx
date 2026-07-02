@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { Organization } from '../../services/models';
 import { auth } from '../../services/supabase';
-import { db as databaseService } from '../../services/database';
+import { db as databaseService, type DashboardNotification } from '../../services/database';
+import { buildDashboardPath } from '../../lib/dashboardRoutes';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { Logo, LogoTitle } from '../Logo';
@@ -92,6 +93,10 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newOrganizationName, setNewOrganizationName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const notificationsRef = React.useRef<HTMLDivElement>(null);
+  
   const [userData, setUserData] = useState<UserData>({
     name: 'Loading...',
     avatar: '',
@@ -115,6 +120,53 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
       totalEvents,
     };
   }, [organizations]);
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const data = await databaseService.getNotifications({ limit: 10, global: true });
+      setNotifications(data);
+    } catch (err) {
+      console.error('Error loading notifications:', err);
+    }
+  }, []);
+
+  const handleMarkAllRead = useCallback(async () => {
+    const hadUnread = notifications.some((n) => !n.isRead);
+    if (!hadUnread) return;
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await databaseService.markAllNotificationsRead();
+    } catch (err) {
+      console.error('Error marking notifications read:', err);
+      loadNotifications();
+    }
+  }, [notifications, loadNotifications]);
+
+  const handleMarkRead = useCallback(
+    async (id: string) => {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      try {
+        await databaseService.markNotificationRead(id);
+      } catch (err) {
+        console.error('Error marking notification read:', err);
+        loadNotifications();
+      }
+    },
+    [loadNotifications]
+  );
+
+  useEffect(() => {
+    if (!isNotificationsOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isNotificationsOpen]);
 
   const loadOrganizations = useCallback(async (showLoading = false) => {
     if (showLoading) setIsRefreshing(true);
@@ -152,7 +204,8 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
     };
 
     fetchUserData();
-  }, [loadOrganizations]);
+    loadNotifications();
+  }, [loadOrganizations, loadNotifications]);
 
   const handleCreateOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,11 +247,69 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
                 className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none w-72"
               />
             </div>
-            <div className="h-6 w-px bg-slate-200 hidden md:block" />
-            <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative">
-              <Bell className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-3">
+              <div className="h-6 w-px bg-slate-200 hidden md:block" />
+              <div className="relative" ref={notificationsRef}>
+                <button 
+                  onClick={() => {
+                    setIsNotificationsOpen(prev => !prev);
+                    if (!isNotificationsOpen) loadNotifications();
+                  }}
+                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                  )}
+                </button>
+
+                {isNotificationsOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllRead}
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                      {notifications.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-slate-400">No notifications yet</div>
+                      ) : notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.isRead) handleMarkRead(n.id);
+                            if (n.programId) {
+                              navigate(buildDashboardPath({ eventId: n.programId, view: 'overview' }));
+                            } else if (n.organizationId) {
+                              const targetOrg = organizations.find((o) => o.id === n.organizationId);
+                              if (targetOrg) {
+                                handleSelectOrganization(targetOrg);
+                              }
+                            }
+                          }}
+                          className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${!n.isRead ? 'bg-emerald-50/40' : ''}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {!n.isRead && <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-slate-900 truncate">{n.title}</p>
+                              <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.body}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
               <div className="flex items-center gap-3 pl-2">
                 {userData.avatar ? (
                   <img src={userData.avatar} alt="" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
