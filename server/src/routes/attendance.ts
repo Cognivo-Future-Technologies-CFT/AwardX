@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { getSupabaseAdmin } from '../supabase.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { requireProgramAccess, canAccessProgram } from '../middleware/programAccess.js';
+import { Resend } from 'resend';
+import QRCode from 'qrcode';
 
 const router = Router();
 
@@ -220,22 +222,102 @@ router.delete('/record/:id', requireAuth, async (req: AuthenticatedRequest, res)
 	}
 });
 
-// Helper: send QR Email using Supabase Edge Function
+// Helper: send QR Email using Resend directly
 async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error?: string }> {
 	try {
 		const supabase = getSupabaseAdmin();
-		const { data, error } = await supabase.functions.invoke('send-attendance-qr', {
-			body: { recordId }
+		
+		const { data: record, error: recordError } = await supabase
+			.from('program_attendance')
+			.select('*, programs(id, title, organization_id)')
+			.eq('id', recordId)
+			.maybeSingle();
+
+		if (recordError || !record) return { ok: false, error: 'Record not found' };
+
+		const program = record.programs as any;
+		if (!program) return { ok: false, error: 'Associated program not found' };
+
+		const siteUrl = (process.env.FRONTEND_URL || process.env.VITE_SITE_URL || 'http://localhost:3000').split(',')[0].replace(/\/$/, '');
+		const scanUrl = `${siteUrl}/attendance/scan?token=${record.qr_code_token}`;
+		
+		const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 300, margin: 2 });
+		const qrBase64 = qrDataUrl.split(',')[1];
+
+		const resendApiKey = process.env.RESEND_API_KEY;
+		if (!resendApiKey) return { ok: false, error: 'RESEND_API_KEY environment variable is not set.' };
+
+		const resend = new Resend(resendApiKey);
+		const fromEmail = process.env.RESEND_FROM || 'onboarding@resend.dev';
+		const subject = `Your Attendance Pass for ${program.title}`;
+
+		const html = `
+		<html>
+			<head>
+				<style>
+					body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; padding: 24px; margin: 0; }
+					.card { background-color: #ffffff; border-radius: 16px; padding: 32px; max-width: 480px; margin: 0 auto; text-align: center; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+					.title { font-size: 20px; font-weight: bold; color: #0f172a; margin-bottom: 8px; }
+					.subtitle { font-size: 14px; color: #64748b; margin-bottom: 24px; }
+					.qr-container { background-color: #f8fafc; padding: 16px; border-radius: 12px; display: inline-block; margin-bottom: 24px; border: 1px solid #f1f5f9; }
+					.qr-image { display: block; width: 220px; height: 220px; margin: 0 auto; }
+					.details { text-align: left; background-color: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #f1f5f9; }
+					.detail-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+					.detail-row:last-child { margin-bottom: 0; }
+					.label { color: #64748b; font-weight: 500; }
+					.value { color: #0f172a; font-weight: 600; }
+					.footer { font-size: 12px; color: #94a3b8; margin-top: 16px; }
+				</style>
+			</head>
+			<body>
+				<div class="card">
+					<div class="title">Attendance Pass</div>
+					<div class="subtitle">Present this QR code to the event organizers to check in.</div>
+					<div class="qr-container">
+						<img src="cid:qr.png" class="qr-image" alt="Check-in Pass QR Code" />
+					</div>
+					<div class="details">
+						<div class="detail-row">
+							<span class="label">Event:</span>
+							<span class="value">${program.title}</span>
+						</div>
+						<div class="detail-row">
+							<span class="label">Participant:</span>
+							<span class="value">${record.name}</span>
+						</div>
+						<div class="detail-row">
+							<span class="label">Email:</span>
+							<span class="value">${record.email}</span>
+						</div>
+					</div>
+					<div class="footer">Sent via AwardX system. Please do not reply directly to this email.</div>
+				</div>
+			</body>
+		</html>
+		`;
+
+		const { error: resError } = await resend.emails.send({
+			from: fromEmail,
+			to: record.email,
+			subject,
+			html,
+			attachments: [
+				{
+					filename: 'qr.png',
+					content: qrBase64
+				}
+			]
 		});
 
-		if (error) {
-			throw error;
+		if (resError) {
+			console.error('[attendance-email] Resend error:', resError);
+			return { ok: false, error: resError.message };
 		}
 
 		return { ok: true };
 	} catch (error: any) {
-		console.error('[attendance-email] Error invoking edge function:', error);
-		return { ok: false, error: error.message || 'Failed to invoke edge function' };
+		console.error('[attendance-email] Error sending email:', error);
+		return { ok: false, error: error.message || 'Failed to send email' };
 	}
 }
 
