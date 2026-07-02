@@ -314,4 +314,113 @@ router.delete('/:programId/submissions', requireAuth, async (req: AuthenticatedR
   }
 });
 
+router.post('/public/:submissionId/auto-assign', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { submissionId } = req.params;
+
+  if (!submissionId) {
+    return res.status(400).json({ error: 'submissionId is required' });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+
+    // Fetch the submission details (program_id, category_id) using service role (bypassing RLS)
+    const { data: submission, error: subError } = await supabase
+      .from('submissions')
+      .select('program_id, category_id')
+      .eq('id', submissionId)
+      .single();
+
+    if (subError || !submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    const { program_id: programId, category_id: categoryId } = submission;
+
+    if (!categoryId) {
+      return res.json({ ok: true, message: 'Submission has no category, skipping assignment' });
+    }
+
+    // Fetch the program details to verify judging_type is auto_assign
+    const { data: program, error: progError } = await supabase
+      .from('programs')
+      .select('judging_type')
+      .eq('id', programId)
+      .single();
+
+    if (progError || !program) {
+      return res.status(404).json({ error: 'Program not found' });
+    }
+
+    if (program.judging_type !== 'auto_assign') {
+      return res.json({ ok: true, message: 'Program is not configured for auto_assign, skipping assignment' });
+    }
+
+    // Fetch categories to build the parent hierarchy
+    const { data: categoriesData, error: categoriesError } = await supabase
+      .from('categories')
+      .select('id, parent_id')
+      .eq('program_id', programId);
+
+    if (categoriesError) {
+      return res.status(500).json({ error: categoriesError.message || 'Failed to load categories' });
+    }
+
+    const categories = categoriesData || [];
+    const parentByChild = new Map<string, string | null>();
+    categories.forEach((category: any) => {
+      parentByChild.set(category.id, category.parent_id || null);
+    });
+
+    const matchingCategoryIds = new Set<string>([categoryId]);
+    let cursor: string | null | undefined = categoryId;
+    while (cursor) {
+      const parentId = parentByChild.get(cursor);
+      if (!parentId || matchingCategoryIds.has(parentId)) break;
+      matchingCategoryIds.add(parentId);
+      cursor = parentId;
+    }
+
+    // Fetch judge assignments mapped to these categories
+    const { data: judgeAssignments, error: judgeAssignmentsError } = await supabase
+      .from('judge_category_assignments')
+      .select('judge_id, category_id, judges!inner(program_id, status)')
+      .eq('judges.program_id', programId)
+      .in('category_id', Array.from(matchingCategoryIds));
+
+    if (judgeAssignmentsError) {
+      return res.status(500).json({ error: judgeAssignmentsError.message || 'Failed to load category judges' });
+    }
+
+    const judgeIds = Array.from(
+      new Set(
+        (judgeAssignments || [])
+          .filter((row: any) => String(row.judges?.status || '').toLowerCase() !== 'declined')
+          .map((row: any) => row.judge_id)
+          .filter(Boolean),
+      ),
+    );
+
+    if (judgeIds.length > 0) {
+      const rows = judgeIds.map((judgeId) => ({
+        submission_id: submissionId,
+        judge_id: judgeId,
+        status: 'pending',
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('submission_judges')
+        .upsert(rows, { onConflict: 'submission_id,judge_id' });
+
+      if (upsertError) {
+        return res.status(500).json({ error: upsertError.message || 'Failed to assign category judges' });
+      }
+    }
+
+    return res.json({ ok: true, assignedCount: judgeIds.length });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
 export default router;

@@ -507,6 +507,7 @@ class DatabaseService {
       const { data: org, error } = await organizations.getCurrent();
       if (org && org.id) {
         this.currentOrgId = org.id;
+        setSupabaseActiveOrganization(org.id);
         await this.refreshPermissionCache();
         return { org, error: null };
       }
@@ -824,11 +825,15 @@ class DatabaseService {
   }
 
   // Programs
-  async getPrograms(): Promise<Program[]> {
+  async getPrograms(organizationId?: string): Promise<Program[]> {
     if (isDemoMode()) return demoDb.getDemoPrograms();
 
-    const { data, error } = await supabasePrograms.getAll();
-    if (error || !data) return [];
+    const { data, error } = await supabasePrograms.getAll(organizationId);
+    if (error) {
+      console.error('Failed to load programs:', error);
+      return [];
+    }
+    if (!data) return [];
     return data.map((p: any) => this.mapProgram(p));
   }
 
@@ -1988,6 +1993,16 @@ class DatabaseService {
       if (insertScopeError) throw new Error(insertScopeError.message || 'Failed to save judge category scope');
     }
 
+    // Fetch the program to check judging_type
+    const { data: programData, error: programError } = await supabase
+      .from('programs')
+      .select('judging_type')
+      .eq('id', programId)
+      .single();
+
+    if (programError) throw new Error(programError.message || 'Failed to load program');
+    const autoAssign = programData?.judging_type === 'auto_assign';
+
     const { data: previousAssignments, error: previousError } = await supabase
       .from('submission_judges')
       .select('id, submission_id, submissions!inner(program_id, category_id)')
@@ -1997,12 +2012,14 @@ class DatabaseService {
 
     if (previousError) throw new Error(previousError.message || 'Failed to load judge assignments');
 
-    const previousScopedIds = (previousAssignments || [])
-      .filter((assignment: any) => {
-        const categoryId = assignment.submissions?.category_id;
-        return categoryId && previousScopedCategoryIds.has(categoryId) && !scopedCategoryIds.has(categoryId);
-      })
-      .map((assignment: any) => assignment.id);
+    const previousScopedIds = autoAssign
+      ? (previousAssignments || [])
+          .filter((assignment: any) => {
+            const categoryId = assignment.submissions?.category_id;
+            return !categoryId || !scopedCategoryIds.has(categoryId);
+          })
+          .map((assignment: any) => assignment.id)
+      : [];
 
     if (previousScopedIds.length > 0) {
       const { error: removeError } = await supabase
@@ -2255,7 +2272,7 @@ class DatabaseService {
     const { data, error } = await team.getMembers(programId);
     if (error || !data) return [];
 
-    return (data as any[]).map((m: any) => {
+    const members: TeamMember[] = (data as any[]).map((m: any) => {
       const profile = m.profiles || {};
       const role = m.roles || {};
       return {
@@ -2273,6 +2290,36 @@ class DatabaseService {
         programId: m.program_id || null,
       };
     });
+
+    if (programId) {
+      try {
+        const loadedJudges = await this.getJudges(programId);
+        const existingEmails = new Set(members.map((m) => m.email.toLowerCase()));
+
+        const judgeMembers = loadedJudges
+          .filter((j) => j.email && !existingEmails.has(j.email.toLowerCase()))
+          .map((j) => ({
+            memberId: j.id,
+            userId: j.id,
+            name: j.name,
+            email: j.email,
+            role: 'Judge',
+            roleId: 'judge',
+            status: (j.status === 'active' ? 'Active' : 'Inactive') as TeamMember['status'],
+            lastActive: '—',
+            avatar: j.avatar,
+            joinedDate: undefined,
+            programScope: 'program' as const,
+            programId: programId || null,
+          }));
+
+        members.push(...judgeMembers);
+      } catch (err) {
+        console.warn('[getTeamMembers] Failed to append judges:', err);
+      }
+    }
+
+    return members;
   }
 
   async updateTeamMemberRole(memberId: string, roleId: string, programId?: string) {
@@ -2749,10 +2796,33 @@ class DatabaseService {
       }
     }
 
+    // Resolve Category/Award Selector → submissions.category_id BEFORE inserting
+    let resolvedCategoryId: string | undefined = undefined;
+    try {
+      const { data: formFields } = await supabase
+        .from('program_form_fields')
+        .select('id, type')
+        .eq('form_id', formId);
+
+      const selectorField = (formFields || []).find((field: any) => field.type === 'award_selector');
+      const selectorValue = selectorField ? formData[selectorField.id] : null;
+
+      if (selectorValue) {
+        const categories = await this.getCategories(form.program_id);
+        const categoryId = resolveCategoryIdFromSelectorValue(categories, String(selectorValue));
+        if (categoryId) {
+          resolvedCategoryId = categoryId;
+        }
+      }
+    } catch (categoryError) {
+      console.warn('[submitFormResponse] Failed to pre-resolve submission category:', categoryError);
+    }
+
     // Create submission with form data in submission_data field
     // Set allowPublicSubmission flag to allow submissions from any authenticated user
     const { data, error } = await submissions.create({
       program_id: form.program_id,
+      category_id: resolvedCategoryId,
       title: form.title || 'Form Submission',
       description: `Form submission for ${form.title}`,
       status: autoAcceptSubmissions ? 'accepted' : 'pending',
@@ -2775,34 +2845,14 @@ class DatabaseService {
 
     const submissionId = (data as any).id;
 
-    // Resolve Category/Award Selector → submissions.category_id
-    try {
-      const { data: formFields } = await supabase
-        .from('program_form_fields')
-        .select('id, type')
-        .eq('form_id', formId);
-
-      const selectorField = (formFields || []).find((field: any) => field.type === 'award_selector');
-      const selectorValue = selectorField ? formData[selectorField.id] : null;
-
-      if (selectorValue) {
-        const categories = await this.getCategories(form.program_id);
-        const categoryId = resolveCategoryIdFromSelectorValue(categories, String(selectorValue));
-
-        if (categoryId) {
-          await supabase
-            .from('submissions')
-            .update({ category_id: categoryId })
-            .eq('id', submissionId);
-
-          const program = await this.getProgramById(form.program_id);
-          if (program && isAutoAssignJudging(program.judgingType)) {
-            await this.assignCategoryJudgesToSubmission(form.program_id, submissionId, categoryId);
-          }
-        }
-      }
-    } catch (categoryError) {
-      console.warn('[submitFormResponse] Failed to resolve submission category:', categoryError);
+    // Trigger auto-assign judging on backend server (which has bypass-RLS permissions)
+    if (resolvedCategoryId) {
+      await fetchBackendJson(`/api/programs/public/${submissionId}/auto-assign`, {
+        method: 'POST',
+        requireAuth: true,
+      }).catch((assignError) => {
+        console.warn('[submitFormResponse] Failed to trigger backend auto-assignment:', assignError);
+      });
     }
 
     // Backfill applicant identity from profile if needed.

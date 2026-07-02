@@ -4,6 +4,7 @@ import { resolveAuthCallbackUrl, resolveSiteUrl } from '../lib/siteUrl';
 import { fetchBackendJson } from './backendApi';
 import { supabase, supabaseUrl, isSupabaseReady } from './supabaseClient';
 import {
+  clearOrganizationDetailsCache,
   clearUserCache,
   getCachedOrganizationDetails,
   getCachedSession,
@@ -22,6 +23,7 @@ import {
 
 export { getSupabaseClient, supabase, isSupabaseReady } from './supabaseClient';
 export {
+  clearOrganizationDetailsCache,
   clearUserCache,
   getCurrentOrgId,
   getCurrentUserId,
@@ -347,8 +349,8 @@ export const organizations = {
         return { data: cachedOrg as { id: string }, error: null };
       }
 
-      // Cache can get stale if org linkage changed; clear and continue with fallback flow.
-      clearUserCache();
+      // Cache can get stale if org linkage changed; clear org details only and continue with fallback flow.
+      clearOrganizationDetailsCache();
     }
 
     const { user, error: userError } = await auth.getUser();
@@ -655,8 +657,8 @@ export const organizations = {
 
 // Programs
 export const programs = {
-  getAll: async () => {
-    const orgId = await getCurrentOrgId();
+  getAll: async (organizationId?: string) => {
+    const orgId = organizationId || (await getCurrentOrgId());
     if (!orgId) return { data: [], error: null };
 
     const { data, error } = await supabase

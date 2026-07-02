@@ -322,13 +322,12 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    const loadPrograms = useCallback(async (showLoading = false) => {
       if (showLoading) setIsRefreshing(true);
       try {
-         // Ensure database is initialized (only once)
-         await databaseService.initialize();
+         await databaseService.setActiveOrganization(activeOrganization.id);
          const canManage = await databaseService.canManagePrograms();
          setCanManagePrograms(canManage);
-         
+
          const [programs, members, roles] = await Promise.all([
-            databaseService.getPrograms(),
+            databaseService.getPrograms(activeOrganization.id),
             databaseService.getTeamMembers(),
             databaseService.getRoles(),
          ]);
@@ -341,7 +340,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          setIsLoading(false);
          setIsRefreshing(false);
       }
-   }, []);
+   }, [activeOrganization.id]);
 
    useEffect(() => {
       if (!newMemberRoleId && orgRoles[0]?.id) {

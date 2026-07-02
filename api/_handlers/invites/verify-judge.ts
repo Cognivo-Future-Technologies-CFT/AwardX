@@ -249,7 +249,18 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
-      assignments = assignments.filter((row: any) => submissionInScope(row.submissions, scopedCategoryIds));
+      const inScope = assignments.filter((row: any) => submissionInScope(row.submissions, scopedCategoryIds));
+      const outOfScope = assignments.filter((row: any) => !submissionInScope(row.submissions, scopedCategoryIds) && row.status === 'pending');
+
+      if (outOfScope.length > 0) {
+        const outOfScopeIds = outOfScope.map((row: any) => row.id);
+        await supabase
+          .from('submission_judges')
+          .delete()
+          .in('id', outOfScopeIds);
+      }
+
+      assignments = inScope;
     }
 
     // Parallel judging only: if no explicit assignments, auto-assign all program submissions.

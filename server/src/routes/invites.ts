@@ -228,6 +228,52 @@ async function insertNotificationSafe(
 	}
 }
 
+function isAutoAssignJudging(value?: string | null): boolean {
+	return value === 'auto_assign';
+}
+
+async function loadScopedCategoryIds(
+	supabase: any,
+	judgeId: string,
+	programId: string,
+): Promise<Set<string>> {
+	const { data: categoriesData } = await supabase
+		.from('categories')
+		.select('id, parent_id')
+		.eq('program_id', programId);
+
+	const categories = categoriesData || [];
+	const childrenByParent = new Map<string, string[]>();
+	categories.forEach((category: any) => {
+		if (!category.parent_id) return;
+		childrenByParent.set(category.parent_id, [...(childrenByParent.get(category.parent_id) || []), category.id]);
+	});
+
+	const { data: assignments } = await supabase
+		.from('judge_category_assignments')
+		.select('category_id')
+		.eq('judge_id', judgeId);
+
+	const scopedCategoryIds = new Set<string>();
+	const addCategoryAndChildren = (categoryId: string) => {
+		if (scopedCategoryIds.has(categoryId)) return;
+		scopedCategoryIds.add(categoryId);
+		(childrenByParent.get(categoryId) || []).forEach(addCategoryAndChildren);
+	};
+
+	(assignments || [])
+		.map((row: any) => row.category_id)
+		.filter(Boolean)
+		.forEach(addCategoryAndChildren);
+
+	return scopedCategoryIds;
+}
+
+function submissionInScope(submission: any, scopedCategoryIds: Set<string>): boolean {
+	const categoryId = submission?.category_id;
+	return !!categoryId && scopedCategoryIds.has(categoryId);
+}
+
 async function handleVerifyJudge(req: any, res: any) {
 	try {
 		if (!isSupabaseConfigured()) {
@@ -265,7 +311,7 @@ async function handleVerifyJudge(req: any, res: any) {
 			judge.program_id
 				? supabase
 						.from('programs')
-						.select('id, title, slug, description, cover_image_url, status, deadline, timezone, industry_category')
+						.select('id, title, slug, description, cover_image_url, status, deadline, timezone, industry_category, judging_type')
 						.eq('id', judge.program_id)
 						.single()
 				: Promise.resolve({ data: null }),
@@ -280,6 +326,8 @@ async function handleVerifyJudge(req: any, res: any) {
 
 		const program: any = programResult.data;
 		const organizationName: string = (orgResult.data as any)?.name || '';
+		const judgingType = program?.judging_type;
+		const autoAssign = isAutoAssignJudging(judgingType);
 
 		if (req.method === 'GET' && !judge.invite_token_used_at) {
 			return res.json({
@@ -392,9 +440,28 @@ async function handleVerifyJudge(req: any, res: any) {
 		assignments = assignmentResult.data || [];
 		criteria = criteriaResult.data || [];
 
-		// If no explicit assignments, auto-assign all program submissions to this judge
 		const effectiveProgramId = judge.program_id || program?.id;
-		if (effectiveProgramId && assignments.length === 0) {
+
+		let scopedCategoryIds = new Set<string>();
+		if (autoAssign && effectiveProgramId) {
+			scopedCategoryIds = await loadScopedCategoryIds(supabase, judge.id, effectiveProgramId);
+		}
+
+		if (autoAssign) {
+			// Delete any out-of-scope pending assignments from the database to keep it clean.
+			const outOfScope = assignments.filter((row: any) => !submissionInScope(row.submissions, scopedCategoryIds) && row.status === 'pending');
+			if (outOfScope.length > 0) {
+				const outOfScopeIds = outOfScope.map((row: any) => row.id);
+				await supabase
+					.from('submission_judges')
+					.delete()
+					.in('id', outOfScopeIds);
+			}
+			assignments = assignments.filter((row: any) => submissionInScope(row.submissions, scopedCategoryIds));
+		}
+
+		// If no explicit assignments (and NOT auto-assign), auto-assign all program submissions to this judge
+		if (!autoAssign && effectiveProgramId && assignments.length === 0) {
 			const { data: programSubs } = await supabase
 				.from('submissions')
 				.select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, votes_count, submission_data')
@@ -420,6 +487,42 @@ async function handleVerifyJudge(req: any, res: any) {
 						...row,
 						submissions: subMap.get(row.submission_id) || null,
 					}));
+				}
+			}
+		}
+
+		// Auto Assign: backfill missing submission_judges for in-scope submissions.
+		if (autoAssign && effectiveProgramId && scopedCategoryIds.size > 0) {
+			const { data: scopedSubs } = await supabase
+				.from('submissions')
+				.select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, votes_count, submission_data')
+				.eq('program_id', effectiveProgramId)
+				.in('category_id', Array.from(scopedCategoryIds))
+				.order('submitted_at', { ascending: false });
+
+			const existingSubmissionIds = new Set(assignments.map((row: any) => row.submission_id));
+			const missingSubs = (scopedSubs || []).filter((sub: any) => !existingSubmissionIds.has(sub.id));
+
+			if (missingSubs.length > 0) {
+				const inserts = missingSubs.map((sub: any) => ({
+					submission_id: sub.id,
+					judge_id: judge.id,
+					status: 'pending',
+				}));
+				const { data: created } = await supabase
+					.from('submission_judges')
+					.upsert(inserts, { onConflict: 'submission_id,judge_id' })
+					.select('id, status, completed_at, assigned_at, submission_id');
+
+				if (created && created.length > 0) {
+					const subMap = new Map((scopedSubs || []).map((s: any) => [s.id, s]));
+					assignments = [
+						...assignments,
+						...created.map((row: any) => ({
+							...row,
+							submissions: subMap.get(row.submission_id) || null,
+						})),
+					];
 				}
 			}
 		}

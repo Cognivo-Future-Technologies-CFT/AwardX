@@ -228,6 +228,10 @@ export const clearUserCache = () => {
   activeOrganizationOverride = null;
 };
 
+export const clearOrganizationDetailsCache = () => {
+  cachedOrganizationDetails = null;
+};
+
 export const setActiveOrganization = (orgId: string | null) => {
   activeOrganizationOverride = orgId;
   if (cachedUserContext) {
