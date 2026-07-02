@@ -538,6 +538,7 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
     const mergedItems = [
         ...filteredMembers.map(m => ({
             id: m.memberId,
+            memberId: m.memberId,
             userId: m.userId,
             name: m.name,
             email: m.email,

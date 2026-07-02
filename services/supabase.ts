@@ -2255,9 +2255,7 @@ export const team = {
       .update({ role_id: roleId })
       .eq('id', memberId)
       .eq('organization_id', orgId);
-    if (programId) {
-      query = query.eq('program_id', programId);
-    }
+      
     const { data, error } = await query.select().single();
 
     return { data, error };

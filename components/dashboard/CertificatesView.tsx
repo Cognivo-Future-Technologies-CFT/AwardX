@@ -153,19 +153,19 @@ function getParticipantActiveRound(participant: ParticipantCertData, rounds: Rou
 }
 
 function getCertificateSubtitle(participant: ParticipantCertData, rounds: Round[], roundLabelsMap: Map<string, string>): string {
-  if (participant.certificateType === 'winner') return 'OF EXCELLENCE';
-  if (participant.certificateType === 'participation') return 'OF PARTICIPATION';
-
   const activeRound = getParticipantActiveRound(participant, rounds);
-  let roundLabel = activeRound?.title || 'Round Advance';
-
+  
   if (activeRound) {
     const customLabel = roundLabelsMap.get(activeRound.id);
     if (customLabel?.trim()) {
-      roundLabel = customLabel.trim();
+      return `OF ${customLabel.trim().toUpperCase()}`;
     }
   }
 
+  if (participant.certificateType === 'winner') return 'OF EXCELLENCE';
+  if (participant.certificateType === 'participation') return 'OF PARTICIPATION';
+
+  let roundLabel = activeRound?.title || 'Round Advance';
   return `OF ${roundLabel.toUpperCase()}`;
 }
 
@@ -693,12 +693,16 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
             const delivery = deliveredMap.get(p.submissionId);
             const activeRound = getParticipantActiveRound(p, roundsQuery.data || []);
             let roundLabel = activeRound?.title || 'Round Advance';
+            let hasCustom = false;
             if (activeRound) {
               const custom = roundLabelsMap.get(activeRound.id);
-              if (custom?.trim()) roundLabel = custom.trim();
+              if (custom?.trim()) {
+                roundLabel = custom.trim();
+                hasCustom = true;
+              }
             }
-            if (p.certificateType === 'winner') roundLabel = 'Winner';
-            if (p.certificateType === 'participation') roundLabel = 'Participation';
+            if (!hasCustom && p.certificateType === 'winner') roundLabel = 'Winner';
+            if (!hasCustom && p.certificateType === 'participation') roundLabel = 'Participation';
 
             return (
             <div
