@@ -16,33 +16,18 @@ router.post('/submission-file', upload.single('file'), async (req, res) => {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    // 1. Fetch Form Schema to validate
-    const { data: form, error: formError } = await supabaseAdmin
-      .from('program_forms')
-      .select('schema')
-      .eq('id', formId)
+    const { data: fieldData, error: fieldError } = await supabaseAdmin
+      .from('program_form_fields')
+      .select('type, config')
+      .eq('id', fieldId)
+      .eq('form_id', formId)
       .single();
 
-    if (formError || !form) {
-      return res.status(404).json({ error: 'Form not found.' });
-    }
-
-    const schema = (form.schema || []) as any[];
-    // Find the field in the schema pages
-    let fieldConfig = null;
-    for (const page of schema) {
-      if (page.fields) {
-        const found = page.fields.find((f: any) => f.id === fieldId);
-        if (found) {
-          fieldConfig = found;
-          break;
-        }
-      }
-    }
-
-    if (!fieldConfig) {
+    if (fieldError || !fieldData) {
       return res.status(404).json({ error: 'Field configuration not found in form.' });
     }
+    
+    const fieldConfig = { type: fieldData.type, validation: (fieldData.config as any)?.validation || {} };
 
     // 2. Validate Type (Image vs File)
     if (fieldConfig.type === 'image') {

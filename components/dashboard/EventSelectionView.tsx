@@ -675,7 +675,9 @@ if (!newEvent.deadline) {
                                     key={n.id}
                                     onClick={() => {
                                        if (!n.isRead) handleMarkRead(n.id);
-                                       if (n.programId) {
+                                       if (n.metadata?.route) {
+                                          window.location.href = n.metadata.route;
+                                       } else if (n.programId) {
                                           const targetEvent = events.find(e => e.id === n.programId);
                                           if (targetEvent) {
                                              onSelectEvent(targetEvent);

@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { canAccessProgram } from '../middleware/programAccess.js';
 import { getSupabaseAdmin } from '../supabase.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -106,6 +107,39 @@ router.post('/:programId', requireAuth, async (req, res) => {
       return res.status(500).json({ error: error?.message || 'Failed to create form' });
     }
 
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', programId).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId: programId,
+        type: 'form',
+        title: 'Form Created',
+        body: `"${data.title || 'Form'}" has been created.`,
+        recipientUserId: req.userId,
+        metadata: {
+          entityId: data.id,
+          entityType: 'form',
+          route: `/dashboard/${programId}/forms`,
+        }
+      });
+
+      if (data.is_active) {
+        await createNotification(supabase, {
+          organizationId: program.organization_id,
+          programId: programId,
+          type: 'form',
+          title: 'Form Published',
+          body: `"${data.title || 'Form'}" is now live and published.`,
+          recipientUserId: req.userId,
+          metadata: {
+            entityId: data.id,
+            entityType: 'form',
+            route: `/dashboard/${programId}/forms`,
+          }
+        });
+      }
+    }
+
     return res.status(201).json({ data });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
@@ -155,6 +189,55 @@ router.put('/:formId', requireAuth, async (req, res) => {
       return res.status(500).json({ error: error?.message || 'Failed to update form' });
     }
 
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', form.program_id).maybeSingle();
+    if (program?.organization_id) {
+      if (updates.is_active !== undefined) {
+        if (updates.is_active) {
+          await createNotification(supabase, {
+            organizationId: program.organization_id,
+            programId: form.program_id,
+            type: 'form',
+            title: 'Form Published',
+            body: `"${data.title || 'Form'}" is now live and published.`,
+            recipientUserId: req.userId,
+            metadata: {
+              entityId: data.id,
+              entityType: 'form',
+              route: `/dashboard/${form.program_id}/forms`,
+            }
+          });
+        } else {
+          await createNotification(supabase, {
+            organizationId: program.organization_id,
+            programId: form.program_id,
+            type: 'form',
+            title: 'Form Unpublished',
+            body: `"${data.title || 'Form'}" is no longer active.`,
+            recipientUserId: req.userId,
+            metadata: {
+              entityId: data.id,
+              entityType: 'form',
+              route: `/dashboard/${form.program_id}/forms`,
+            }
+          });
+        }
+      } else {
+        await createNotification(supabase, {
+          organizationId: program.organization_id,
+          programId: form.program_id,
+          type: 'form',
+          title: 'Form Updated',
+          body: `"${data.title || 'Form'}" has been updated.`,
+          recipientUserId: req.userId,
+          metadata: {
+            entityId: data.id,
+            entityType: 'form',
+            route: `/dashboard/${form.program_id}/forms`,
+          }
+        });
+      }
+    }
+
     return res.json({ data });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
@@ -194,6 +277,23 @@ router.delete('/:formId', requireAuth, async (req, res) => {
 
     if (error) {
       return res.status(500).json({ error: error.message || 'Failed to delete form' });
+    }
+
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', form.program_id).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId: form.program_id,
+        type: 'form',
+        title: 'Form Deleted',
+        body: `A form has been deleted.`,
+        recipientUserId: req.userId,
+        metadata: {
+          entityId: formId,
+          entityType: 'form',
+          route: `/dashboard/${form.program_id}/forms`,
+        }
+      });
     }
 
     return res.status(204).send();

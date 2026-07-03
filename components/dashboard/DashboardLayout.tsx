@@ -1320,7 +1320,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
             onNotificationClick={(notification) => {
-              if (notification.programId) {
+              if (notification.metadata?.route) {
+                window.location.href = notification.metadata.route;
+              } else if (notification.programId) {
                 const targetProgram = allProgramsQuery.data?.find(p => p.id === notification.programId);
                 if (targetProgram) {
                   onSelectProgram(targetProgram);

@@ -284,7 +284,9 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
                           key={n.id}
                           onClick={() => {
                             if (!n.isRead) handleMarkRead(n.id);
-                            if (n.programId) {
+                            if (n.metadata?.route) {
+                              window.location.href = n.metadata.route;
+                            } else if (n.programId) {
                               navigate(buildDashboardPath({ eventId: n.programId, view: 'overview' }));
                             } else if (n.organizationId) {
                               const targetOrg = organizations.find((o) => o.id === n.organizationId);

@@ -5,6 +5,7 @@ import { requireProgramAccess } from '../middleware/programAccess.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 import { validateRoundTransitions } from '../services/flowValidation.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 const ALLOWED_ROUND_TYPES = new Set([
@@ -342,6 +343,23 @@ router.post('/:programId/rounds', requireAuth, async (req: AuthenticatedRequest,
       return res.status(500).json({ error: error?.message || 'Failed to create round' });
     }
 
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', programId).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId: programId,
+        type: 'judging',
+        title: 'Round Created',
+        body: `"${data.title}" round has been created.`,
+        recipientUserId: req.userId,
+        metadata: {
+          entityId: data.id,
+          entityType: 'round',
+          route: `/dashboard/${programId}/pipeline`,
+        }
+      });
+    }
+
     await invalidateSchedule(programId);
     return res.status(201).json({ data });
   } catch (error: any) {
@@ -426,6 +444,23 @@ router.put('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedReque
       return res.status(500).json({ error: error?.message || 'Failed to update round' });
     }
 
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', programId).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId: programId,
+        type: 'judging',
+        title: 'Round Updated',
+        body: `"${data.title}" round settings were updated.`,
+        recipientUserId: req.userId,
+        metadata: {
+          entityId: data.id,
+          entityType: 'round',
+          route: `/dashboard/${programId}/pipeline`,
+        }
+      });
+    }
+
     await invalidateSchedule(programId);
     return res.json({ data });
   } catch (error: any) {
@@ -472,6 +507,23 @@ router.delete('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedRe
     const { error } = await supabase.from('rounds').delete().eq('id', id).eq('program_id', programId);
     if (error) {
       return res.status(500).json({ error: error.message || 'Failed to delete round' });
+    }
+
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', programId).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId: programId,
+        type: 'judging',
+        title: 'Round Deleted',
+        body: `A round has been deleted.`,
+        recipientUserId: req.userId,
+        metadata: {
+          entityId: id,
+          entityType: 'round',
+          route: `/dashboard/${programId}/pipeline`,
+        }
+      });
     }
 
     await invalidateSchedule(programId);

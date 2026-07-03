@@ -6,6 +6,7 @@ import {
 	getOrgResendMailer,
 } from '../services/orgResend.js';
 import { canManageOrganizationInvites } from '../lib/orgAccess.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -201,32 +202,6 @@ async function resolveTeamInvite(supabase: any, token: string) {
 	return { invite };
 }
 
-async function insertNotificationSafe(
-	supabase: any,
-	payload: {
-		organizationId: string;
-		programId?: string | null;
-		recipientUserId?: string | null;
-		type: string;
-		title: string;
-		body: string;
-		metadata?: Record<string, any>;
-	},
-) {
-	try {
-		await supabase.from('notifications').insert({
-			organization_id: payload.organizationId,
-			program_id: payload.programId || null,
-			recipient_user_id: payload.recipientUserId || null,
-			type: payload.type,
-			title: payload.title,
-			body: payload.body,
-			metadata: payload.metadata || {},
-		});
-	} catch {
-		// Notifications are best-effort and should never break invite flows.
-	}
-}
 
 function isAutoAssignJudging(value?: string | null): boolean {
 	return value === 'auto_assign';
@@ -883,7 +858,7 @@ router.post('/verify-team', async (req, res) => {
 			? await supabase.from('programs').select('title').eq('id', resolved.invite.program_id).maybeSingle()
 			: ({ data: null } as any);
 		const joinedTitle = program?.title || 'the team';
-		await insertNotificationSafe(supabase, {
+		await createNotification(supabase, {
 			organizationId: resolved.invite.organization_id,
 			programId: resolved.invite.program_id,
 			recipientUserId: authResult.user.id,
@@ -1011,7 +986,7 @@ router.post('/team', async (req, res) => {
 			.eq('email', normalizedEmail)
 			.maybeSingle();
 
-		await insertNotificationSafe(supabase, {
+		await createNotification(supabase, {
 			organizationId: resolvedOrgId,
 			programId: programId || null,
 			recipientUserId: user.id,
@@ -1056,7 +1031,7 @@ router.post('/team', async (req, res) => {
 		const mailer = await getOrgResendMailer(supabase, resolvedOrgId);
 		if (!mailer) {
 			if (existingProfile?.id) {
-				await insertNotificationSafe(supabase, {
+				await createNotification(supabase, {
 					organizationId: resolvedOrgId,
 					programId: programId || null,
 					recipientUserId: existingProfile.id,
@@ -1160,7 +1135,7 @@ router.post('/team', async (req, res) => {
 		if (sendError) {
 			console.error('Resend error (team invite):', sendError);
 			if (existingProfile?.id) {
-				await insertNotificationSafe(supabase, {
+				await createNotification(supabase, {
 					organizationId: resolvedOrgId,
 					programId: programId || null,
 					recipientUserId: existingProfile.id,
@@ -1181,7 +1156,7 @@ router.post('/team', async (req, res) => {
 		}
 
 		if (existingProfile?.id) {
-			await insertNotificationSafe(supabase, {
+			await createNotification(supabase, {
 				organizationId: resolvedOrgId,
 				programId: programId || null,
 				recipientUserId: existingProfile.id,

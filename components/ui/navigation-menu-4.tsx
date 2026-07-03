@@ -50,6 +50,7 @@ interface NotificationItem {
   isRead: boolean
   createdAt: string
   programId?: string | null
+  metadata?: Record<string, any> | null
 }
 
 interface NavigationMenuFourProps {

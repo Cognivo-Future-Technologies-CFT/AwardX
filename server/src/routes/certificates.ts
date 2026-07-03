@@ -9,7 +9,7 @@
  * - DELETE /:programId/certificate-round-labels/:roundId — remove a global certificate display label
  */
 
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { requireProgramAccess } from '../middleware/programAccess.js';
@@ -19,6 +19,7 @@ import {
 	RESEND_NOT_CONFIGURED_MESSAGE,
 } from '../services/orgResend.js';
 import { rateLimit } from '../middleware/rateLimit.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -111,6 +112,30 @@ router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), 
 	}
 
 	const sent = results.filter((r) => r.success).length;
+
+	// Hook: Certificate Issuance Notification
+	if (sent > 0) {
+		const title = sent === 1 ? 'Certificate Issued' : 'Certificates Delivered';
+		const body = sent === 1 ? `Successfully sent 1 certificate.` : `Successfully sent ${sent} certificates.`;
+		
+		await createNotification(supabase, {
+			organizationId: program.organization_id,
+			programId: programId,
+			type: 'certificate',
+			title,
+			body,
+			metadata: {
+				organizationId: program.organization_id,
+				programId,
+				actorUserId: req.userId,
+				entityType: 'certificate',
+				certificateCount: sent,
+				route: `/dashboard/${programId}/certificates`,
+				createdAt: new Date().toISOString()
+			}
+		});
+	}
+
 	return res.json({ sent, total: recipients.length, results });
 });
 

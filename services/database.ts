@@ -57,6 +57,7 @@ export interface DashboardNotification {
   isRead: boolean;
   programId: string | null;
   organizationId: string | null;
+  metadata?: Record<string, any>;
   createdAt: string;
 }
 
@@ -337,10 +338,21 @@ export const submissionDrafts = {
     draft_data: Record<string, any>;
     current_page: number;
   }) {
+    let query = supabase
+      .from('submission_drafts')
+      .select('id')
+      .eq('form_id', draft.form_id);
+      
+    if (draft.user_id) query = query.eq('user_id', draft.user_id);
+    else if (draft.session_id) query = query.eq('session_id', draft.session_id);
+
+    const { data: existing } = await query.maybeSingle();
+
     const { data, error } = await supabase
       .from('submission_drafts')
       .upsert({
         ...draft,
+        ...(existing?.id ? { id: existing.id } : {}),
         updated_at: new Date().toISOString(),
       })
       .select()
@@ -597,6 +609,19 @@ class DatabaseService {
 
     const created = this.mapOrganization(data);
     await this.setActiveOrganization(created.id);
+
+    if (!isDemoMode()) {
+      await this.createNotification({
+        type: 'organization',
+        title: 'Organization Created',
+        body: `"${name}" organization has been created.`,
+        organizationId: created.id,
+        entityId: created.id,
+        entityType: 'organization',
+        route: `/organization/${created.id}/settings`,
+      });
+    }
+
     return created;
   }
 
@@ -981,6 +1006,19 @@ class DatabaseService {
       }
     }
 
+    // Hook: New Program Notification
+    if (!isDemoMode()) {
+      await this.createNotification({
+        type: 'program',
+        title: 'New Program Created',
+        body: `"${created.title}" has been created.`,
+        programId: created.id,
+        entityId: created.id,
+        entityType: 'program',
+        route: `/dashboard/${created.id}/overview`,
+      });
+    }
+
     return created;
   }
 
@@ -1043,6 +1081,33 @@ class DatabaseService {
       details: updated.title,
       metadata: { title: updated.title },
     });
+
+    if (!isDemoMode() && this.currentOrgId) {
+      // Basic "Program Updated"
+      let title = 'Program Updated';
+      let body = `"${updated.title}" settings have been updated.`;
+
+      // Infer state from current values
+      if (program.status === 'published') {
+        title = 'Program Published';
+        body = `"${updated.title}" is published and live.`;
+      } else if (program.status === 'draft') {
+        title = 'Program Unpublished';
+        body = `"${updated.title}" has been moved to draft.`;
+      }
+
+      await this.createNotification({
+        type: 'program',
+        title,
+        body,
+        organizationId: this.currentOrgId,
+        programId: updated.id,
+        entityId: updated.id,
+        entityType: 'program',
+        route: `/dashboard/${updated.id}/overview`,
+      });
+    }
+
     return updated;
   }
 
@@ -1210,6 +1275,18 @@ class DatabaseService {
       details: `Program ${programId} deleted`,
       metadata: { programId },
     });
+
+    if (!isDemoMode() && this.currentOrgId) {
+      await this.createNotification({
+        type: 'program',
+        title: 'Program Deleted',
+        body: `A program has been deleted.`,
+        organizationId: this.currentOrgId,
+        entityId: programId,
+        entityType: 'program',
+        route: `/organization/${this.currentOrgId}/events`,
+      });
+    }
   }
 
   // Categories (via backend API — avoids client RLS failures on direct inserts)
@@ -1322,6 +1399,20 @@ class DatabaseService {
       details: created.title,
       metadata: { title: created.title, programId: created.programId, parentId: created.parentId },
     });
+
+    // Hook: New Award Category Notification
+    if (!isDemoMode()) {
+      await this.createNotification({
+        type: 'award',
+        title: 'New Award Configured',
+        body: `"${created.title}" award has been added.`,
+        programId: created.programId,
+        entityId: created.id,
+        entityType: 'category',
+        route: `/dashboard/${created.programId}/awards`,
+      });
+    }
+
     return created;
   }
 
@@ -1742,6 +1833,21 @@ class DatabaseService {
       details: `${submissionIds.length} submissions; ${judgeIds.length} judges`,
       metadata: { submissionIds, judgeIds },
     });
+
+    if (!isDemoMode() && this.currentOrgId && supabase && submissionIds.length > 0) {
+      const { data } = await supabase.from('submissions').select('program_id').eq('id', submissionIds[0]).maybeSingle();
+      if (data?.program_id) {
+        await this.createNotification({
+          type: 'judging',
+          title: 'Judge Assigned',
+          body: `Judges were assigned to ${submissionIds.length} submission(s).`,
+          organizationId: this.currentOrgId,
+          programId: data.program_id,
+          entityType: 'submission',
+          route: `/dashboard/${data.program_id}/submissions`,
+        });
+      }
+    }
   }
 
   async unassignJudgesFromSubmissions(submissionIds: string[], judgeIds?: string[]) {
@@ -1756,6 +1862,21 @@ class DatabaseService {
       details: `${submissionIds.length} submissions`,
       metadata: { submissionIds, judgeIds },
     });
+
+    if (!isDemoMode() && this.currentOrgId && supabase && submissionIds.length > 0) {
+      const { data } = await supabase.from('submissions').select('program_id').eq('id', submissionIds[0]).maybeSingle();
+      if (data?.program_id) {
+        await this.createNotification({
+          type: 'judging',
+          title: 'Judge Unassigned',
+          body: `Judges were unassigned from ${submissionIds.length} submission(s).`,
+          organizationId: this.currentOrgId,
+          programId: data.program_id,
+          entityType: 'submission',
+          route: `/dashboard/${data.program_id}/submissions`,
+        });
+      }
+    }
   }
 
   // Judges
@@ -2333,6 +2454,19 @@ class DatabaseService {
       resourceId: memberId,
       metadata: { roleId },
     });
+
+    if (!isDemoMode()) {
+      await this.createNotification({
+        type: 'team',
+        title: 'Role Changed',
+        body: `A team member's role has been updated.`,
+        organizationId: this.currentOrgId!,
+        programId,
+        entityId: memberId,
+        entityType: 'organization_member',
+        route: programId ? `/dashboard/${programId}/settings` : `/organization/${this.currentOrgId}/settings`,
+      });
+    }
   }
 
   async addTeamMemberByEmail(email: string, roleId: string, programId?: string) {
@@ -2345,6 +2479,19 @@ class DatabaseService {
       details: email,
       metadata: { email, roleId, programId },
     });
+
+    if (!isDemoMode()) {
+      await this.createNotification({
+        type: 'team',
+        title: 'Member Invited',
+        body: `Invited ${email} to the team.`,
+        organizationId: this.currentOrgId!,
+        programId,
+        entityId: email,
+        entityType: 'organization_member',
+        route: programId ? `/dashboard/${programId}/settings` : `/organization/${this.currentOrgId}/settings`,
+      });
+    }
   }
 
 
@@ -2479,6 +2626,7 @@ class DatabaseService {
         isRead: !!n.is_read,
         programId: n.program_id || null,
         organizationId: n.organization_id || null,
+        metadata: n.metadata || {},
         createdAt: n.created_at || new Date().toISOString(),
       }));
     } catch {
@@ -2580,6 +2728,17 @@ class DatabaseService {
         actionType: 'update',
         resourceType: 'organization',
       });
+      if (!isDemoMode() && this.currentOrgId) {
+        await this.createNotification({
+          type: 'organization',
+          title: 'Organization Updated',
+          body: `Organization settings have been updated.`,
+          organizationId: this.currentOrgId,
+          entityId: this.currentOrgId,
+          entityType: 'organization',
+          route: `/organization/${this.currentOrgId}/settings`,
+        });
+      }
     }
     return res;
   }
@@ -2646,6 +2805,7 @@ class DatabaseService {
       details: payload.title,
       metadata: { programId: payload.program_id },
     });
+
     return data;
   }
 
@@ -2666,6 +2826,7 @@ class DatabaseService {
       resourceType: 'program_form',
       resourceId: id,
     });
+
     return data;
   }
 
@@ -2883,6 +3044,19 @@ class DatabaseService {
       );
     } catch (e) {
       console.warn('[pipeline] Failed to auto-enroll submission in first round:', e);
+    }
+
+    if (!isDemoMode() && this.currentOrgId) {
+      await this.createNotification({
+        type: 'submission',
+        title: 'Submission Received',
+        body: `A new submission was received for ${form.title || 'a form'}.`,
+        organizationId: this.currentOrgId,
+        programId: form.program_id,
+        entityId: submissionIdForEnrollment,
+        entityType: 'submission',
+        route: `/dashboard/${form.program_id}/submissions`,
+      });
     }
 
     return data;
@@ -3630,6 +3804,18 @@ class DatabaseService {
       resourceType: 'organization_member',
       resourceId: memberId,
     });
+
+    if (!isDemoMode()) {
+      await this.createNotification({
+        type: 'team',
+        title: 'Member Removed',
+        body: `A team member has been removed from the organization.`,
+        organizationId: this.currentOrgId!,
+        entityId: memberId,
+        entityType: 'organization_member',
+        route: `/organization/${this.currentOrgId}/settings`,
+      });
+    }
   }
 
   async getPendingTeamInvites(organizationId: string): Promise<PendingInvite[]> {
@@ -3985,6 +4171,59 @@ class DatabaseService {
 
   async getAdvancementEventsByRound(roundId: string) {
     return advancement.getEventsByRound(roundId);
+  }
+
+  async createNotification(payload: {
+    type: string;
+    title: string;
+    body?: string;
+    organizationId?: string;
+    programId?: string;
+    actorUserId?: string;
+    entityId?: string;
+    entityType?: string;
+    route?: string;
+    certificateCount?: number;
+    recipientUserId?: string;
+  }) {
+    if (isDemoMode() || !supabase) return;
+
+    const orgId = payload.organizationId || this.currentOrgId;
+    if (!orgId) return;
+
+    let actorUserId = payload.actorUserId;
+    if (!actorUserId) {
+       const { user } = await auth.getUser();
+       actorUserId = user?.id;
+    }
+
+    const metadata = {
+       organizationId: orgId,
+       programId: payload.programId,
+       actorUserId,
+       entityId: payload.entityId,
+       entityType: payload.entityType,
+       route: payload.route,
+       certificateCount: payload.certificateCount,
+       createdAt: new Date().toISOString()
+    };
+
+    try {
+      const { error } = await supabase.from('notifications').insert({
+        organization_id: orgId,
+        program_id: payload.programId || null,
+        recipient_user_id: payload.recipientUserId || null,
+        type: payload.type,
+        title: payload.title,
+        body: payload.body || '',
+        metadata
+      });
+      if (error) {
+        console.error('Failed to create notification', error);
+      }
+    } catch (e) {
+      console.error('Exception creating notification', e);
+    }
   }
 
   hasPermission(permission: string): boolean {

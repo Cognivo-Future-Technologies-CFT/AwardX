@@ -48,8 +48,38 @@ async function getRound(roundId: string): Promise<RoundRow | null> {
 
 async function updateRoundStatus(roundId: string, status: string, extra?: Record<string, any>) {
   const supabase = getSupabaseAdmin();
-  const { error } = await supabase.from('rounds').update({ status, ...extra }).eq('id', roundId);
+  const { error, data } = await supabase.from('rounds').update({ status, ...extra }).eq('id', roundId).select('title, program_id').single();
   if (error) throw new Error(error.message);
+
+  if (data?.program_id) {
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', data.program_id).maybeSingle();
+    if (program?.organization_id) {
+      const { createNotification } = await import('./notifications.js');
+      let title = '';
+      let body = '';
+      if (status === 'active') {
+        title = 'Round Started';
+        body = `"${data.title}" round has started.`;
+      } else if (status === 'completed') {
+        title = 'Round Ended';
+        body = `"${data.title}" round has ended.`;
+      }
+      if (title && body) {
+        await createNotification(supabase, {
+          organizationId: program.organization_id,
+          programId: data.program_id,
+          type: 'judging',
+          title,
+          body,
+          metadata: {
+            entityId: roundId,
+            entityType: 'round',
+            route: `/dashboard/${data.program_id}/pipeline`,
+          }
+        });
+      }
+    }
+  }
 }
 
 async function getEnrolledCount(roundId: string): Promise<number> {

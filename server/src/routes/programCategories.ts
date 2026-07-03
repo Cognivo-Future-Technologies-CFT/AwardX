@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ensureCanManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
+import { createNotification } from '../services/notifications.js';
 
 const router = Router();
 
@@ -171,6 +172,23 @@ router.delete('/:programId/categories/:categoryId', requireAuth, async (req: Aut
 
     if (error) {
       return res.status(500).json({ error: error.message || 'Failed to delete category' });
+    }
+
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', programId).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId,
+        type: 'award',
+        title: 'Award Deleted',
+        body: `An award/category has been deleted.`,
+        recipientUserId: req.userId,
+        metadata: {
+          entityId: categoryId,
+          entityType: 'category',
+          route: `/dashboard/${programId}/overview`,
+        }
+      });
     }
 
     return res.json({ ok: true });
