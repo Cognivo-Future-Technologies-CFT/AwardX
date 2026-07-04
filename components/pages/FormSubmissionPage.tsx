@@ -671,7 +671,14 @@ const fieldsByStep = useMemo(() => {
 
     try {
       setIsSubmitting(true);
-      const paymentRequired = !!(paymentConfig?.enabled && (paymentConfig?.fee || 0) > 0 && programId);
+      // Payment is required if either:
+      // 1. paymentConfig is loaded from DB and enabled with fee > 0, OR
+      // 2. The form contains a payment field (even if config didn't load from the public view)
+      const hasPaymentField = formFields.some(f => f.type === 'payment');
+      const paymentRequired = !!(
+        (paymentConfig?.enabled && (paymentConfig?.fee || 0) > 0 && programId) ||
+        (hasPaymentField && programId)
+      );
 
       const submission: any = await db.submitFormResponse(currentFormId, formData, paymentRequired
         ? {
