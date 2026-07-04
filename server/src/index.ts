@@ -7,6 +7,7 @@ import apiRoutes from './routes/index.js';
 import { getCacheStatus } from './cache/redisCache.js';
 import { startRoundScheduler } from './jobs/roundScheduler.js';
 import { rateLimit } from './middleware/rateLimit.js';
+import { resolveHandler } from '../../api/_handlers/registry.js';
 
 // Resolve __dirname in ESM and load .env from the project root (two levels up from server/src/)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +53,25 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.use('/api', apiRoutes);
+
+// Catch-all: delegate unmatched /api/* routes to the serverless-style handler registry.
+// This covers payments, webhooks, submissions/my, notifications, etc. that live in api/_handlers/.
+app.all('/api/:path(*)', async (req, res, next) => {
+	const pathKey = req.params.path || 'health';
+	const method = (req.method || 'GET').toUpperCase();
+	const handler = resolveHandler(pathKey, method);
+	if (!handler) {
+		return next();
+	}
+	try {
+		await handler(req, res);
+	} catch (error: any) {
+		console.error('[serverless-compat] Handler error:', error?.message || error);
+		if (!res.headersSent) {
+			res.status(500).json({ error: error?.message || 'Internal server error' });
+		}
+	}
+});
 
 app.listen(port, () => {
 	const cacheStatus = getCacheStatus();
