@@ -63,12 +63,15 @@ interface FormBuilderProps {
   isSaving?: boolean;
   paymentConfigured?: boolean;
   paymentProvider?: string;
+  paymentFee?: number;
+  paymentCurrency?: string;
   elementsPanelOpen?: boolean;
   propertiesPanelOpen?: boolean;
   onElementsPanelOpenChange?: (open: boolean) => void;
   onPropertiesPanelOpenChange?: (open: boolean) => void;
   awardOptions?: string[];
   isAutoAssignJudging?: boolean;
+  onPaymentConfigSave?: (config: { provider: 'Stripe' | 'Razorpay'; fee: number; currency: string; publicKey: string }) => Promise<void>;
 }
 
 export interface FormBuilderRef {
@@ -113,7 +116,7 @@ const buildFieldTypes = (isAutoAssign: boolean) => {
   {
     group: 'Advanced',
     items: [
-      { type: 'payment', label: 'Payment', icon: CreditCard, description: 'Collect fees via Razorpay' },
+      { type: 'payment', label: 'Payment', icon: CreditCard, description: 'Collect submission fees' },
     ]
   }
 ];
@@ -140,12 +143,15 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   isSaving = false,
   paymentConfigured = false,
   paymentProvider,
+  paymentFee,
+  paymentCurrency,
   elementsPanelOpen = true,
   propertiesPanelOpen = false,
   onElementsPanelOpenChange,
   onPropertiesPanelOpenChange,
   awardOptions = [],
   isAutoAssignJudging = false,
+  onPaymentConfigSave,
 }, ref) => {
   const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
   const selectorLabels = getCategorySelectorLabels(isAutoAssignJudging);
@@ -163,6 +169,12 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState<string>(pages[0]?.id || 'page-1');
   const [showPaymentPopup, setShowPaymentPopup] = useState(false);
+  const [paymentModalProvider, setPaymentModalProvider] = useState<'Stripe' | 'Razorpay'>('Razorpay');
+  const [paymentModalFee, setPaymentModalFee] = useState<number>(paymentFee || 0);
+  const [paymentModalCurrency, setPaymentModalCurrency] = useState<string>(paymentCurrency || 'INR');
+  const [paymentModalKey, setPaymentModalKey] = useState<string>('');
+  const [paymentModalSaving, setPaymentModalSaving] = useState(false);
+  const [paymentModalError, setPaymentModalError] = useState<string | null>(null);
 
   const [isPreview, setIsPreview] = useState(false);
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
@@ -615,11 +627,15 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         );
       case 'payment':
         return (
-          <div className={`relative ${!paymentConfigured ? 'opacity-40 pointer-events-none' : ''}`}>
+          <div className="relative">
             <div className="border-2 border-dashed border-emerald-300 bg-emerald-50/50 rounded-xl p-6 text-center">
               <CreditCard className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
               <p className="text-sm font-semibold text-emerald-800">Payment Collection</p>
-              <p className="text-xs text-emerald-600 mt-1">Submission fee will be collected via {paymentProvider || 'Razorpay'}</p>
+              <p className="text-xs text-emerald-600 mt-1">
+                {paymentConfigured
+                  ? `${paymentCurrency || 'INR'} ${paymentFee || 0} via ${paymentProvider || 'Razorpay'}`
+                  : `Submission fee will be collected via ${paymentProvider || 'Razorpay'}`}
+              </p>
             </div>
           </div>
         );
@@ -1351,6 +1367,57 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                     )}
                   </div>
                 ) : null}
+                {field.type === 'payment' && (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Payment Settings</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Fee Amount</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={paymentFee || 0}
+                          onChange={e => {
+                            const newFee = Number(e.target.value) || 0;
+                            if (onPaymentConfigSave) {
+                              onPaymentConfigSave({
+                                provider: (paymentProvider as 'Stripe' | 'Razorpay') || 'Razorpay',
+                                fee: newFee,
+                                currency: paymentCurrency || 'INR',
+                                publicKey: '',
+                              }).catch(() => {});
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 mb-1 block">Currency</label>
+                        <input
+                          type="text"
+                          value={paymentCurrency || 'INR'}
+                          disabled
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600"
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <p className="text-xs text-emerald-700">
+                        <span className="font-semibold">{paymentProvider || 'Razorpay'}</span> — {paymentConfigured ? 'Connected' : 'Not configured'}
+                      </p>
+                    </div>
+                    {!paymentConfigured && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentPopup(true)}
+                        className="w-full text-xs px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+                      >
+                        Configure Payment
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })() : (
@@ -1366,32 +1433,178 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
         </div>
       </div>
 
-      {/* Payment Not Configured Popup */}
+      {/* Payment Configuration Modal */}
       {showPaymentPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 max-w-sm w-full mx-4 space-y-5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-center w-14 h-14 bg-amber-100 rounded-2xl mx-auto">
-              <CreditCard className="w-7 h-7 text-amber-600" />
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 max-w-md w-full mx-4 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-center w-14 h-14 bg-emerald-100 rounded-2xl mx-auto">
+              <CreditCard className="w-7 h-7 text-emerald-600" />
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-bold text-slate-900">Payment Not Configured</h3>
+              <h3 className="text-lg font-bold text-slate-900">Configure Payment</h3>
               <p className="text-sm text-slate-500">
-                You need to set up a payment provider (Razorpay, Stripe, or PayPal) in your program settings before adding a payment field.
+                Set up a payment gateway to collect submission fees directly from your form.
               </p>
             </div>
-            <div className="flex flex-col gap-2.5">
+
+            <div className="space-y-4">
+              {/* Provider Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Payment Provider</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentModalProvider('Razorpay');
+                      if (paymentModalCurrency === 'USD' || paymentModalCurrency === 'EUR' || paymentModalCurrency === 'GBP') {
+                        setPaymentModalCurrency('INR');
+                      }
+                    }}
+                    className={`flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl border-2 transition-all ${
+                      paymentModalProvider === 'Razorpay'
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-lg">🇮🇳</span>
+                    <span className="text-sm font-semibold text-slate-800">Razorpay</span>
+                    <span className="text-[11px] text-slate-500">India & Global</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentModalProvider('Stripe');
+                      if (paymentModalCurrency === 'INR') {
+                        setPaymentModalCurrency('USD');
+                      }
+                    }}
+                    className={`flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl border-2 transition-all ${
+                      paymentModalProvider === 'Stripe'
+                        ? 'border-purple-500 bg-purple-50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="text-lg">💳</span>
+                    <span className="text-sm font-semibold text-slate-800">Stripe</span>
+                    <span className="text-[11px] text-slate-500">Global</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Fee & Currency */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Submission Fee</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={paymentModalFee}
+                    onChange={(e) => setPaymentModalFee(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    placeholder="e.g. 500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Currency</label>
+                  <select
+                    value={paymentModalCurrency}
+                    onChange={(e) => setPaymentModalCurrency(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  >
+                    {paymentModalProvider === 'Razorpay' ? (
+                      <>
+                        <option value="INR">INR (₹)</option>
+                        <option value="USD">USD ($)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                        <option value="CAD">CAD ($)</option>
+                        <option value="INR">INR (₹)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* API Key */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">
+                  {paymentModalProvider === 'Razorpay' ? 'Razorpay Key ID' : 'Stripe Publishable Key'}
+                </label>
+                <input
+                  type="text"
+                  value={paymentModalKey}
+                  onChange={(e) => setPaymentModalKey(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  placeholder={paymentModalProvider === 'Razorpay' ? 'rzp_live_xxxxxxxxxxxx' : 'pk_live_xxxxxxxxxxxx'}
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {paymentModalProvider === 'Razorpay'
+                    ? 'Find this in your Razorpay Dashboard → Settings → API Keys'
+                    : 'Find this in your Stripe Dashboard → Developers → API Keys'}
+                </p>
+              </div>
+
+              {paymentModalError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {paymentModalError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-2">
               <button
-                onClick={() => {
-                  setShowPaymentPopup(false);
-                  // Navigate to settings/billing via dispatching a navigation event
-                  window.dispatchEvent(new CustomEvent('navigate-to', { detail: 'program-details' }));
+                onClick={async () => {
+                  if (!paymentModalKey.trim()) {
+                    setPaymentModalError('Please enter your API key');
+                    return;
+                  }
+                  if (paymentModalFee <= 0) {
+                    setPaymentModalError('Please set a submission fee greater than 0');
+                    return;
+                  }
+                  setPaymentModalError(null);
+                  setPaymentModalSaving(true);
+                  try {
+                    if (onPaymentConfigSave) {
+                      await onPaymentConfigSave({
+                        provider: paymentModalProvider,
+                        fee: paymentModalFee,
+                        currency: paymentModalCurrency,
+                        publicKey: paymentModalKey.trim(),
+                      });
+                    }
+                    setShowPaymentPopup(false);
+                    // Add the payment field now that it's configured
+                    pushHistory();
+                    const newField: FormField = {
+                      id: `field-${Date.now()}`,
+                      type: 'payment',
+                      label: 'Payment',
+                      placeholder: '',
+                      helpText: '',
+                      required: false,
+                      pageId: selectedPageId,
+                    };
+                    setFields((prev) => [...prev, newField]);
+                    setSelectedFieldId(newField.id);
+                  } catch (err: any) {
+                    setPaymentModalError(err?.message || 'Failed to save payment configuration');
+                  } finally {
+                    setPaymentModalSaving(false);
+                  }
                 }}
-                className="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
+                disabled={paymentModalSaving}
+                className="w-full px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50"
               >
-                Go to Billing &amp; Plan Settings
+                {paymentModalSaving ? 'Saving...' : `Enable ${paymentModalProvider} Payments`}
               </button>
               <button
-                onClick={() => setShowPaymentPopup(false)}
+                onClick={() => { setShowPaymentPopup(false); setPaymentModalError(null); }}
                 className="w-full px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl hover:bg-slate-50 transition-colors"
               >
                 Cancel

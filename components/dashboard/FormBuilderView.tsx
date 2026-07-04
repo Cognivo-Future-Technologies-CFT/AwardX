@@ -500,12 +500,30 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               isSaving={isSaving}
               paymentConfigured={!!(activeEvent?.paymentConfig?.enabled && activeEvent?.paymentConfig?.publicKey)}
               paymentProvider={activeEvent?.paymentConfig?.provider || 'Razorpay'}
+              paymentFee={activeEvent?.paymentConfig?.fee}
+              paymentCurrency={activeEvent?.paymentConfig?.currency}
               elementsPanelOpen={elementsPanelOpen}
               propertiesPanelOpen={propertiesPanelOpen}
               onElementsPanelOpenChange={setElementsPanelOpen}
               onPropertiesPanelOpenChange={setPropertiesPanelOpen}
               awardOptions={awardOptions}
               isAutoAssignJudging={isAutoAssign}
+              onPaymentConfigSave={async (config) => {
+                if (!activeEvent) throw new Error('No active program selected');
+                await db.updateProgram({
+                  ...activeEvent,
+                  paymentConfig: {
+                    enabled: true,
+                    provider: config.provider,
+                    currency: config.currency,
+                    fee: config.fee,
+                    publicKey: config.publicKey,
+                    connected: true,
+                  },
+                });
+                // Refresh the program data so the form builder gets updated props
+                queryClient.invalidateQueries({ queryKey: queryKeys.programs.all() });
+              }}
             />
           ) : null}
         </div>
