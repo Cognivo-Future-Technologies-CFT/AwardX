@@ -26,8 +26,14 @@ import {
 
 const router = Router();
 
-const ALLOWED_ROLE_NAMES = new Set(['admin', 'program manager', 'owner', 'ceo', 'superadmin']);
-const ALLOWED_PERMISSION_KEYS = new Set(['manage_programs', 'manage_judging']);
+const ALLOWED_ROLE_NAMES = new Set([
+  'admin', 'program manager', 'owner', 'ceo', 'superadmin',
+  'lead judge', 'lead_judge', 'event manager',
+]);
+const ALLOWED_PERMISSION_KEYS = new Set([
+  'manage_programs', 'manage_judging', 'manage_submissions',
+  'manage_forms', 'manage_teams', 'manage_settings', 'all',
+]);
 
 async function canSendMassEmail(userId: string, programId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin();
@@ -42,7 +48,7 @@ async function canSendMassEmail(userId: string, programId: string): Promise<bool
 
   const { data: memberships } = await supabase
     .from('organization_members')
-    .select('status, program_id, roles ( name, permissions )')
+    .select('status, program_id, roles(name, permissions, role_permissions(permissions(key)))')
     .eq('organization_id', program.organization_id)
     .eq('user_id', userId)
     .eq('status', 'active');
@@ -53,10 +59,21 @@ async function canSendMassEmail(userId: string, programId: string): Promise<bool
       return true;
     }
     const roleName = String(m.roles?.name || '').toLowerCase().trim();
-    const perms: string[] = Array.isArray(m.roles?.permissions)
+    if (ALLOWED_ROLE_NAMES.has(roleName)) return true;
+
+    // Collect permissions from both sources
+    const permsFromArray: string[] = Array.isArray(m.roles?.permissions)
       ? m.roles.permissions.map((v: any) => String(v).toLowerCase().trim())
       : [];
-    return ALLOWED_ROLE_NAMES.has(roleName) || perms.some((p) => ALLOWED_PERMISSION_KEYS.has(p));
+    const permsFromJunction: string[] = Array.isArray(m.roles?.role_permissions)
+      ? m.roles.role_permissions
+          .map((rp: any) => rp?.permissions?.key)
+          .filter(Boolean)
+          .map((key: string) => key.toLowerCase().trim())
+      : [];
+
+    const allPermissions = [...permsFromArray, ...permsFromJunction];
+    return allPermissions.some((p) => ALLOWED_PERMISSION_KEYS.has(p));
   });
 }
 

@@ -704,6 +704,7 @@ class DatabaseService {
         .select('role_id')
         .eq('organization_id', this.currentOrgId)
         .eq('user_id', user.id)
+        .eq('status', 'active')
         .eq('program_id', this.currentProgramId)
         .maybeSingle();
 
@@ -715,6 +716,7 @@ class DatabaseService {
           .select('role_id')
           .eq('organization_id', this.currentOrgId)
           .eq('user_id', user.id)
+          .eq('status', 'active')
           .is('program_id', null)
           .maybeSingle();
 
@@ -726,6 +728,7 @@ class DatabaseService {
         .select('role_id')
         .eq('organization_id', this.currentOrgId)
         .eq('user_id', user.id)
+        .eq('status', 'active')
         .is('program_id', null)
         .maybeSingle();
 
@@ -737,6 +740,7 @@ class DatabaseService {
           .select('role_id')
           .eq('organization_id', this.currentOrgId)
           .eq('user_id', user.id)
+          .eq('status', 'active')
           .limit(1)
           .maybeSingle();
 
@@ -781,14 +785,19 @@ class DatabaseService {
     await this.refreshPermissionCache();
 
     const roleName = (this.cachedRoleName || '').toLowerCase();
-    const isAdminRole = roleName === 'admin' || roleName === 'owner' || roleName === 'superadmin';
+    const isManagementRole = ['admin', 'owner', 'superadmin', 'program manager', 'lead judge', 'event manager'].includes(roleName);
     const hasManagePermission = !!this.cachedPermissions && (
       this.cachedPermissions.has('all') ||
-      this.cachedPermissions.has('manage_programs')
+      this.cachedPermissions.has('manage_programs') ||
+      this.cachedPermissions.has('manage_judging') ||
+      this.cachedPermissions.has('manage_submissions') ||
+      this.cachedPermissions.has('manage_forms') ||
+      this.cachedPermissions.has('manage_teams') ||
+      this.cachedPermissions.has('manage_settings')
     );
 
-    if (isAdminRole || hasManagePermission) return;
-    throw new Error('Only admins can edit or delete programs');
+    if (isManagementRole || hasManagePermission) return;
+    throw new Error('You do not have permission to manage programs');
   }
 
   async canManagePrograms(): Promise<boolean> {
