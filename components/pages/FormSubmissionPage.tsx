@@ -688,9 +688,14 @@ const fieldsByStep = useMemo(() => {
         : undefined);
 
       if (paymentRequired && submission?.id && programId) {
+        const { session } = await auth.getSession();
+        const authToken = session?.access_token || '';
         const checkoutResponse = await fetch('/api/payments/create-checkout', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
           body: JSON.stringify({
             submissionId: submission.id,
             programId,
