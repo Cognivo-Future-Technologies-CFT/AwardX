@@ -122,7 +122,7 @@ const PROFILE_FIELD_KEYWORDS = [
 const ACCENT_GREEN = '#059669';
 
 const isFullWidthField = (field: FormField) =>
-  ['textarea', 'radio', 'checkbox', 'select', 'award_selector', 'file', 'image'].includes(field.type);
+  ['textarea', 'radio', 'checkbox', 'select', 'award_selector', 'file', 'image', 'payment'].includes(field.type);
 
 const SECTION_TITLES = {
   profile: "Basic Information",
@@ -543,7 +543,7 @@ export const FormSubmissionPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [formData, currentFieldIdx, formId, isLoading, isSubmitted]);
 
-  const requiredFields = useMemo(() => formFields.filter(f => !!f.required), [formFields]);
+  const requiredFields = useMemo(() => formFields.filter(f => !!f.required && f.type !== 'payment'), [formFields]);
   const completedRequiredCount = useMemo(() => {
     return requiredFields.filter((field) => {
       const value = formData[field.id];
@@ -1254,6 +1254,40 @@ case 'award_selector': {
                 </div>
               </div>
             )}
+          </div>
+        );
+      }
+
+      case 'payment': {
+        const fee = paymentConfig?.fee || 0;
+        const currency = paymentConfig?.currency || 'INR';
+        const provider = paymentConfig?.provider || 'Razorpay';
+        const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
+
+        if (!paymentConfig?.enabled || fee <= 0) {
+          return null; // Don't render if payment isn't configured
+        }
+
+        return (
+          <div className="border-2 border-emerald-200 bg-emerald-50/60 rounded-2xl p-6 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-emerald-900">Submission Fee</p>
+                <p className="text-xs text-emerald-600">Payment via {provider}</p>
+              </div>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl font-bold text-emerald-800">{currencySymbol}{fee}</span>
+              <span className="text-sm text-emerald-600 font-medium">{currency}</span>
+            </div>
+            <p className="text-xs text-emerald-700/80">
+              You will be redirected to {provider} to complete payment after submitting this form.
+            </p>
           </div>
         );
       }
