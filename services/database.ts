@@ -2930,11 +2930,13 @@ class DatabaseService {
     const applicantName = String(profile?.data?.full_name || '').trim();
 
     // Enforce nomination limits for the same form + person identity.
+    // Submissions with payment_status='pending' are not counted (payment was not completed).
     if (nominationLimit > 0) {
       let existingQuery = supabase
         .from('submissions')
         .select('id', { count: 'exact', head: true })
         .eq('program_id', form.program_id)
+        .neq('payment_status', 'pending')
         .contains('submission_data', { form_id: formId });
 
       if (userId) {
@@ -2957,6 +2959,24 @@ class DatabaseService {
           }
           throw new Error('You have already submitted this nomination form.');
         }
+      }
+
+      // Clean up previous incomplete submissions (pending payment) for this user/form
+      if (options?.paymentRequired) {
+        let deleteQuery = supabase
+          .from('submissions')
+          .delete()
+          .eq('program_id', form.program_id)
+          .eq('payment_status', 'pending')
+          .contains('submission_data', { form_id: formId });
+
+        if (userId) {
+          deleteQuery = deleteQuery.eq('applicant_id', userId);
+        } else if (applicantEmail) {
+          deleteQuery = deleteQuery.ilike('applicant_email', applicantEmail);
+        }
+
+        await deleteQuery;
       }
     }
 
