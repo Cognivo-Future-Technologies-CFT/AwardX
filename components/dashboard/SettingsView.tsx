@@ -160,6 +160,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
+    setError(null);
+    setIntegrationMessage(null);
+    setConnectMessage(null);
     if (!activeEvent?.id) return;
     navigate(buildDashboardPath({
       eventId: activeEvent.id,
@@ -191,7 +194,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent, onDelet
         setPrograms(allPrograms || []);
         setCanManagePrograms(canManage);
 
-        const queryProgramId = params.get('programId') || '';
+        const searchParams = new URLSearchParams(window.location.search);
+        const queryProgramId = searchParams.get('programId') || '';
         const defaultProgramId = queryProgramId || activeEvent?.id || allPrograms?.[0]?.id || '';
         setSelectedProgramId(defaultProgramId);
       } catch (e: any) {
