@@ -613,7 +613,7 @@ const fieldsByStep = useMemo(() => {
     const stepFields = fieldsByStep[stepId];
     if (stepFields.length === 0) return true;
     for (const field of stepFields) {
-      if (field.required && !hasFieldValue(formData[field.id])) {
+      if (field.required && field.type !== 'payment' && !hasFieldValue(formData[field.id])) {
         return false;
       }
     }
@@ -1264,10 +1264,6 @@ case 'award_selector': {
         const provider = paymentConfig?.provider || 'Razorpay';
         const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
 
-        if (!paymentConfig?.enabled || fee <= 0) {
-          return null; // Don't render if payment isn't configured
-        }
-
         return (
           <div className="border-2 border-emerald-200 bg-emerald-50/60 rounded-2xl p-6 space-y-3">
             <div className="flex items-center gap-3">
@@ -1281,12 +1277,16 @@ case 'award_selector': {
                 <p className="text-xs text-emerald-600">Payment via {provider}</p>
               </div>
             </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-bold text-emerald-800">{currencySymbol}{fee}</span>
-              <span className="text-sm text-emerald-600 font-medium">{currency}</span>
-            </div>
+            {fee > 0 && (
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-bold text-emerald-800">{currencySymbol}{fee}</span>
+                <span className="text-sm text-emerald-600 font-medium">{currency}</span>
+              </div>
+            )}
             <p className="text-xs text-emerald-700/80">
-              You will be redirected to {provider} to complete payment after submitting this form.
+              {fee > 0
+                ? `You will be redirected to ${provider} to complete payment after submitting this form.`
+                : 'A submission fee is required. You will be redirected to complete payment after submitting.'}
             </p>
           </div>
         );

@@ -327,10 +327,17 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       }
     }
 
-    // Payment field: show popup if not configured
-    if (type === 'payment' && !paymentConfigured) {
-      setShowPaymentPopup(true);
-      return;
+    // Only allow one payment field per form
+    if (type === 'payment') {
+      const existingPaymentField = fields.find((field) => field.type === 'payment');
+      if (existingPaymentField) {
+        setSelectedFieldId(existingPaymentField.id);
+        return;
+      }
+      if (!paymentConfigured) {
+        setShowPaymentPopup(true);
+        return;
+      }
     }
 
     pushHistory();
