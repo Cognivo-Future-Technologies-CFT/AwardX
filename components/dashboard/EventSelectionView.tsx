@@ -7,7 +7,6 @@ import {
    Rocket, GraduationCap, BookOpen, UserCheck, Palette, Users, UserPlus, Shield
 } from 'lucide-react';
 import { Program, EventType, Organization, Role, TeamMember, JudgingType } from '../../services/models';
-import { auth } from '../../services/supabase';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
 import { sendTeamInviteEmail } from '../../services/email';
 import { Modal } from '../Modal';
@@ -15,14 +14,11 @@ import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
 import { todayDateString } from '../../lib/utils';
 import { handleNotificationClick } from '../../lib/notificationClick';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { UserIdentity } from '../ui/UserIdentity';
 import { Logo, LogoTitle } from '../Logo';
 import { toast } from 'sonner';
 import { JUDGING_TYPE_OPTIONS, DEFAULT_JUDGING_TYPE } from '../../lib/judgingType';
-interface UserData {
-   name: string;
-   avatar: string;
-   role: string;
-}
 
 interface EventSelectionViewProps {
    activeOrganization: Organization;
@@ -203,10 +199,19 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    const [newMemberEmail, setNewMemberEmail] = useState('');
    const [newMemberRoleId, setNewMemberRoleId] = useState('');
    const [isAddingMember, setIsAddingMember] = useState(false);
-   const [userData, setUserData] = useState<UserData>({
-      name: 'Loading...',
-      avatar: '',
-      role: 'Admin Workspace'
+   const { profile, isLoading: isUserProfileLoading } = useUserProfile({
+      fetchFullProfile: async () => {
+         await databaseService.initialize();
+         const realUser = await databaseService.getCurrentUser();
+         if (!realUser?.name) return null;
+         return {
+            id: realUser.id,
+            name: realUser.name,
+            email: realUser.email,
+            avatar: realUser.avatar,
+            role: realUser.role,
+         };
+      },
    });
    const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -366,23 +371,6 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    useEffect(() => {
       // Load programs immediately
       loadPrograms(true);
-
-      const fetchUserData = async () => {
-         try {
-            const { user, error } = await auth.getUser();
-            if (user && !error) {
-               setUserData({
-                  name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                  avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-                  role: 'Admin Workspace'
-               });
-            }
-         } catch (err) {
-            console.error('Error fetching user data:', err);
-         }
-      };
-
-      fetchUserData();
       loadNotifications();
 
       // Refresh programs when component becomes visible or window gains focus
@@ -698,19 +686,12 @@ if (!newEvent.deadline) {
                      )}
                   </div>
                   <div className="flex items-center gap-3">
-                     <div className="flex items-center gap-3 pl-2">
-                        {userData.avatar ? (
-                           <img src={userData.avatar} alt="" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
-                        ) : (
-                           <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-emerald-600 flex items-center justify-center text-white font-bold text-sm">
-                              {userData.name.charAt(0).toUpperCase()}
-                           </div>
-                        )}
-                        <div className="hidden md:block text-left">
-                           <div className="text-sm font-bold text-slate-900">{userData.name}</div>
-                           <div className="text-xs text-slate-500">{userData.role}</div>
-                        </div>
-                     </div>
+                     <UserIdentity
+                        profile={profile}
+                        isLoading={isUserProfileLoading}
+                        meta="Admin Workspace"
+                        size="md"
+                     />
                      {/* Always visible logout button */}
                      <button
                         onClick={onLogout}

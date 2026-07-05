@@ -3337,7 +3337,7 @@ class DatabaseService {
 
     return {
       id: user.id,
-      name: profile.full_name || user.email || 'User',
+      name: profile.full_name || user.email?.split('@')[0] || '',
       email: user.email || '',
       role: roleName,
       status: 'Active',

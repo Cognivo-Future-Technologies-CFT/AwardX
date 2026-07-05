@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, X, LayoutDashboard, LogOut, Github, ChevronDown } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut, Github } from 'lucide-react';
 import { Button } from './Button';
 import { PreRegistrationModal } from './PreRegistrationModal';
 import { Logo } from './Logo';
@@ -7,8 +7,9 @@ import { GITHUB_REPO } from '@/lib/brand';
 import { isLandingOnly } from '@/lib/landingOnly';
 import { motion, useScroll } from 'framer-motion';
 import { db } from '../services/database';
-import { Contact } from '../services/models';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { UserAvatar, UserIdentity, UserProfileSkeleton } from './ui/UserIdentity';
 
 interface HeaderProps {
   onNavigate: (page: string) => void;
@@ -21,10 +22,25 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPreRegModalOpen, setIsPreRegModalOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<Contact | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { scrollY } = useScroll();
-  const { isAuthenticated, user, signOut } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, signOut } = useAuth();
+  const { profile, isLoading: isProfileLoading } = useUserProfile({
+    fetchFullProfile: async () => {
+      await db.initialize().catch(() => undefined);
+      const realUser = await db.getCurrentUser().catch(() => null);
+      if (!realUser?.name) return null;
+      return {
+        id: realUser.id,
+        name: realUser.name,
+        email: realUser.email,
+        avatar: realUser.avatar,
+        role: realUser.role,
+      };
+    },
+  });
+  const showAuthenticatedChrome = isAuthenticated || isLoggingOut;
+  const showProfileLoading = isAuthLoading || (showAuthenticatedChrome && isProfileLoading && !profile?.name);
 
   useEffect(() => {
     const handleOpen = () => setIsPreRegModalOpen(true);
@@ -51,68 +67,11 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeDropdown]);
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!isAuthenticated) {
-        setCurrentUser(null);
-        return;
-      }
-
-      try {
-        try {
-          await db.initialize().catch(() => {
-            // If initialize fails, continue with auth fallback
-          });
-          const realUser = await db.getCurrentUser().catch(() => null);
-          if (realUser) {
-            setCurrentUser(realUser);
-          } else {
-            if (user) {
-              setCurrentUser({
-                id: user.id,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                email: user.email || '',
-                role: 'Admin',
-                status: 'Active',
-                lastActive: 'Now',
-                avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-                source: 'Internal',
-                surveyAnswer: '',
-                joinedDate: new Date().toISOString().split('T')[0],
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Failed to fetch user data:', error);
-          if (user) {
-            setCurrentUser({
-              id: user.id,
-              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-              email: user.email || '',
-              role: 'Admin',
-              status: 'Active',
-              lastActive: 'Now',
-              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-              source: 'Internal',
-              surveyAnswer: '',
-              joinedDate: new Date().toISOString().split('T')[0],
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error checking auth:', error);
-      }
-    };
-
-    fetchUserData();
-  }, [isAuthenticated, user]);
-
   const handleLogout = async () => {
     setIsLoggingOut(true);
     setActiveDropdown(null);
     try {
       await signOut();
-      setCurrentUser(null);
       if (onLogout) {
         onLogout();
       } else {
@@ -212,7 +171,9 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                 <Github className="w-3.5 h-3.5" />
                 <span>GitHub</span>
               </a>
-            ) : isAuthenticated ? (
+            ) : isAuthLoading ? (
+              <UserProfileSkeleton size="sm" />
+            ) : showAuthenticatedChrome ? (
               <>
                 <button
                   onClick={() => handleNavClick('dashboard')}
@@ -220,41 +181,38 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                 >
                   <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
                 </button>
-                
-                {!isLoggingOut && (
+
+                {showProfileLoading ? (
+                  <UserProfileSkeleton size="sm" />
+                ) : profile ? (
                   <div className="relative" ref={profileRef}>
                     <button
                       onClick={() => setActiveDropdown(activeDropdown === 'profile' ? null : 'profile')}
                       className="flex items-center justify-center w-8 h-8 rounded-full bg-white/50 border border-white/40 hover:bg-white/70 hover:shadow-sm transition-all focus:outline-none"
+                      aria-label="Open profile menu"
                     >
-                    {currentUser?.avatar ? (
-                      <img src={currentUser.avatar} alt={currentUser.name} className="w-7 h-7 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[11px] font-bold">
-                        {currentUser?.name.charAt(0).toUpperCase() || 'U'}
+                      <UserAvatar profile={profile} size="sm" />
+                    </button>
+
+                    {activeDropdown === 'profile' && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden z-50">
+                        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{profile.name}</p>
+                          <p className="text-xs text-slate-500 truncate">{profile.email}</p>
+                        </div>
+                        <div className="p-2">
+                          <button
+                            onClick={handleLogout}
+                            disabled={isLoggingOut}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors disabled:opacity-60"
+                          >
+                            <LogOut className="w-4 h-4" /> {isLoggingOut ? 'Signing out...' : 'Sign out'}
+                          </button>
+                        </div>
                       </div>
                     )}
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {activeDropdown === 'profile' && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden z-50">
-                      <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{currentUser?.name || 'User'}</p>
-                        <p className="text-xs text-slate-500 truncate">{currentUser?.email || ''}</p>
-                      </div>
-                      <div className="p-2">
-                        <button
-                          onClick={handleLogout}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                        >
-                          <LogOut className="w-4 h-4" /> Sign out
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                )}
+                  </div>
+                ) : null}
               </>
             ) : (
               <>
@@ -330,28 +288,22 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
               >
                 <Github className="w-4 h-4" /> View on GitHub
               </a>
-            ) : isAuthenticated ? (
+            ) : isAuthLoading ? (
+              <UserProfileSkeleton size="md" showText className="px-4 py-2" />
+            ) : showAuthenticatedChrome ? (
               <>
                 <Button variant="secondary" className="w-full justify-center" onClick={() => handleNavClick('dashboard')}>
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Dashboard
                 </Button>
-                {!isLoggingOut && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-50">
-                    {currentUser?.avatar ? (
-                      <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full border-2 border-slate-200 object-cover" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold">
-                        {currentUser?.name.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-700 truncate">{currentUser?.name || 'User'}</div>
-                      <div className="text-xs text-slate-500 truncate">{currentUser?.email || ''}</div>
-                    </div>
+                {showProfileLoading ? (
+                  <UserProfileSkeleton size="md" showText className="px-4 py-2" />
+                ) : profile ? (
+                  <div className="px-4 py-2">
+                    <UserIdentity profile={profile} showText size="md" alwaysShowText className="!gap-2" />
                   </div>
-                )}
+                ) : null}
                 <Button disabled={isLoggingOut} variant="outline" className="w-full justify-center text-red-600 border-red-200 hover:bg-red-50" onClick={handleLogout}>
-                  <LogOut className="w-4 h-4 mr-2" /> {isLoggingOut ? 'Logging out...' : 'Logout'}
+                  <LogOut className="w-4 h-4 mr-2" /> {isLoggingOut ? 'Signing out...' : 'Logout'}
                 </Button>
               </>
             ) : (

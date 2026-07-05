@@ -2,11 +2,11 @@ import React, { Suspense, lazy, useEffect, useMemo } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { auth } from './services/supabase';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { isLandingOnly } from './lib/landingOnly';
+import { useAuth } from './contexts/AuthContext';
 
 const HomePage = lazy(() => import('./components/pages/HomePage').then((m) => ({ default: m.HomePage })));
 const FeaturesPage = lazy(() => import('./components/pages/FeaturesPage').then((m) => ({ default: m.FeaturesPage })));
@@ -129,14 +129,25 @@ const MarketingLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
       <Header
         currentPage={currentPage}
         onNavigate={(page) => navigate(pageToPath(page))}
-        onLogout={async () => {
-          await auth.signOut();
-          navigate('/');
-        }}
+        onLogout={() => navigate('/')}
       />
       <main>{children}</main>
       <Footer />
     </div>
+  );
+};
+
+const DashboardRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  return (
+    <Dashboard
+      onLogout={async () => {
+        await signOut();
+        navigate('/');
+      }}
+    />
   );
 };
 
@@ -310,12 +321,7 @@ const App: React.FC = () => {
               path="/dashboard/*"
               element={
                 <ProtectedRoute>
-                  <Dashboard
-                    onLogout={async () => {
-                      await auth.signOut();
-                      navigate('/');
-                    }}
-                  />
+                  <DashboardRoute />
                 </ProtectedRoute>
               }
             />
