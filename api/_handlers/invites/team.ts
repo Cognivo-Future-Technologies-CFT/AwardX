@@ -304,6 +304,7 @@ export default async function handler(req: any, res: any) {
     </table>
   </body>
 </html>`,
+    });
 
     if (sendError) {
       console.error('Resend API error:', sendError);

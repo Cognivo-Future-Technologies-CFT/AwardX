@@ -111,33 +111,18 @@ router.post('/:programId', requireAuth, async (req, res) => {
     if (program?.organization_id) {
       await createNotification(supabase, {
         organizationId: program.organization_id,
-        programId: programId,
+        programId,
         type: 'form',
-        title: 'Form Created',
-        body: `"${data.title || 'Form'}" has been created.`,
-        recipientUserId: req.userId,
-        metadata: {
-          entityId: data.id,
-          entityType: 'form',
-          route: `/dashboard/${programId}/forms`,
-        }
+        title: data.is_active ? 'Form Published' : 'Form Created',
+        body: data.is_active
+          ? `"${data.title || 'Form'}" is now live and published.`
+          : `"${data.title || 'Form'}" has been created.`,
+            view: 'templates',
+            metadata: {
+              entityId: data.id,
+              entityType: 'form',
+            },
       });
-
-      if (data.is_active) {
-        await createNotification(supabase, {
-          organizationId: program.organization_id,
-          programId: programId,
-          type: 'form',
-          title: 'Form Published',
-          body: `"${data.title || 'Form'}" is now live and published.`,
-          recipientUserId: req.userId,
-          metadata: {
-            entityId: data.id,
-            entityType: 'form',
-            route: `/dashboard/${programId}/forms`,
-          }
-        });
-      }
     }
 
     return res.status(201).json({ data });
@@ -199,12 +184,11 @@ router.put('/:formId', requireAuth, async (req, res) => {
             type: 'form',
             title: 'Form Published',
             body: `"${data.title || 'Form'}" is now live and published.`,
-            recipientUserId: req.userId,
+            view: 'templates',
             metadata: {
               entityId: data.id,
               entityType: 'form',
-              route: `/dashboard/${form.program_id}/forms`,
-            }
+            },
           });
         } else {
           await createNotification(supabase, {
@@ -213,12 +197,11 @@ router.put('/:formId', requireAuth, async (req, res) => {
             type: 'form',
             title: 'Form Unpublished',
             body: `"${data.title || 'Form'}" is no longer active.`,
-            recipientUserId: req.userId,
+            view: 'templates',
             metadata: {
               entityId: data.id,
               entityType: 'form',
-              route: `/dashboard/${form.program_id}/forms`,
-            }
+            },
           });
         }
       } else {
@@ -228,12 +211,11 @@ router.put('/:formId', requireAuth, async (req, res) => {
           type: 'form',
           title: 'Form Updated',
           body: `"${data.title || 'Form'}" has been updated.`,
-          recipientUserId: req.userId,
+          view: 'templates',
           metadata: {
             entityId: data.id,
             entityType: 'form',
-            route: `/dashboard/${form.program_id}/forms`,
-          }
+          },
         });
       }
     }
@@ -287,12 +269,11 @@ router.delete('/:formId', requireAuth, async (req, res) => {
         type: 'form',
         title: 'Form Deleted',
         body: `A form has been deleted.`,
-        recipientUserId: req.userId,
+        view: 'templates',
         metadata: {
           entityId: formId,
           entityType: 'form',
-          route: `/dashboard/${form.program_id}/forms`,
-        }
+        },
       });
     }
 

@@ -30,6 +30,7 @@ import { isAutoAssignJudging } from '../lib/judgingType';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
 import { isDemoMode } from './demoMode';
 import * as demoDb from './demoDatabase';
+import { buildNotificationRoute, buildOrgHubRoute, buildTeamNotificationRoute } from '../lib/notificationNavigation';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -618,7 +619,7 @@ class DatabaseService {
         organizationId: created.id,
         entityId: created.id,
         entityType: 'organization',
-        route: `/organization/${created.id}/settings`,
+        route: buildOrgHubRoute(),
       });
     }
 
@@ -1024,7 +1025,7 @@ class DatabaseService {
         programId: created.id,
         entityId: created.id,
         entityType: 'program',
-        route: `/dashboard/${created.id}/overview`,
+        view: 'overview',
       });
     }
 
@@ -1113,7 +1114,7 @@ class DatabaseService {
         programId: updated.id,
         entityId: updated.id,
         entityType: 'program',
-        route: `/dashboard/${updated.id}/overview`,
+        view: 'overview',
       });
     }
 
@@ -1293,7 +1294,7 @@ class DatabaseService {
         organizationId: this.currentOrgId,
         entityId: programId,
         entityType: 'program',
-        route: `/organization/${this.currentOrgId}/events`,
+        route: buildOrgHubRoute(),
       });
     }
   }
@@ -1408,19 +1409,6 @@ class DatabaseService {
       details: created.title,
       metadata: { title: created.title, programId: created.programId, parentId: created.parentId },
     });
-
-    // Hook: New Award Category Notification
-    if (!isDemoMode()) {
-      await this.createNotification({
-        type: 'award',
-        title: 'New Award Configured',
-        body: `"${created.title}" award has been added.`,
-        programId: created.programId,
-        entityId: created.id,
-        entityType: 'category',
-        route: `/dashboard/${created.programId}/awards`,
-      });
-    }
 
     return created;
   }
@@ -1853,7 +1841,7 @@ class DatabaseService {
           organizationId: this.currentOrgId,
           programId: data.program_id,
           entityType: 'submission',
-          route: `/dashboard/${data.program_id}/submissions`,
+          view: 'judging',
         });
       }
     }
@@ -1882,7 +1870,7 @@ class DatabaseService {
           organizationId: this.currentOrgId,
           programId: data.program_id,
           entityType: 'submission',
-          route: `/dashboard/${data.program_id}/submissions`,
+          view: 'judging',
         });
       }
     }
@@ -2473,7 +2461,7 @@ class DatabaseService {
         programId,
         entityId: memberId,
         entityType: 'organization_member',
-        route: programId ? `/dashboard/${programId}/settings` : `/organization/${this.currentOrgId}/settings`,
+        view: 'teams',
       });
     }
   }
@@ -2488,21 +2476,7 @@ class DatabaseService {
       details: email,
       metadata: { email, roleId, programId },
     });
-
-    if (!isDemoMode()) {
-      await this.createNotification({
-        type: 'team',
-        title: 'Member Invited',
-        body: `Invited ${email} to the team.`,
-        organizationId: this.currentOrgId!,
-        programId,
-        entityId: email,
-        entityType: 'organization_member',
-        route: programId ? `/dashboard/${programId}/settings` : `/organization/${this.currentOrgId}/settings`,
-      });
-    }
   }
-
 
   // Audit logs
   async getLogs(): Promise<Log[]> {
@@ -2622,6 +2596,11 @@ class DatabaseService {
 
       if (options?.limit) {
         query = query.limit(options.limit);
+      }
+
+      const userId = await getCurrentUserId();
+      if (userId) {
+        query = query.or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`);
       }
 
       const { data, error } = await query;
@@ -2745,7 +2724,7 @@ class DatabaseService {
           organizationId: this.currentOrgId,
           entityId: this.currentOrgId,
           entityType: 'organization',
-          route: `/organization/${this.currentOrgId}/settings`,
+          route: buildOrgHubRoute(),
         });
       }
     }
@@ -3064,7 +3043,7 @@ class DatabaseService {
         programId: form.program_id,
         entityId: submissionIdForEnrollment,
         entityType: 'submission',
-        route: `/dashboard/${form.program_id}/submissions`,
+        view: 'submissions',
       });
     }
 
@@ -3822,7 +3801,7 @@ class DatabaseService {
         organizationId: this.currentOrgId!,
         entityId: memberId,
         entityType: 'organization_member',
-        route: `/organization/${this.currentOrgId}/settings`,
+        route: buildOrgHubRoute(),
       });
     }
   }
@@ -4192,6 +4171,8 @@ class DatabaseService {
     entityId?: string;
     entityType?: string;
     route?: string;
+    view?: string;
+    settingsTab?: string;
     certificateCount?: number;
     recipientUserId?: string;
   }) {
@@ -4206,13 +4187,28 @@ class DatabaseService {
        actorUserId = user?.id;
     }
 
+    let route = payload.route;
+    if (!route && payload.programId && payload.view) {
+      route = buildNotificationRoute({
+        eventId: payload.programId,
+        view: payload.view,
+        settingsTab: payload.settingsTab,
+      });
+    } else if (!route && payload.programId) {
+      route = buildNotificationRoute({ eventId: payload.programId, view: 'overview' });
+    } else if (!route && payload.type === 'organization') {
+      route = buildOrgHubRoute();
+    } else if (!route && payload.type === 'team') {
+      route = buildTeamNotificationRoute(payload.programId);
+    }
+
     const metadata = {
        organizationId: orgId,
        programId: payload.programId,
        actorUserId,
        entityId: payload.entityId,
        entityType: payload.entityType,
-       route: payload.route,
+       route,
        certificateCount: payload.certificateCount,
        createdAt: new Date().toISOString()
     };

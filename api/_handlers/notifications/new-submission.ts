@@ -1,6 +1,7 @@
 import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
 import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { getAuthenticatedUser } from '../../_utils/authUser';
+import { insertNotification } from '../../_utils/notifications';
 import { newSubmissionNotificationSchema } from '../../_utils/validation';
 
 export default async function handler(req: any, res: any) {
@@ -33,44 +34,27 @@ export default async function handler(req: any, res: any) {
 
   try {
     const supabase = createSupabaseAdmin();
-
-    const { data: members } = await supabase
-      .from('organization_members')
-      .select('user_id')
-      .eq('organization_id', organizationId);
-
-    const recipients = (members || []).map((member: any) => member.user_id).filter(Boolean);
     const title = 'New submission received';
     const body = applicantName
       ? `${applicantName} submitted "${submissionTitle}".`
       : `A new submission "${submissionTitle}" was received.`;
 
-    const records = recipients.length > 0
-      ? recipients.map((recipientUserId: string) => ({
-          organization_id: organizationId,
-          program_id: programId,
-          recipient_user_id: recipientUserId,
-          type: 'submission',
-          title,
-          body,
-          metadata: { submissionId },
-        }))
-      : [{
-          organization_id: organizationId,
-          program_id: programId,
-          type: 'submission',
-          title,
-          body,
-          metadata: { submissionId },
-        }];
+    const { error } = await insertNotification(supabase, {
+      organizationId,
+      programId,
+      type: 'submission',
+      title,
+      body,
+      view: 'submissions',
+      metadata: { submissionId },
+    });
 
-    const { error } = await supabase.from('notifications').insert(records);
     if (error) {
       res.status(500).json({ error: error.message || 'Failed to create notification' });
       return;
     }
 
-    res.json({ ok: true, inserted: records.length });
+    res.json({ ok: true, inserted: 1 });
   } catch (error: any) {
     res.status(500).json({ error: error?.message || 'Internal server error' });
   }

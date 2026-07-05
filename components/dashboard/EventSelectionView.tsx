@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
    Trophy, HandCoins, Building2, Sparkles, Calendar, ArrowRight,
    LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2,
@@ -13,6 +14,7 @@ import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { AppDatePicker } from '../ui/AppDateFields';
 import { todayDateString } from '../../lib/utils';
+import { handleNotificationClick } from '../../lib/notificationClick';
 import { Logo, LogoTitle } from '../Logo';
 import { toast } from 'sonner';
 import { JUDGING_TYPE_OPTIONS, DEFAULT_JUDGING_TYPE } from '../../lib/judgingType';
@@ -169,6 +171,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    onSwitchOrganization,
    onLogout,
 }) => {
+   const navigate = useNavigate();
    const createSectionRef = React.useRef<HTMLElement>(null);
    const [events, setEvents] = useState<Program[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
@@ -674,15 +677,9 @@ if (!newEvent.deadline) {
                                  <div
                                     key={n.id}
                                     onClick={() => {
-                                       if (!n.isRead) handleMarkRead(n.id);
-                                       if (n.metadata?.route) {
-                                          window.location.href = n.metadata.route;
-                                       } else if (n.programId) {
-                                          const targetEvent = events.find(e => e.id === n.programId);
-                                          if (targetEvent) {
-                                             onSelectEvent(targetEvent);
-                                          }
-                                       }
+                                       void handleNotificationClick(n, navigate, {
+                                          onMarkRead: handleMarkRead,
+                                       });
                                     }}
                                     className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${!n.isRead ? 'bg-emerald-50/40' : ''}`}
                                  >

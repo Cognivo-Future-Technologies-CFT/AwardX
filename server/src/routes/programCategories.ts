@@ -103,6 +103,22 @@ router.post('/:programId/categories', requireAuth, async (req: AuthenticatedRequ
       return res.status(500).json({ error: error?.message || 'Failed to create category' });
     }
 
+    const { data: program } = await supabase.from('programs').select('organization_id').eq('id', programId).maybeSingle();
+    if (program?.organization_id) {
+      await createNotification(supabase, {
+        organizationId: program.organization_id,
+        programId,
+        type: 'award',
+        title: 'New Award Configured',
+        body: `"${data.title}" award has been added.`,
+        view: 'awards',
+        metadata: {
+          entityId: data.id,
+          entityType: 'category',
+        },
+      });
+    }
+
     return res.status(201).json({ data: mapCategory(data as Record<string, unknown>) });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
@@ -182,12 +198,11 @@ router.delete('/:programId/categories/:categoryId', requireAuth, async (req: Aut
         type: 'award',
         title: 'Award Deleted',
         body: `An award/category has been deleted.`,
-        recipientUserId: req.userId,
+        view: 'awards',
         metadata: {
           entityId: categoryId,
           entityType: 'category',
-          route: `/dashboard/${programId}/overview`,
-        }
+        },
       });
     }
 

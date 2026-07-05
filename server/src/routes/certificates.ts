@@ -124,15 +124,11 @@ router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), 
 			type: 'certificate',
 			title,
 			body,
+			view: 'certificates',
 			metadata: {
-				organizationId: program.organization_id,
-				programId,
-				actorUserId: req.userId,
 				entityType: 'certificate',
 				certificateCount: sent,
-				route: `/dashboard/${programId}/certificates`,
-				createdAt: new Date().toISOString()
-			}
+			},
 		});
 	}
 

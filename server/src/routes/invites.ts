@@ -865,6 +865,7 @@ router.post('/verify-team', async (req, res) => {
 			type: 'team',
 			title: 'Team invite accepted',
 			body: `You joined ${joinedTitle}.`,
+			view: 'teams',
 			metadata: { inviteId: resolved.invite.id },
 		});
 
@@ -993,6 +994,7 @@ router.post('/team', async (req, res) => {
 			type: 'team',
 			title: `Invite sent: ${programTitle}`,
 			body: `Team invite sent to ${normalizedEmail}.`,
+			view: 'teams',
 			metadata: { inviteId: inviteRow.id },
 		});
 
@@ -1038,6 +1040,7 @@ router.post('/team', async (req, res) => {
 					type: 'team',
 					title: `Team invite: ${programTitle}`,
 					body: `You have been invited to join ${programTitle}.`,
+					view: 'teams',
 					metadata: { inviteId: inviteRow.id, inviteUrl },
 				});
 			}
@@ -1142,6 +1145,7 @@ router.post('/team', async (req, res) => {
 					type: 'team',
 					title: `Team invite: ${programTitle}`,
 					body: `You have been invited to join ${programTitle}.`,
+					view: 'teams',
 					metadata: { inviteId: inviteRow.id, inviteUrl },
 				});
 			}
@@ -1163,6 +1167,7 @@ router.post('/team', async (req, res) => {
 				type: 'team',
 				title: `Team invite: ${programTitle}`,
 				body: `You have been invited to join ${programTitle}.`,
+				view: 'teams',
 				metadata: { inviteId: inviteRow.id, inviteUrl },
 			});
 		}

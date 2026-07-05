@@ -351,12 +351,11 @@ router.post('/:programId/rounds', requireAuth, async (req: AuthenticatedRequest,
         type: 'judging',
         title: 'Round Created',
         body: `"${data.title}" round has been created.`,
-        recipientUserId: req.userId,
+        view: 'schedule-rounds',
         metadata: {
           entityId: data.id,
           entityType: 'round',
-          route: `/dashboard/${programId}/pipeline`,
-        }
+        },
       });
     }
 
@@ -452,12 +451,11 @@ router.put('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedReque
         type: 'judging',
         title: 'Round Updated',
         body: `"${data.title}" round settings were updated.`,
-        recipientUserId: req.userId,
+        view: 'schedule-rounds',
         metadata: {
           entityId: data.id,
           entityType: 'round',
-          route: `/dashboard/${programId}/pipeline`,
-        }
+        },
       });
     }
 
@@ -517,12 +515,11 @@ router.delete('/:programId/rounds/:id', requireAuth, async (req: AuthenticatedRe
         type: 'judging',
         title: 'Round Deleted',
         body: `A round has been deleted.`,
-        recipientUserId: req.userId,
+        view: 'schedule-rounds',
         metadata: {
           entityId: id,
           entityType: 'round',
-          route: `/dashboard/${programId}/pipeline`,
-        }
+        },
       });
     }
 

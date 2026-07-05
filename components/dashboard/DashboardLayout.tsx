@@ -1,5 +1,6 @@
 
 import React, { useDeferredValue, useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   LayoutDashboard, FileText, Gavel,
@@ -43,6 +44,7 @@ import {
   toggleScheduleRepresentation,
   type ScheduleRepresentation,
 } from '../../lib/roundRepresentationConversion';
+import { handleNotificationClick } from '../../lib/notificationClick';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -220,6 +222,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onScheduleRepresentationChange,
   isDemoMode = false,
 }) => {
+  const navigate = useNavigate();
   const { user: authUser, isLoading: isAuthLoading } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(isDemoMode);
@@ -1320,14 +1323,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
             onNotificationClick={(notification) => {
-              if (notification.metadata?.route) {
-                window.location.href = notification.metadata.route;
-              } else if (notification.programId) {
-                const targetProgram = allProgramsQuery.data?.find(p => p.id === notification.programId);
-                if (targetProgram) {
-                  onSelectProgram(targetProgram);
-                }
-              }
+              void handleNotificationClick(notification, navigate, {
+                onMarkRead: async (id) => {
+                  if (!supabase) return;
+                  await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+                  queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                },
+              });
             }}
             onMarkAllRead={async () => {
               if (!supabase) return;

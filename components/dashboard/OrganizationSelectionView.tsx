@@ -9,6 +9,7 @@ import { Organization } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
 import { buildDashboardPath } from '../../lib/dashboardRoutes';
+import { handleNotificationClick } from '../../lib/notificationClick';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { Logo, LogoTitle } from '../Logo';
@@ -283,17 +284,15 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
                         <div
                           key={n.id}
                           onClick={() => {
-                            if (!n.isRead) handleMarkRead(n.id);
-                            if (n.metadata?.route) {
-                              window.location.href = n.metadata.route;
-                            } else if (n.programId) {
-                              navigate(buildDashboardPath({ eventId: n.programId, view: 'overview' }));
-                            } else if (n.organizationId) {
-                              const targetOrg = organizations.find((o) => o.id === n.organizationId);
-                              if (targetOrg) {
-                                handleSelectOrganization(targetOrg);
-                              }
-                            }
+                            void handleNotificationClick(n, navigate, {
+                              onMarkRead: handleMarkRead,
+                              ensureOrganizationContext: async (orgId) => {
+                                const targetOrg = organizations.find((o) => o.id === orgId);
+                                if (targetOrg) {
+                                  await handleSelectOrganization(targetOrg);
+                                }
+                              },
+                            });
                           }}
                           className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${!n.isRead ? 'bg-emerald-50/40' : ''}`}
                         >
