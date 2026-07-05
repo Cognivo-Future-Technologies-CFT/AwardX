@@ -17,6 +17,8 @@ const PricingPage = lazy(() => import('./components/pages/PricingPage').then((m)
 const DocsPage = lazy(() => import('./components/pages/DocsPage').then((m) => ({ default: m.DocsPage })));
 const SignupPage = lazy(() => import('./components/pages/SignupPage').then((m) => ({ default: m.SignupPage })));
 const LoginPage = lazy(() => import('./components/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const ForgotPasswordPage = lazy(() => import('./components/pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import('./components/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })));
 const DemoDashboard = lazy(() => import('./components/demo/DemoDashboard').then((m) => ({ default: m.DemoDashboard })));
 const AuthCallback = lazy(() => import('./components/AuthCallback').then((m) => ({ default: m.AuthCallback })));
@@ -276,6 +278,8 @@ const App: React.FC = () => {
           <>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
             <Route path="/pre-registration" element={<PreRegistrationPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/attendance/scan" element={<AttendanceScanPage />} />

@@ -27,6 +27,7 @@ import invitesTeam from './invites/team';
 import invitesVerifyJudge from './invites/verify-judge';
 import invitesVerifyTeam from './invites/verify-team';
 import scoresJudgeSubmit from './scores/judge-submit';
+import authForgotPassword from './auth/forgot-password';
 
 const routes: Record<string, RouteEntry> = {
   health: { GET: health },
@@ -48,6 +49,7 @@ const routes: Record<string, RouteEntry> = {
   'invites/verify-judge': { GET: invitesVerifyJudge, POST: invitesVerifyJudge },
   'invites/verify-team': { GET: invitesVerifyTeam, POST: invitesVerifyTeam },
   'scores/judge-submit': { POST: scoresJudgeSubmit },
+  'auth/forgot-password': { POST: authForgotPassword },
 };
 
 export function resolveHandler(path: string, method: string): ApiHandler | null {
