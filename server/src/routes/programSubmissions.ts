@@ -87,7 +87,10 @@ router.get('/:programId/submissions', requireAuth, async (req: AuthenticatedRequ
         `
         *,
         categories(title),
-        submission_judges(judge_id)
+        submission_judges(
+          judge_id,
+          judges(id, name, email, avatar_url)
+        )
       `,
         { count: 'exact' },
       )
@@ -112,7 +115,7 @@ router.get('/:programId/submissions', requireAuth, async (req: AuthenticatedRequ
 
     const rows = (data || []).map((row: Record<string, unknown> & {
       categories?: { title?: string } | null;
-      submission_judges?: Array<{ judge_id: string }>;
+      submission_judges?: Array<{ judge_id: string; judges?: any }>;
     }) => ({
       ...mapSubmissionRow(row, row.categories?.title ?? null),
       submission_judges: row.submission_judges || [],

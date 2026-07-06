@@ -41,6 +41,15 @@ export const SubmissionReviewSheet: React.FC<SubmissionReviewSheetProps> = ({
 
   const assignedJudges = useMemo(() => {
     if (!submission) return [];
+    if (submission.assignedJudgeDetails && submission.assignedJudgeDetails.length > 0) {
+      return submission.assignedJudgeDetails.map((j) => ({
+        id: j.id,
+        name: j.name,
+        email: j.email,
+        avatar: j.avatar,
+        status: 'Active' as const,
+      }));
+    }
     const ids = submission.assignedJudges || [];
     const byId = new Map(judges.map((judge) => [judge.id, judge]));
     return ids

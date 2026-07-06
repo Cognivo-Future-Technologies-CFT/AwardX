@@ -109,6 +109,12 @@ export interface Submission {
   voteCount?: number; // Alternative field name
   submissionData?: any;
   description?: string; // May come from submissions table
+  assignedJudgeDetails?: Array<{
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+  }>;
 }
 
 
