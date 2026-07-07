@@ -40,6 +40,11 @@ describe('dashboardRoutes', () => {
       view: 'judging',
       settingsTab: null,
     });
+    expect(parseDashboardPath('/dashboard/events/evt-1/certificates')).toEqual({
+      eventId: 'evt-1',
+      view: 'certificates',
+      settingsTab: null,
+    });
     expect(parseDashboardPath('/dashboard/events/evt-1/settings/integrations')).toEqual({
       eventId: 'evt-1',
       view: 'settings',

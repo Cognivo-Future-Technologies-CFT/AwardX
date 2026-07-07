@@ -1,10 +1,18 @@
 import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
 import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { insertNotification } from '../../_utils/notifications';
 import { deadlineApproachingNotificationSchema } from '../../_utils/validation';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const { user, error: authError } = await getAuthenticatedUser(req);
+  if (authError || !user) {
+    res.status(401).json({ error: authError || 'Unauthorized' });
     return;
   }
 
@@ -27,11 +35,6 @@ export default async function handler(req: any, res: any) {
   try {
     const supabase = createSupabaseAdmin();
 
-    const { data: members } = await supabase
-      .from('organization_members')
-      .select('user_id')
-      .eq('organization_id', organizationId);
-
     const deadlineDate = new Date(deadlineIso);
     const formattedDeadline = Number.isNaN(deadlineDate.getTime())
       ? deadlineIso
@@ -39,34 +42,23 @@ export default async function handler(req: any, res: any) {
 
     const title = 'Deadline approaching';
     const body = `"${programTitle}" closes on ${formattedDeadline}.`;
-    const recipients = (members || []).map((member: any) => member.user_id).filter(Boolean);
 
-    const records = recipients.length > 0
-      ? recipients.map((recipientUserId: string) => ({
-          organization_id: organizationId,
-          program_id: programId,
-          recipient_user_id: recipientUserId,
-          type: 'deadline',
-          title,
-          body,
-          metadata: { deadlineIso },
-        }))
-      : [{
-          organization_id: organizationId,
-          program_id: programId,
-          type: 'deadline',
-          title,
-          body,
-          metadata: { deadlineIso },
-        }];
+    const { error } = await insertNotification(supabase, {
+      organizationId,
+      programId,
+      type: 'deadline',
+      title,
+      body,
+      view: 'schedule-rounds',
+      metadata: { deadlineIso },
+    });
 
-    const { error } = await supabase.from('notifications').insert(records);
     if (error) {
       res.status(500).json({ error: error.message || 'Failed to create notification' });
       return;
     }
 
-    res.json({ ok: true, inserted: records.length });
+    res.json({ ok: true, inserted: 1 });
   } catch (error: any) {
     res.status(500).json({ error: error?.message || 'Internal server error' });
   }

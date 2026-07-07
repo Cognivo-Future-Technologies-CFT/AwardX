@@ -71,11 +71,11 @@ async function updateRoundStatus(roundId: string, status: string, extra?: Record
           type: 'judging',
           title,
           body,
+          view: 'schedule-rounds',
           metadata: {
             entityId: roundId,
             entityType: 'round',
-            route: `/dashboard/${data.program_id}/pipeline`,
-          }
+          },
         });
       }
     }

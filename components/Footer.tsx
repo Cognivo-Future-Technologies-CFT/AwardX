@@ -27,7 +27,7 @@ export const Footer: React.FC = () => {
           <div>
             <h4 className="text-white font-semibold mb-6">Platform</h4>
             <ul className="space-y-4 text-sm text-slate-400">
-              <li><a href="#" className="hover:text-cyan-400 transition-colors">Features</a></li>
+              <li><a href="/features" className="hover:text-cyan-400 transition-colors">Features</a></li>
               <li><a href="#" className="hover:text-cyan-400 transition-colors">Integrations</a></li>
               <li><a href="#" className="hover:text-cyan-400 transition-colors">Self-Host Guide</a></li>
               <li><a href="#" className="hover:text-cyan-400 transition-colors">Showcase</a></li>
@@ -47,7 +47,7 @@ export const Footer: React.FC = () => {
             <h4 className="text-white font-semibold mb-6">Community</h4>
             <ul className="space-y-4 text-sm text-slate-400">
               <li><a href="#" className="hover:text-cyan-400 transition-colors">Discord Server</a></li>
-              <li><a href="#" className="hover:text-cyan-400 transition-colors">GitHub Discussions</a></li>
+              <li><a href={`${GITHUB_REPO}/discussions`} target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">GitHub Discussions</a></li>
               <li><a href="#" className="hover:text-cyan-400 transition-colors">Documentation</a></li>
               <li><a href="#" className="hover:text-cyan-400 transition-colors">Changelog</a></li>
             </ul>

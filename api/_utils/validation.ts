@@ -28,6 +28,10 @@ export const verifyTeamSchema = z.object({
   token: z.string().uuid(),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email().max(320),
+});
+
 export const resendInviteSchema = z.object({
   inviteType: z.enum(['judge', 'team']),
   recordId: z.string().uuid(),

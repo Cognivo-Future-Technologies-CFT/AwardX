@@ -6,9 +6,11 @@ import {
   Sparkles, Layers, Calendar, Gavel
 } from 'lucide-react';
 import { Organization } from '../../services/models';
-import { auth } from '../../services/supabase';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
 import { buildDashboardPath } from '../../lib/dashboardRoutes';
+import { handleNotificationClick } from '../../lib/notificationClick';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { UserIdentity } from '../ui/UserIdentity';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { Logo, LogoTitle } from '../Logo';
@@ -29,11 +31,6 @@ interface JudgeInviteRow {
     industryCategory?: string | null;
   };
   organization: { id: string; name: string; logoUrl?: string | null } | null;
-}
-
-interface UserData {
-  name: string;
-  avatar: string;
 }
 
 interface OrganizationSelectionViewProps {
@@ -96,10 +93,19 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const notificationsRef = React.useRef<HTMLDivElement>(null);
-  
-  const [userData, setUserData] = useState<UserData>({
-    name: 'Loading...',
-    avatar: '',
+  const { profile, isLoading: isUserProfileLoading } = useUserProfile({
+    fetchFullProfile: async () => {
+      await databaseService.initialize();
+      const realUser = await databaseService.getCurrentUser();
+      if (!realUser?.name) return null;
+      return {
+        id: realUser.id,
+        name: realUser.name,
+        email: realUser.email,
+        avatar: realUser.avatar,
+        role: realUser.role,
+      };
+    },
   });
   const [judgeInvites, setJudgeInvites] = useState<JudgeInviteRow[]>([]);
   const navigate = useNavigate();
@@ -188,22 +194,6 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
 
   useEffect(() => {
     loadOrganizations(true);
-
-    const fetchUserData = async () => {
-      try {
-        const { user, error } = await auth.getUser();
-        if (user && !error) {
-          setUserData({
-            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-            avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-          });
-        }
-      } catch (err) {
-        console.error('Error fetching user data:', err);
-      }
-    };
-
-    fetchUserData();
     loadNotifications();
   }, [loadOrganizations, loadNotifications]);
 
@@ -283,17 +273,15 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
                         <div
                           key={n.id}
                           onClick={() => {
-                            if (!n.isRead) handleMarkRead(n.id);
-                            if (n.metadata?.route) {
-                              window.location.href = n.metadata.route;
-                            } else if (n.programId) {
-                              navigate(buildDashboardPath({ eventId: n.programId, view: 'overview' }));
-                            } else if (n.organizationId) {
-                              const targetOrg = organizations.find((o) => o.id === n.organizationId);
-                              if (targetOrg) {
-                                handleSelectOrganization(targetOrg);
-                              }
-                            }
+                            void handleNotificationClick(n, navigate, {
+                              onMarkRead: handleMarkRead,
+                              ensureOrganizationContext: async (orgId) => {
+                                const targetOrg = organizations.find((o) => o.id === orgId);
+                                if (targetOrg) {
+                                  await handleSelectOrganization(targetOrg);
+                                }
+                              },
+                            });
                           }}
                           className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${!n.isRead ? 'bg-emerald-50/40' : ''}`}
                         >
@@ -312,19 +300,12 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
                 )}
               </div>
               <div className="flex items-center gap-3">
-              <div className="flex items-center gap-3 pl-2">
-                {userData.avatar ? (
-                  <img src={userData.avatar} alt="" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
-                ) : (
-                  <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-emerald-600 flex items-center justify-center text-white font-bold text-sm">
-                    {userData.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="hidden md:block text-left">
-                  <div className="text-sm font-bold text-slate-900">{userData.name}</div>
-                  <div className="text-xs text-slate-500">Workspace</div>
-                </div>
-              </div>
+              <UserIdentity
+                profile={profile}
+                isLoading={isUserProfileLoading}
+                meta="Workspace"
+                size="md"
+              />
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 hover:border-red-200"

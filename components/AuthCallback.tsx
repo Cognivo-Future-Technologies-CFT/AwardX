@@ -28,6 +28,18 @@ export const AuthCallback: React.FC = () => {
     let settled = false;
     invalidateSessionCache();
 
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const isRecovery =
+      hashParams.get('type') === 'recovery' || queryParams.get('type') === 'recovery';
+
+    const finishRecovery = async (session: Awaited<ReturnType<typeof refreshSessionFromAuth>>) => {
+      if (settled || !session) return;
+      settled = true;
+      setCachedSession(session);
+      navigate('/auth/reset-password', { replace: true });
+    };
+
     const finishSuccess = async (session: Awaited<ReturnType<typeof refreshSessionFromAuth>>) => {
       if (settled || !session) return;
       settled = true;
@@ -46,8 +58,6 @@ export const AuthCallback: React.FC = () => {
       setErrorMessage(message);
     };
 
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const queryParams = new URLSearchParams(window.location.search);
     const oauthError =
       hashParams.get('error_description') ||
       queryParams.get('error_description') ||
@@ -59,7 +69,15 @@ export const AuthCallback: React.FC = () => {
     }
 
     const unsubscribe = subscribeAuthState(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        await finishRecovery(session);
+        return;
+      }
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        if (isRecovery) {
+          await finishRecovery(session);
+          return;
+        }
         await finishSuccess(session);
       }
     });
@@ -68,6 +86,10 @@ export const AuthCallback: React.FC = () => {
       if (settled) return;
       const session = await refreshSessionFromAuth();
       if (session) {
+        if (isRecovery) {
+          await finishRecovery(session);
+          return;
+        }
         await finishSuccess(session);
         return;
       }

@@ -1,5 +1,6 @@
 
 import React, { useDeferredValue, useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   LayoutDashboard, FileText, Gavel,
@@ -43,6 +44,9 @@ import {
   toggleScheduleRepresentation,
   type ScheduleRepresentation,
 } from '../../lib/roundRepresentationConversion';
+import { handleNotificationClick } from '../../lib/notificationClick';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { UserAvatar, UserProfileSkeleton } from '../ui/UserIdentity';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -220,7 +224,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onScheduleRepresentationChange,
   isDemoMode = false,
 }) => {
-  const { user: authUser, isLoading: isAuthLoading } = useAuth();
+  const navigate = useNavigate();
+  const { isLoading: isAuthLoading } = useAuth();
+  const { profile: resolvedProfile, isLoading: isUserProfileLoading } = useUserProfile({
+    enabled: !isDemoMode,
+    fetchFullProfile: async () => {
+      await databaseService.initialize();
+      const realUser = await databaseService.getCurrentUser();
+      if (!realUser?.name) return null;
+      return {
+        id: realUser.id,
+        name: realUser.name,
+        email: realUser.email,
+        avatar: realUser.avatar,
+        role: realUser.role,
+      };
+    },
+  });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(isDemoMode);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
@@ -247,7 +267,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // User & Permissions
   const [currentUser, setCurrentUser] = useState<DashboardUser>({
     id: '',
-    name: 'Loading...',
+    name: '',
     email: '',
     role: 'Member',
     status: 'Active',
@@ -740,44 +760,41 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       return;
     }
 
-    if (isAuthLoading) {
+    if (isAuthLoading || isUserProfileLoading || !resolvedProfile?.name) {
       return;
     }
 
-    const fetchUserData = async () => {
+    setCurrentUser({
+      id: resolvedProfile.id,
+      name: resolvedProfile.name,
+      email: resolvedProfile.email,
+      role: resolvedProfile.role || 'Member',
+      status: 'Active',
+      lastActive: 'Now',
+      avatar: resolvedProfile.avatar,
+      joinedDate: new Date().toISOString().split('T')[0],
+    });
+  }, [isAuthLoading, isDemoMode, isUserProfileLoading, resolvedProfile]);
+
+  useEffect(() => {
+    if (isDemoMode || isAuthLoading) {
+      return;
+    }
+
+    const loadPermissions = async () => {
       try {
         await databaseService.initialize();
         setPermissionsReady(true);
-        try {
-          const loadedPerms = Object.values(PERMISSIONS).filter(p => databaseService.hasPermission(p));
-          setUserPermissions(loadedPerms);
-        } catch {
-          setUserPermissions([]);
-        }
-        const realUser = await databaseService.getCurrentUser();
-        if (realUser) {
-          setCurrentUser(realUser);
-          return;
-        }
-        if (authUser) {
-          setCurrentUser({
-            id: authUser.id,
-            name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
-            email: authUser.email || '',
-            role: 'Member',
-            status: 'Active',
-            lastActive: 'Now',
-            avatar: authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture || '',
-            joinedDate: new Date().toISOString().split('T')[0],
-          });
-        }
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
+        const loadedPerms = Object.values(PERMISSIONS).filter((p) => databaseService.hasPermission(p));
+        setUserPermissions(loadedPerms);
+      } catch {
+        setUserPermissions([]);
+        setPermissionsReady(true);
       }
     };
 
-    void fetchUserData();
-  }, [authUser, isAuthLoading, isDemoMode]);
+    void loadPermissions();
+  }, [isAuthLoading, isDemoMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1241,22 +1258,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* User Profile (Left Bottom) */}
         <div className="p-3 border-t border-slate-100 relative group">
           <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${!isSidebarExpanded ? 'flex justify-center' : 'flex items-center gap-3'}`}>
-            {currentUser.avatar ? (
-              <img
-                src={currentUser.avatar}
-                alt="User"
-                className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover shrink-0"
-              />
+            {isUserProfileLoading && !currentUser.name ? (
+              <UserProfileSkeleton size="md" showText={isSidebarExpanded} />
             ) : (
-              <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                {currentUser.name?.charAt(0).toUpperCase() || 'U'}
-              </div>
-            )}
-            {isSidebarExpanded && (
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
-                <div className="text-xs text-indigo-600 font-medium truncate">{currentUser.role}</div>
-              </div>
+              <>
+                <UserAvatar profile={currentUser} size="md" alt={currentUser.name} />
+                {isSidebarExpanded && currentUser.name && (
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
+                    <div className="text-xs text-indigo-600 font-medium truncate">{currentUser.role}</div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -1320,14 +1333,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             notifications={notifications}
             onNotificationClick={(notification) => {
-              if (notification.metadata?.route) {
-                window.location.href = notification.metadata.route;
-              } else if (notification.programId) {
-                const targetProgram = allProgramsQuery.data?.find(p => p.id === notification.programId);
-                if (targetProgram) {
-                  onSelectProgram(targetProgram);
-                }
-              }
+              void handleNotificationClick(notification, navigate, {
+                onMarkRead: async (id) => {
+                  if (!supabase) return;
+                  await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+                  queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                },
+              });
             }}
             onMarkAllRead={async () => {
               if (!supabase) return;

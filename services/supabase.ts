@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { isPersistedUuid } from '../lib/ids';
-import { resolveAuthCallbackUrl, resolveSiteUrl } from '../lib/siteUrl';
+import { resolveAuthCallbackUrl } from '../lib/siteUrl';
 import { fetchBackendJson } from './backendApi';
 import { supabase, supabaseUrl, isSupabaseReady } from './supabaseClient';
 import {
@@ -280,15 +280,23 @@ export const auth = {
     return { session, error: null };
   },
 
-  // Reset password
+  // Reset password — sent via backend (Resend) to avoid Supabase built-in email limits.
   resetPassword: async (email: string) => {
-    if (!supabase) {
-      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return { data: null, error: { message: 'Email is required.' } };
     }
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${resolveSiteUrl()}/auth/reset-password`,
-    });
-    return { data, error };
+
+    try {
+      const data = await fetchBackendJson<{ ok: boolean }>('/api/auth/forgot-password', {
+        method: 'POST',
+        body: { email: normalizedEmail },
+        errorPrefix: 'Password reset',
+      });
+      return { data, error: null };
+    } catch (error: any) {
+      return { data: null, error: { message: error?.message || 'Failed to send reset email.' } };
+    }
   },
 
   // Update password

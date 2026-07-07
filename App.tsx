@@ -2,11 +2,11 @@ import React, { Suspense, lazy, useEffect, useMemo } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { auth } from './services/supabase';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminProtectedRoute } from './components/AdminProtectedRoute';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { isLandingOnly } from './lib/landingOnly';
+import { useAuth } from './contexts/AuthContext';
 
 const HomePage = lazy(() => import('./components/pages/HomePage').then((m) => ({ default: m.HomePage })));
 const FeaturesPage = lazy(() => import('./components/pages/FeaturesPage').then((m) => ({ default: m.FeaturesPage })));
@@ -17,6 +17,8 @@ const PricingPage = lazy(() => import('./components/pages/PricingPage').then((m)
 const DocsPage = lazy(() => import('./components/pages/DocsPage').then((m) => ({ default: m.DocsPage })));
 const SignupPage = lazy(() => import('./components/pages/SignupPage').then((m) => ({ default: m.SignupPage })));
 const LoginPage = lazy(() => import('./components/pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const ForgotPasswordPage = lazy(() => import('./components/pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import('./components/pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard').then((m) => ({ default: m.Dashboard })));
 const DemoDashboard = lazy(() => import('./components/demo/DemoDashboard').then((m) => ({ default: m.DemoDashboard })));
 const AuthCallback = lazy(() => import('./components/AuthCallback').then((m) => ({ default: m.AuthCallback })));
@@ -127,14 +129,25 @@ const MarketingLayout: React.FC<React.PropsWithChildren> = ({ children }) => {
       <Header
         currentPage={currentPage}
         onNavigate={(page) => navigate(pageToPath(page))}
-        onLogout={async () => {
-          await auth.signOut();
-          navigate('/');
-        }}
+        onLogout={() => navigate('/')}
       />
       <main>{children}</main>
       <Footer />
     </div>
+  );
+};
+
+const DashboardRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+
+  return (
+    <Dashboard
+      onLogout={async () => {
+        await signOut();
+        navigate('/');
+      }}
+    />
   );
 };
 
@@ -276,6 +289,8 @@ const App: React.FC = () => {
           <>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
             <Route path="/pre-registration" element={<PreRegistrationPage />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/attendance/scan" element={<AttendanceScanPage />} />
@@ -306,12 +321,7 @@ const App: React.FC = () => {
               path="/dashboard/*"
               element={
                 <ProtectedRoute>
-                  <Dashboard
-                    onLogout={async () => {
-                      await auth.signOut();
-                      navigate('/');
-                    }}
-                  />
+                  <DashboardRoute />
                 </ProtectedRoute>
               }
             />

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { auth } from '../services/supabase';
+import { clearCachedUserProfile } from '../lib/userProfile';
 import {
   getCachedSession,
   getCurrentOrgId,
@@ -16,6 +17,7 @@ type AuthContextValue = {
   orgId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isSigningOut: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -26,6 +28,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -91,11 +94,18 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       orgId,
       isAuthenticated: !!session,
       isLoading,
+      isSigningOut,
       signOut: async () => {
-        await auth.signOut();
+        setIsSigningOut(true);
+        try {
+          await auth.signOut();
+          clearCachedUserProfile();
+        } finally {
+          setIsSigningOut(false);
+        }
       },
     }),
-    [isLoading, orgId, session, user],
+    [isLoading, isSigningOut, orgId, session, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
