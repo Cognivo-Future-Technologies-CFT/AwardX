@@ -234,6 +234,14 @@ export const FormSubmissionPage: React.FC = () => {
 
   const needsGithubApplication = applicationMode === 'hackathon' || requireGithubAuth;
 
+  const paymentField = formFields.find(f => f.type === 'payment');
+  const isPaymentOptional = !!(
+    paymentField &&
+    !paymentField.required &&
+    paymentConfig?.enabled &&
+    Number(paymentConfig?.fee || 0) > 0
+  );
+
   const completeSubmissionSideEffects = async (currentFormId: string) => {
     const { user } = await auth.getUser();
     formAnalytics.track({ form_id: currentFormId, event_type: 'complete', user_id: user?.id }).catch(() => {});
@@ -652,7 +660,7 @@ const fieldsByStep = useMemo(() => {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (forcePaymentOptIn?: boolean) => {
     if (!validateCurrentStep()) {
       toast.error('Please fill in all required fields');
       return;
@@ -674,10 +682,12 @@ const fieldsByStep = useMemo(() => {
       // Payment is required if either:
       // 1. paymentConfig is loaded from DB and enabled with fee > 0, OR
       // 2. The form contains a payment field (even if config didn't load from the public view)
-      const hasPaymentField = formFields.some(f => f.type === 'payment');
+      const hasPaymentField = !!paymentField;
+      const isPaymentRequiredByField = paymentField ? !!paymentField.required : true;
+
       const paymentRequired = !!(
-        (paymentConfig?.enabled && (paymentConfig?.fee || 0) > 0 && programId) ||
-        (hasPaymentField && programId)
+        (paymentConfig?.enabled && (paymentConfig?.fee || 0) > 0 && programId && (isPaymentRequiredByField || forcePaymentOptIn)) ||
+        (hasPaymentField && programId && (isPaymentRequiredByField || forcePaymentOptIn))
       );
 
       const submission: any = await db.submitFormResponse(currentFormId, formData, paymentRequired
@@ -1285,7 +1295,9 @@ case 'award_selector': {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold text-emerald-900">Submission Fee</p>
+                <p className="text-sm font-bold text-emerald-900">
+                  Submission Fee {!field.required && <span className="text-xs font-semibold text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full ml-1.5">Optional</span>}
+                </p>
                 <p className="text-xs text-emerald-600">Payment via {provider}</p>
               </div>
             </div>
@@ -1296,9 +1308,9 @@ case 'award_selector': {
               </div>
             )}
             <p className="text-xs text-emerald-700/80">
-              {fee > 0
+              {field.required
                 ? `You will be redirected to ${provider} to complete payment after submitting this form.`
-                : 'A submission fee is required. You will be redirected to complete payment after submitting.'}
+                : `Payment is optional. You can choose to submit and pay, or submit without payment using the options at the bottom of the form.`}
             </p>
           </div>
         );
@@ -1400,9 +1412,13 @@ const renderSectionFields = (fields: FormField[]) => {
 
             {paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0 && (
               <section className="rounded-[20px] border border-emerald-200 bg-emerald-50/50 p-5 sm:p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Payment</h3>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">
+                  Payment {!paymentField?.required && <span className="text-xs font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full ml-2">Optional</span>}
+                </h3>
                 <p className="text-sm text-slate-600 mb-4">
-                  A submission fee is required before your entry is finalized.
+                  {paymentField?.required
+                    ? 'A submission fee is required before your entry is finalized.'
+                    : 'An optional payment/donation can be made with your submission.'}
                 </p>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-[16px] bg-white border border-emerald-100 px-4 py-4">
                   <div>
@@ -1731,18 +1747,40 @@ const renderSectionFields = (fields: FormField[]) => {
               </div>
 
               {isLastStep ? (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="rounded-full px-7 py-2.5 text-sm font-bold shadow-md min-w-[140px]"
-                  style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
-                >
-                  {isSubmitting
-                    ? 'Submitting...'
-                    : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
-                      ? `Pay ${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)}`
-                      : 'Submit'}
-                </Button>
+                isPaymentOptional ? (
+                  <div className="flex items-center gap-3">
+                    <Button
+                      onClick={() => handleSubmit(false)}
+                      disabled={isSubmitting}
+                      className="rounded-full px-5 py-2.5 text-sm font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 min-w-[150px]"
+                    >
+                      {isSubmitting ? 'Submitting...' : 'Submit without Payment'}
+                    </Button>
+                    <Button
+                      onClick={() => handleSubmit(true)}
+                      disabled={isSubmitting}
+                      className="rounded-full px-6 py-2.5 text-sm font-bold shadow-md min-w-[160px]"
+                      style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                    >
+                      {isSubmitting
+                        ? 'Submitting...'
+                        : `Pay & Submit (${paymentConfig?.currency} ${Number(paymentConfig?.fee || 0).toFixed(2)})`}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => handleSubmit()}
+                    disabled={isSubmitting}
+                    className="rounded-full px-7 py-2.5 text-sm font-bold shadow-md min-w-[140px]"
+                    style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                  >
+                    {isSubmitting
+                      ? 'Submitting...'
+                      : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
+                        ? `Pay ${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)}`
+                        : 'Submit'}
+                  </Button>
+                )
               ) : (
                 <Button
                   onClick={handleNext}
@@ -1766,35 +1804,69 @@ const renderSectionFields = (fields: FormField[]) => {
             {saveState === 'error' && <span className="text-rose-500">Save failed</span>}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="ghost"
-              onClick={handleBack}
-              disabled={wizardStepIndex === 0}
-              className={`w-full rounded-[16px] py-3 text-sm font-semibold ${wizardStepIndex === 0 ? 'opacity-40' : 'text-slate-700 border border-slate-200'}`}
-            >
-              Back
-            </Button>
-            {isLastStep ? (
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="w-full rounded-[16px] py-3 text-sm font-bold shadow-md"
-                style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
-              >
-                {isSubmitting
-                  ? 'Submitting...'
-                  : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
-                    ? `Pay ${Number(paymentConfig.fee || 0).toFixed(2)}`
-                    : 'Submit'}
-              </Button>
+            {isPaymentOptional && isLastStep ? (
+              <div className="col-span-2 flex flex-col gap-2 w-full">
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <Button
+                    onClick={() => handleSubmit(false)}
+                    disabled={isSubmitting}
+                    className="w-full rounded-[16px] py-3 text-xs font-semibold border border-slate-200 bg-white text-slate-700"
+                  >
+                    {isSubmitting ? 'Submitting...' : 'Submit (No Pay)'}
+                  </Button>
+                  <Button
+                    onClick={() => handleSubmit(true)}
+                    disabled={isSubmitting}
+                    className="w-full rounded-[16px] py-3 text-xs font-bold shadow-md"
+                    style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                  >
+                    {isSubmitting
+                      ? 'Submitting...'
+                      : `Pay & Submit (${Number(paymentConfig?.fee || 0).toFixed(0)})`}
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  disabled={isSubmitting}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700 text-center py-1 flex items-center justify-center gap-1 mt-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Back to edit
+                </button>
+              </div>
             ) : (
-              <Button
-                onClick={handleNext}
-                className="w-full rounded-[16px] py-3 text-sm font-bold shadow-md"
-                style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
-              >
-                Continue
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={handleBack}
+                  disabled={wizardStepIndex === 0}
+                  className={`w-full rounded-[16px] py-3 text-sm font-semibold ${wizardStepIndex === 0 ? 'opacity-40' : 'text-slate-700 border border-slate-200'}`}
+                >
+                  Back
+                </Button>
+                {isLastStep ? (
+                  <Button
+                    onClick={() => handleSubmit()}
+                    disabled={isSubmitting}
+                    className="w-full rounded-[16px] py-3 text-sm font-bold shadow-md"
+                    style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                  >
+                    {isSubmitting
+                      ? 'Submitting...'
+                      : paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
+                        ? `Pay ${Number(paymentConfig.fee || 0).toFixed(2)}`
+                        : 'Submit'}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleNext}
+                    className="w-full rounded-[16px] py-3 text-sm font-bold shadow-md"
+                    style={{ backgroundColor: accentColor, color: theme.buttonTextColor || '#fff' }}
+                  >
+                    Continue
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -109,6 +109,7 @@ export interface Submission {
   voteCount?: number; // Alternative field name
   submissionData?: any;
   description?: string; // May come from submissions table
+  paymentStatus?: string | null;
 }
 
 

@@ -61,6 +61,34 @@ const StatusBadge = ({ status }: { status: string }) => {
    );
 };
 
+const PaymentStatusBadge = ({ status }: { status: string | null | undefined }) => {
+   const normalized = String(status || 'pending').toLowerCase();
+   const variants: Record<string, { container: string; dot: string; label: string }> = {
+      'paid': {
+         container: 'bg-emerald-50 text-emerald-700 border-emerald-100/50',
+         dot: 'bg-emerald-400',
+         label: 'Paid'
+      },
+      'pending': {
+         container: 'bg-amber-50 text-amber-700 border-amber-100/50',
+         dot: 'bg-amber-400',
+         label: 'Pending'
+      },
+      'failed': {
+         container: 'bg-rose-50 text-rose-700 border-rose-100/50',
+         dot: 'bg-rose-400',
+         label: 'Failed'
+      }
+   };
+   const variant = variants[normalized] || variants['pending'];
+   return (
+      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border leading-none tracking-tight ${variant.container}`}>
+         <span className={`w-1.5 h-1.5 rounded-full ${variant.dot}`} />
+         {variant.label}
+      </span>
+   );
+};
+
 interface SubmissionTableProps {
    activeEvent?: Program | null;
    onNavigate?: (view: string) => void;
@@ -548,7 +576,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const judges = judgesQuery.data || [];
    const total = submissionsQuery.data?.total || 0;
    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-   const tableColumnCount = 5 + responseColumns.length;
+   const isPaymentRequired = !!(activeEvent?.paymentConfig?.enabled && (activeEvent?.paymentConfig?.fee || 0) > 0);
+   const tableColumnCount = 5 + responseColumns.length + (isPaymentRequired ? 1 : 0);
    const isInitialLoading = (submissionsQuery.isLoading && !submissionsQuery.data)
     || (judgesQuery.isLoading && !judgesQuery.data);
    const isSearching = debouncedSearch.length > 0;
@@ -819,6 +848,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
          'category',
          'status',
          'score',
+         ...(isPaymentRequired ? ['payment_status'] : []),
          'date',
          ...responseColumns.map((column) => column.label),
       ];
@@ -829,6 +859,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
             item.category,
             item.status,
             item.score ?? '',
+            ...(isPaymentRequired ? [item.paymentStatus || 'pending'] : []),
             item.date,
             ...responseColumns.map((column) => formatSubmissionFieldValue(responses[column.id])),
          ];
@@ -955,7 +986,12 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               <p className="mt-0.5 truncate text-xs text-slate-500">{sub.applicant}</p>
                            </div>
                         </div>
-                        <StatusBadge status={sub.status} />
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                           <StatusBadge status={sub.status} />
+                           {isPaymentRequired && (
+                              <PaymentStatusBadge status={sub.paymentStatus} />
+                           )}
+                        </div>
                      </div>
 
                      <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1015,6 +1051,9 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                         <th className="p-5 whitespace-nowrap">Status</th> */}
                         <th className="p-5 whitespace-nowrap">Judges</th>
                         <th className="p-5 whitespace-nowrap">Score</th>
+                        {isPaymentRequired && (
+                           <th className="p-5 whitespace-nowrap">Payment</th>
+                        )}
                         <th className="p-5 whitespace-nowrap">Date</th>
                         <th className="p-5 text-right whitespace-nowrap sticky right-0 z-20 bg-slate-50/95 supports-[backdrop-filter]:bg-slate-50/70 backdrop-blur border-l border-slate-100/80">Actions</th>
                      </tr>
@@ -1127,6 +1166,11 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                  <span className="text-sm font-medium text-slate-300">--</span>
                               )}
                            </td>
+                           {isPaymentRequired && (
+                              <td className="p-5">
+                                 <PaymentStatusBadge status={sub.paymentStatus} />
+                              </td>
+                           )}
                            <td className="p-5">
                               <div className="flex flex-col">
                                  <div className="text-xs font-bold tracking-tight text-slate-900">
@@ -1484,7 +1528,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                setPromoteRoundId('');
             }}
             title="Super promote submission"
-            size="md"
+            size="default"
          >
             {promoteTarget && (
                <div className="space-y-5">

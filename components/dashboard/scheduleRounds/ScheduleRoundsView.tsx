@@ -35,7 +35,7 @@ import {
   informRoundParticipants,
   type AdvancementPreview,
 } from '../../../services/roundPipelineApi';
-import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges, isVotingRoundType } from '../../../lib/roundScheduleUtils';
+import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges, isVotingRoundType, type SchedulerRoundType } from '../../../lib/roundScheduleUtils';
 import {
   fetchJudgeScoresBySubmission,
   fetchVoteCountsBySubmission,
@@ -569,7 +569,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
   }, []);
 
   const confirmAddRound = useCallback(
-    async (name: string, type: Round['type']) => {
+    async (name: string, type: SchedulerRoundType) => {
       if (!activeEvent) return;
       setIsCreatingRound(true);
       try {

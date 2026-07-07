@@ -30,6 +30,7 @@ function mapSubmissionRow(row: Record<string, unknown>, categoryTitle?: string |
     cover_image_url: row.cover_image_url,
     category_title: categoryTitle ?? null,
     submission_data: row.submission_data ?? null,
+    payment_status: row.payment_status ?? null,
   };
 }
 
@@ -92,6 +93,7 @@ router.get('/:programId/submissions', requireAuth, async (req: AuthenticatedRequ
         { count: 'exact' },
       )
       .eq('program_id', programId)
+      .neq('payment_status', 'pending')
       .order('submitted_at', { ascending: false });
 
     if (search) {

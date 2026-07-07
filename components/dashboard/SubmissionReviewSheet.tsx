@@ -23,6 +23,12 @@ const statusStyles: Record<string, string> = {
   Rejected: 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
+const paymentStatusStyles: Record<string, string> = {
+  paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  failed: 'bg-rose-50 text-rose-700 border-rose-200',
+};
+
 export const SubmissionReviewSheet: React.FC<SubmissionReviewSheetProps> = ({
   isOpen,
   onClose,
@@ -111,6 +117,11 @@ export const SubmissionReviewSheet: React.FC<SubmissionReviewSheetProps> = ({
                   <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${statusClass}`}>
                     {submission.status}
                   </span>
+                  {submission.paymentStatus && (
+                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${paymentStatusStyles[String(submission.paymentStatus).toLowerCase()] || paymentStatusStyles.pending}`}>
+                      Payment: {submission.paymentStatus === 'paid' ? 'Paid' : submission.paymentStatus === 'failed' ? 'Failed' : 'Pending'}
+                    </span>
+                  )}
                   <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
                     {submission.category}
                   </span>

@@ -26,6 +26,12 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
         'Under Review': { color: 'text-blue-600 bg-blue-50 border-blue-100', icon: <Clock className="w-3 h-3" /> },
     };
 
+    const paymentStatusConfig: any = {
+        'paid': { color: 'text-green-600 bg-green-50 border-green-100', label: 'Paid' },
+        'pending': { color: 'text-amber-600 bg-amber-50 border-amber-100', label: 'Payment Pending' },
+        'failed': { color: 'text-red-600 bg-red-50 border-red-100', label: 'Payment Failed' },
+    };
+
     const submissionData = (submission.submissionData || {}) as Record<string, any>;
     const formId = getSubmissionFormId(submissionData);
     const actualResponses = extractSubmissionResponses(submissionData);
@@ -130,6 +136,11 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
                                 {(statusConfig[submission.status] || statusConfig['Pending']).icon}
                                 {submission.status}
                             </span>
+                            {submission.paymentStatus && (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${(paymentStatusConfig[String(submission.paymentStatus).toLowerCase()] || paymentStatusConfig['pending']).color}`}>
+                                    {(paymentStatusConfig[String(submission.paymentStatus).toLowerCase()] || paymentStatusConfig['pending']).label}
+                                </span>
+                            )}
                             <span className="text-xs text-slate-400 font-medium">#{submission.id.split('-')[1]}</span>
                         </div>
                         <h2 className="text-2xl font-bold text-slate-900 leading-tight">{submission.title}</h2>

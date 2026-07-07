@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus } from 'lucide-react';
 import { Button } from '../../Button';
-import { Round } from '../../../types/scheduleRounds';
-import { SCHEDULER_ROUND_TYPES } from '../../../lib/roundScheduleUtils';
+import { SCHEDULER_ROUND_TYPES, type SchedulerRoundType } from '../../../lib/roundScheduleUtils';
 
 interface AddRoundSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (name: string, type: Round['type']) => void;
+  onConfirm: (name: string, type: SchedulerRoundType) => void;
   existingNames: string[];
   isFirstRound: boolean;
   isSubmitting?: boolean;
@@ -23,7 +22,7 @@ export const AddRoundSheet: React.FC<AddRoundSheetProps> = ({
   isSubmitting = false,
 }) => {
   const [name, setName] = useState('');
-  const [type, setType] = useState<Round['type']>(isFirstRound ? 'Nomination' : 'Shortlisting');
+  const [type, setType] = useState<SchedulerRoundType>(isFirstRound ? 'Nomination' : 'Shortlisting');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -113,7 +112,7 @@ export const AddRoundSheet: React.FC<AddRoundSheetProps> = ({
                   </label>
                   <select
                     value={type}
-                    onChange={(e) => setType(e.target.value as Round['type'])}
+                    onChange={(e) => setType(e.target.value as SchedulerRoundType)}
                     disabled={isFirstRound}
                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50"
                   >

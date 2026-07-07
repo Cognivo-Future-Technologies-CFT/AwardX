@@ -1672,6 +1672,7 @@ class DatabaseService {
       applicantName: s.applicant_name || undefined,
       applicantEmail: s.applicant_email || undefined,
       submittedAt: s.submitted_at || undefined,
+      paymentStatus: s.payment_status || s.paymentStatus || null,
     };
   }
 

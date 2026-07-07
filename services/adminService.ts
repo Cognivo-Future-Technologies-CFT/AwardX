@@ -111,7 +111,7 @@ export const adminService = {
 
     const [programsRes, submissionsRes, roundsRes, certificatesRes] = await Promise.all([
       supabase.from('programs').select('*', { count: 'exact', head: true }),
-      supabase.from('submissions').select('*', { count: 'exact', head: true }),
+      supabase.from('submissions').select('*', { count: 'exact', head: true }).neq('payment_status', 'pending'),
       supabase.from('rounds').select('*', { count: 'exact', head: true }),
       supabase.from('certificates').select('*', { count: 'exact', head: true })
     ]);
@@ -139,7 +139,7 @@ export const adminService = {
       supabase.from('profiles').select('id, created_at, full_name'),
       supabase.from('organizations').select('id, name, created_at, plan'),
       supabase.from('programs').select('id, created_at, industry_category, status, title'),
-      supabase.from('submissions').select('id, submitted_at, status'),
+      supabase.from('submissions').select('id, submitted_at, status').neq('payment_status', 'pending'),
       supabase.from('certificates').select('id, issued_at'),
       supabase.from('categories').select('id')
     ]);

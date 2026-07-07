@@ -110,7 +110,12 @@ export default async function handler(req: any, res: any) {
       : '/dashboard?payment=cancelled';
 
     if (provider === 'razorpay') {
-      const razorpayKeyId = (paymentConfig.public_key || process.env.RAZORPAY_KEY_ID || '').trim();
+      let razorpayKeyId = (paymentConfig.public_key || process.env.RAZORPAY_KEY_ID || '').trim();
+      if (razorpayKeyId.startsWith('zp_test_')) {
+        razorpayKeyId = 'r' + razorpayKeyId;
+      } else if (razorpayKeyId.startsWith('zp_live_')) {
+        razorpayKeyId = 'r' + razorpayKeyId;
+      }
       const razorpayKeySecret = (paymentConfig.secret_key_encrypted || (paymentConfig as any).secret_key || process.env.RAZORPAY_KEY_SECRET || '').trim();
       if (!razorpayKeyId || !razorpayKeySecret) {
         logError('payments.create_checkout.razorpay_keys_missing', {
@@ -161,7 +166,11 @@ export default async function handler(req: any, res: any) {
         keyId: razorpayKeyId,
         name: 'Submission Fee',
         description: submission.title || 'Program submission',
-        prefill: {},
+        prefill: {
+          name: user.user_metadata?.full_name || user.email || '',
+          email: user.email || '',
+          contact: user.phone || '9999999999',
+        },
         notes: { submissionId, programId },
         successPath,
         cancelPath,
@@ -223,7 +232,16 @@ export default async function handler(req: any, res: any) {
       url: session.url,
     });
   } catch (error: any) {
-    logError('payments.create_checkout.exception', { message: error?.message, submissionId, programId });
-    res.status(500).json({ error: error?.message || 'Failed to create checkout session' });
+    console.error('[create-checkout] Exception:', error);
+    const getErrorMessage = (err: any): string => {
+      if (typeof err === 'string') return err;
+      if (err?.error?.description) return err.error.description;
+      if (err?.description) return err.description;
+      if (err?.message) return err.message;
+      return 'Failed to create checkout session';
+    };
+    const errorMessage = getErrorMessage(error);
+    logError('payments.create_checkout.exception', { message: errorMessage, submissionId, programId });
+    res.status(500).json({ error: errorMessage });
   }
 }

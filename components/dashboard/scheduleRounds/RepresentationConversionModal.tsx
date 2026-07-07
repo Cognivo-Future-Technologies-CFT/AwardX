@@ -24,7 +24,7 @@ export const RepresentationConversionModal: React.FC<RepresentationConversionMod
   onClose,
 }) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="md">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="default">
       <div className="space-y-4">
         <p className="text-sm text-slate-600">{description}</p>
 

@@ -12,7 +12,7 @@ import ReactFlow, {
   Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import RoundType, { Round, RoundEdge } from '../../../types/scheduleRounds';
+import RoundType, { Round, RoundEdge, EdgeCondition } from '../../../types/scheduleRounds';
 import { RoundConfigurationPanel } from './RoundConfigurationPanel';
 import { ConnectionModal } from './ConnectionModal';
 import { RoundNode } from './RoundNode';
@@ -61,7 +61,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (edgeMenu && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (edgeMenu && menuRef.current && !menuRef.current.contains(event.target as globalThis.Node)) {
         setEdgeMenu(null);
       }
     };
@@ -157,7 +157,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
     onRoundUpdate(newRound);
 
     const parentRound = rounds.find(r => r.id === parentRoundId);
-    const defaultCondition = parentRound?.type === 'Nomination' ? { type: 'always' } : { type: 'if_shortlisted' };
+    const defaultCondition: EdgeCondition = parentRound?.type === 'Nomination' ? { type: 'always' } : { type: 'if_shortlisted' };
 
     // Create edge from parent to child
     const newEdge: RoundEdge = {

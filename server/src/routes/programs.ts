@@ -108,7 +108,8 @@ router.get('/:id/stats', requireAuth, requireProgramAccess('id'), async (req, re
 				supabase
 					.from('submissions')
 					.select('status,payment_status,payment_amount,submitted_at')
-					.eq('program_id', id),
+					.eq('program_id', id)
+					.neq('payment_status', 'pending'),
 				supabase
 					.from('judges')
 					.select('id', { count: 'exact', head: true })

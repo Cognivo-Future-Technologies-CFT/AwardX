@@ -168,7 +168,7 @@ export async function enrollSubmissionsInRootRound(
     return { ok: true, enrolled: 0 };
   }
 
-  let subsQuery = supabase.from('submissions').select('id').eq('program_id', programId);
+  let subsQuery = supabase.from('submissions').select('id').eq('program_id', programId).neq('payment_status', 'pending');
   if (submissionIds && submissionIds.length > 0) {
     subsQuery = subsQuery.in('id', submissionIds);
   }
