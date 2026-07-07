@@ -42,7 +42,7 @@ export default async function handler(req, res) {
                 .order('submitted_at', { ascending: false }),
             supabase
                 .from('submission_drafts')
-                .select('id, form_id, current_page, updated_at, draft_data, program_forms(title, program_id, programs(title))')
+                .select('id, form_id, current_page, updated_at, draft_data, program_forms(title, program_id, programs!program_id(title))')
                 .eq('user_id', user.id)
                 .order('updated_at', { ascending: false }),
         ]);

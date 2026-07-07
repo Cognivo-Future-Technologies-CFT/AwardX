@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../Button';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -25,6 +26,25 @@ const defaultTheme: FormTheme = {
   buttonTextColor: '#ffffff',
   borderRadius: '0.5rem',
   fontFamily: 'Inter, sans-serif',
+};
+
+const defaultPaymentCurrency = (provider?: string) => {
+  const normalized = String(provider || '').toLowerCase();
+  return normalized === 'razorpay' ? 'INR' : 'USD';
+};
+
+const razorpayCheckoutDisplayConfig = {
+  display: {
+    blocks: {
+      upi: { name: 'Pay via UPI', instruments: [{ method: 'upi' }] },
+      card: { name: 'Pay via Card', instruments: [{ method: 'card' }] },
+      netbanking: { name: 'Pay via Netbanking', instruments: [{ method: 'netbanking' }] },
+      wallet: { name: 'Pay via Wallet', instruments: [{ method: 'wallet' }] },
+      paylater: { name: 'Pay Later', instruments: [{ method: 'paylater' }] },
+    },
+    sequence: ['block.upi', 'block.card', 'block.netbanking', 'block.wallet', 'block.paylater'],
+    preferences: { show_default_blocks: true },
+  },
 };
 
 const syncAwardSelectorOptions = (
@@ -180,6 +200,7 @@ const hasFieldValue = (value: any) => {
 
 export const FormSubmissionPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { formId: formIdParam } = useParams<{ formId?: string }>();
 
   const getRequireSignInFromUrl = () => {
@@ -254,6 +275,7 @@ export const FormSubmissionPage: React.FC = () => {
     const { user } = await auth.getUser();
     formAnalytics.track({ form_id: currentFormId, event_type: 'complete', user_id: user?.id }).catch(() => {});
     submissionDrafts.delete(currentFormId, user?.id).catch(() => {});
+    await queryClient.invalidateQueries({ queryKey: ['my-submissions-portal'] });
   };
 
   const loadRazorpayScript = async (): Promise<boolean> => {
@@ -286,6 +308,7 @@ export const FormSubmissionPage: React.FC = () => {
           if (!verifyResponse.ok) {
             throw new Error(verifyPayload?.error || 'Payment verification failed');
           }
+          await queryClient.invalidateQueries({ queryKey: ['my-submissions-portal'] });
           setIsSubmitted(true);
           setPaymentState('success');
           setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
@@ -459,7 +482,7 @@ export const FormSubmissionPage: React.FC = () => {
           setPaymentConfig({
             enabled: !!paymentConfigRow.enabled,
             provider: provider === 'paypal' ? 'PayPal' : provider === 'razorpay' ? 'Razorpay' : 'Stripe',
-            currency: paymentConfigRow.currency || 'USD',
+            currency: paymentConfigRow.currency || defaultPaymentCurrency(provider),
             fee: Number(paymentConfigRow.fee_amount) || 0,
             connected: !!paymentConfigRow.connected,
             publicKey: paymentConfigRow.public_key || undefined,
@@ -751,7 +774,6 @@ const fieldsByStep = useMemo(() => {
             submissionId: submission.id,
             programId,
             formId: currentFormId,
-            currency: paymentConfig?.currency || 'USD',
           }),
         });
 
@@ -773,6 +795,7 @@ const fieldsByStep = useMemo(() => {
             name: checkoutPayload.name,
             description: checkoutPayload.description,
             order_id: checkoutPayload.orderId,
+            config: razorpayCheckoutDisplayConfig,
             handler: async (response: any) => {
               const verifyResponse = await fetch('/api/payments/razorpay-verify', {
                 method: 'POST',
@@ -947,84 +970,6 @@ case 'award_selector': {
     return acc;
   }, {} as Record<string, string[]>);
 
-  // Eligibility gate — show welcome screen before form when eligible
-  if (eligibility.status === 'eligible' && !eligibilityGateDismissed && !isSubmitted) {
-    const hasExisting = eligibility.hasExistingSubmissions;
-    const hasDraft = eligibility.hasDraft;
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/30 flex items-center justify-center px-4 py-12">
-        <div className="max-w-2xl w-full">
-          <div className="bg-white rounded-[32px] shadow-xl border border-slate-100 p-8 sm:p-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
-              <Sparkles className="w-8 h-8 text-emerald-600" />
-            </div>
-
-            {hasExisting ? (
-              <>
-                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
-                  You can submit another entry.
-                </h1>
-                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
-                  Continue where you left off or start a new application.
-                </p>
-              </>
-            ) : hasDraft ? (
-              <>
-                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
-                  You have a saved draft.
-                </h1>
-                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
-                  Pick up where you left off or start fresh.
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
-                  Ready to submit
-                </h1>
-                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
-                  Complete the form below to submit your entry.
-                </p>
-              </>
-            )}
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              {hasDraft ? (
-                <Button
-                  onClick={() => setEligibilityGateDismissed(true)}
-                  className="w-full sm:w-auto"
-                >
-                  <PencilLine className="w-4 h-4 mr-2" />
-                  Continue Draft
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => setEligibilityGateDismissed(true)}
-                  className="w-full sm:w-auto"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  {hasExisting ? 'New Submission' : 'Start Submission'}
-                </Button>
-              )}
-
-              {hasExisting && (
-                <Button
-                  variant="outline"
-                  onClick={() => navigate('/my-submissions')}
-                  className="w-full sm:w-auto"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  View Submission
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative space-y-2 overflow-visible">
       <details className="group relative overflow-visible">
@@ -1088,7 +1033,13 @@ case 'award_selector': {
                 </div>
 
                 {awards.map((award) => {
-                  const optionValue = `${category} -> ${award}`;
+                  const optionValue = options.find((opt) => {
+                    const parts = opt.split(/\s*(?:→|->)\s*/).map((part) => part.trim());
+                    if (parts.length > 1) {
+                      return parts[0] === category && parts.slice(1).join(' → ') === award;
+                    }
+                    return parts[0] === category;
+                  }) || `${category} -> ${award}`;
                   const selected = value === optionValue;
 
                   return (
@@ -1401,7 +1352,7 @@ case 'award_selector': {
 
       case 'payment': {
         const fee = paymentConfig?.fee || 0;
-        const currency = paymentConfig?.currency || 'INR';
+        const currency = paymentConfig?.currency || defaultPaymentCurrency(paymentConfig?.provider);
         const provider = paymentConfig?.provider || 'Razorpay';
         const currencySymbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
 
@@ -1692,11 +1643,6 @@ const renderSectionFields = (fields: FormField[]) => {
     );
   }
 
-  // Eligible but need to gate before showing form (first time or returning)
-  if (eligibility.status === 'eligible' && !error && !isSubmitted && formFields.length === 0 && programId) {
-    // Don't gate here — formFields won't be loaded yet. The gate is before form renders.
-  }
-
   if (error) {
     if (error === 'github_required') {
       const returnUrl = `${window.location.pathname}${window.location.search}`;
@@ -1755,7 +1701,11 @@ const renderSectionFields = (fields: FormField[]) => {
               <CheckCircle2 className="w-12 h-12 text-emerald-500" />
             </div>
             <h2 className="text-3xl font-bold text-slate-900 mb-4">Thank You!</h2>
-            <p className="text-lg text-slate-600">{paymentMessage || 'Your form has been submitted successfully.'}</p>
+            <p className="text-lg text-slate-600 mb-8">{paymentMessage || 'Your form has been submitted successfully.'}</p>
+            <Button onClick={() => navigate('/my-submissions')} className="w-full sm:w-auto">
+              <Eye className="w-4 h-4 mr-2" />
+              View My Submissions
+            </Button>
           </motion.div>
         </div>
       );
@@ -1767,11 +1717,90 @@ const renderSectionFields = (fields: FormField[]) => {
           <div className="text-center max-w-md px-4">
             <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto mb-6" />
             <h2 className="text-3xl font-bold text-slate-900 mb-4">Thank You!</h2>
-            <p className="text-lg text-slate-600">Your form has been submitted successfully.</p>
+            <p className="text-lg text-slate-600 mb-8">Your form has been submitted successfully.</p>
+            <Button onClick={() => navigate('/my-submissions')}>View My Submissions</Button>
           </div>
         </div>
       );
     }
+  }
+
+  // Eligible welcome gate — shown before the form wizard
+  if (eligibility.status === 'eligible' && !eligibilityGateDismissed && !isSubmitted) {
+    const hasExisting = eligibility.hasExistingSubmissions;
+    const hasDraft = eligibility.hasDraft;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/30 flex items-center justify-center px-4 py-12">
+        <div className="max-w-2xl w-full">
+          <div className="bg-white rounded-[32px] shadow-xl border border-slate-100 p-8 sm:p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+              <Sparkles className="w-8 h-8 text-emerald-600" />
+            </div>
+
+            {hasExisting ? (
+              <>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+                  You can submit another entry.
+                </h1>
+                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
+                  Continue where you left off or start a new application.
+                </p>
+              </>
+            ) : hasDraft ? (
+              <>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+                  You have a saved draft.
+                </h1>
+                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
+                  Pick up where you left off or start fresh.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+                  Ready to submit
+                </h1>
+                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
+                  Complete the form below to submit your entry.
+                </p>
+              </>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              {hasDraft ? (
+                <Button
+                  onClick={() => setEligibilityGateDismissed(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <PencilLine className="w-4 h-4 mr-2" />
+                  Continue Draft
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setEligibilityGateDismissed(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  {hasExisting ? 'New Submission' : 'Start Submission'}
+                </Button>
+              )}
+
+              {hasExisting && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/my-submissions')}
+                  className="w-full sm:w-auto"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Submission
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

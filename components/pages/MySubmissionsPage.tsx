@@ -121,7 +121,24 @@ export const MySubmissionsPage: React.FC = () => {
           </div>
         )}
 
-        {!submissionsQuery.isLoading && submissions.length === 0 && (
+        {submissionsQuery.isError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
+            <AlertCircle className="mx-auto mb-3 h-8 w-8 text-rose-400" />
+            <h2 className="text-lg font-bold text-rose-900">Could not load submissions</h2>
+            <p className="mt-1 text-sm text-rose-700">
+              {(submissionsQuery.error as Error)?.message || 'Something went wrong. Please try again.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => submissionsQuery.refetch()}
+              className="mt-4 inline-flex items-center rounded-lg border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!submissionsQuery.isLoading && !submissionsQuery.isError && submissions.length === 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
             <FileText className="mx-auto mb-3 h-8 w-8 text-slate-300" />
             <h2 className="text-lg font-bold text-slate-900">No submissions yet</h2>

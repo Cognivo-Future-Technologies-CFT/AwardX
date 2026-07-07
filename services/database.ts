@@ -840,7 +840,8 @@ class DatabaseService {
           if (p === 'razorpay') return 'Razorpay';
           return 'Stripe';
         })(),
-        currency: program.program_payment_configs.currency || 'USD',
+        currency: program.program_payment_configs.currency
+          || (String(program.program_payment_configs.provider || 'stripe').toLowerCase() === 'razorpay' ? 'INR' : 'USD'),
         fee: Number(program.program_payment_configs.fee_amount) || 0,
         connected: program.program_payment_configs.connected || false,
         publicKey: program.program_payment_configs.public_key || undefined,
@@ -1080,13 +1081,14 @@ class DatabaseService {
     // Upsert payment config if provided
     if (supabase && program.paymentConfig) {
       const pc = program.paymentConfig;
+      const provider = (pc.provider || 'Stripe').toLowerCase();
       const { error: pcError } = await supabase
         .from('program_payment_configs')
         .upsert({
           program_id: program.id,
           enabled: !!pc.enabled,
-          provider: (pc.provider || 'Stripe').toLowerCase(),
-          currency: pc.currency || 'USD',
+          provider,
+          currency: pc.currency || (provider === 'razorpay' ? 'INR' : 'USD'),
           fee_amount: Number(pc.fee) || 0,
           public_key: pc.publicKey || null,
           secret_key_encrypted: pc.secretKey || null,
@@ -2895,8 +2897,12 @@ class DatabaseService {
       throw new Error('This nomination form is not published.');
     }
 
-    // Get current user info
-    const userId = await getCurrentUserId();
+    // Get current user info (session fallback if user-context cache is stale)
+    let userId = await getCurrentUserId();
+    if (!userId) {
+      const { session } = await auth.getSession();
+      userId = session?.user?.id || null;
+    }
     const profile = userId
       ? await supabase
         .from('profiles')
@@ -3040,15 +3046,27 @@ class DatabaseService {
       });
     }
 
-    // Backfill applicant identity from profile if needed.
-    if (profile?.data && (!applicantName || !applicantEmail)) {
+    // Backfill applicant identity from profile / session when missing on insert.
+    const identityPatch: Record<string, string | null> = {};
+    if (userId && !(data as any).applicant_id) {
+      identityPatch.applicant_id = userId;
+    }
+    if (profile?.data) {
+      if (!applicantName && profile.data.full_name) {
+        identityPatch.applicant_name = profile.data.full_name;
+      }
+      if (!applicantEmail && profile.data.email) {
+        identityPatch.applicant_email = profile.data.email;
+      }
+    }
+    if (Object.keys(identityPatch).length > 0) {
       await supabase
         .from('submissions')
-        .update({
-          applicant_name: profile.data.full_name || null,
-          applicant_email: profile.data.email || null,
-        })
+        .update(identityPatch)
         .eq('id', (data as any).id);
+      if (identityPatch.applicant_id) {
+        (data as any).applicant_id = identityPatch.applicant_id;
+      }
     }
 
     await this.safeAuditLog({

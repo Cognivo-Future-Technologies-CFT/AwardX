@@ -21,12 +21,18 @@ export default async function handler(req: any, res: any) {
     }
 
     const supabase = createSupabaseAdmin();
+    const userEmail = String(user.email || '').trim();
 
-    const [submissionsResult, draftsResult] = await Promise.all([
-      supabase
+    // Claim orphan submissions that match this user's email but lack applicant_id.
+    if (userEmail) {
+      await supabase
         .from('submissions')
-        .select(
-          `
+        .update({ applicant_id: user.id })
+        .is('applicant_id', null)
+        .ilike('applicant_email', userEmail);
+    }
+
+    const submissionSelect = `
           id,
           title,
           status,
@@ -44,13 +50,25 @@ export default async function handler(req: any, res: any) {
             judge_comments(overall_comment,recommendation),
             scores(score,comment,criterion_id)
           )
-        `,
-        )
-        .eq('applicant_id', user.id)
-        .order('submitted_at', { ascending: false }),
+        `;
+
+    let submissionsQuery = supabase
+      .from('submissions')
+      .select(submissionSelect);
+
+    if (userEmail) {
+      submissionsQuery = submissionsQuery.or(
+        `applicant_id.eq.${user.id},applicant_email.ilike.${userEmail}`,
+      );
+    } else {
+      submissionsQuery = submissionsQuery.eq('applicant_id', user.id);
+    }
+
+    const [submissionsResult, draftsResult] = await Promise.all([
+      submissionsQuery.order('submitted_at', { ascending: false }),
       supabase
         .from('submission_drafts')
-        .select('id, form_id, current_page, updated_at, draft_data, program_forms(title, program_id, programs(title))')
+        .select('id, form_id, current_page, updated_at, draft_data, program_forms(title, program_id, programs!program_id(title))')
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false }),
     ]);

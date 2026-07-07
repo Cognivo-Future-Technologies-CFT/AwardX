@@ -9,6 +9,19 @@ import { resolveEffectivePaymentProgramId } from '../../_utils/programIntegratio
 
 const toMinorUnits = (amount: number) => Math.max(0, Math.round(amount * 100));
 
+const resolveCheckoutCurrency = (
+  provider: string,
+  dbCurrency?: string | null,
+  clientCurrency?: string | null,
+) => {
+  const normalizedProvider = String(provider || 'stripe').toLowerCase();
+  const fromDb = String(dbCurrency || '').trim().toUpperCase();
+  if (fromDb) return fromDb;
+  const fromClient = String(clientCurrency || '').trim().toUpperCase();
+  if (fromClient) return fromClient;
+  return normalizedProvider === 'razorpay' ? 'INR' : 'USD';
+};
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -64,6 +77,7 @@ export default async function handler(req: any, res: any) {
     const provider = String(paymentConfig.provider || 'stripe').toLowerCase();
     const feeAmount = Number(paymentConfig.fee_amount || 0);
     const amount = toMinorUnits(feeAmount);
+    const checkoutCurrency = resolveCheckoutCurrency(provider, paymentConfig.currency, currency);
     if (amount <= 0) {
       res.status(400).json({ error: 'Submission fee is not configured' });
       return;
@@ -133,7 +147,7 @@ export default async function handler(req: any, res: any) {
       const razorpay = new Razorpay({ key_id: razorpayKeyId, key_secret: razorpayKeySecret });
       const order = await razorpay.orders.create({
         amount,
-        currency: (currency || paymentConfig.currency || 'INR').toUpperCase(),
+        currency: checkoutCurrency,
         receipt: submissionId,
         notes: {
           submissionId,
@@ -162,7 +176,7 @@ export default async function handler(req: any, res: any) {
         provider: 'razorpay',
         orderId: order.id,
         amount,
-        currency: (currency || paymentConfig.currency || 'INR').toUpperCase(),
+        currency: checkoutCurrency,
         keyId: razorpayKeyId,
         name: 'Submission Fee',
         description: submission.title || 'Program submission',
@@ -189,12 +203,12 @@ export default async function handler(req: any, res: any) {
       mode: 'payment',
       success_url: `${siteUrl}${successPath}`,
       cancel_url: `${siteUrl}${cancelPath}`,
-      currency: (currency || paymentConfig.currency || 'USD').toLowerCase(),
+      currency: checkoutCurrency.toLowerCase(),
       line_items: [
         {
           quantity: 1,
           price_data: {
-            currency: (currency || paymentConfig.currency || 'USD').toLowerCase(),
+            currency: checkoutCurrency.toLowerCase(),
             unit_amount: amount,
             product_data: {
               name: 'Submission Fee',
