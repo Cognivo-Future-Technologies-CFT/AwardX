@@ -1039,6 +1039,12 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
             <Modal isOpen={isChangeRoleModalOpen} onClose={() => setIsChangeRoleModalOpen(false)} title="Change Role">
                 <div className="space-y-4">
                     <p className="text-sm text-slate-600">Change role for <strong>{changingMember?.name}</strong></p>
+                    {changingMember?.programScope === 'organization' && eventId && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 space-y-1">
+                            <span className="font-semibold block text-amber-900">Organization-Wide Member Notice</span>
+                            <span>This user holds an organization-wide role. Modifying their role from this event-specific page will assign a program-scoped role for this event, keeping their organization-wide role intact.</span>
+                        </div>
+                    )}
                     <select
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                         value={newRoleId}

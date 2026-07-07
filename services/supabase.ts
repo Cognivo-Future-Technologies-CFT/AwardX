@@ -2229,8 +2229,34 @@ export const team = {
 
     if (error || !memberRows) return { data: [], error };
 
-    const userIds = Array.from(new Set(memberRows.map((m: any) => m.user_id).filter(Boolean)));
-    const roleIds = Array.from(new Set(memberRows.map((m: any) => m.role_id).filter(Boolean)));
+    // Deduplicate in memory: if a user has a program-specific row, discard their organization-wide row
+    let filteredMemberRows = memberRows;
+    if (programId) {
+      const userRows = new Map<string, any[]>();
+      for (const row of memberRows) {
+        if (!row.user_id) continue;
+        if (!userRows.has(row.user_id)) {
+          userRows.set(row.user_id, []);
+        }
+        userRows.get(row.user_id)!.push(row);
+      }
+
+      filteredMemberRows = [];
+      for (const rows of userRows.values()) {
+        const progScoped = rows.find(r => r.program_id === programId);
+        if (progScoped) {
+          filteredMemberRows.push(progScoped);
+        } else {
+          const orgWide = rows.find(r => r.program_id === null);
+          if (orgWide) {
+            filteredMemberRows.push(orgWide);
+          }
+        }
+      }
+    }
+
+    const userIds = Array.from(new Set(filteredMemberRows.map((m: any) => m.user_id).filter(Boolean)));
+    const roleIds = Array.from(new Set(filteredMemberRows.map((m: any) => m.role_id).filter(Boolean)));
 
     const [{ data: profiles, error: profilesError }, { data: rolesRows, error: rolesError }] = await Promise.all([
       userIds.length
@@ -2247,7 +2273,7 @@ export const team = {
     const profileById = new Map((profiles || []).map((p: any) => [p.id, p]));
     const roleById = new Map((rolesRows || []).map((r: any) => [r.id, r]));
 
-    const hydrated = (memberRows || []).map((m: any) => ({
+    const hydrated = (filteredMemberRows || []).map((m: any) => ({
       ...m,
       profiles: profileById.get(m.user_id) || null,
       roles: roleById.get(m.role_id) || null,
@@ -2260,15 +2286,46 @@ export const team = {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
 
-    let query = supabase
+    // Fetch the existing membership row to determine scope
+    const { data: memberRow, error: fetchError } = await supabase
       .from('organization_members')
-      .update({ role_id: roleId })
+      .select('*')
       .eq('id', memberId)
-      .eq('organization_id', orgId);
-      
-    const { data, error } = await query.select().single();
+      .eq('organization_id', orgId)
+      .maybeSingle();
 
-    return { data, error };
+    if (fetchError) return { data: null, error: fetchError };
+    if (!memberRow) return { data: null, error: { message: 'Member not found' } };
+
+    if (memberRow.program_id !== null || !programId) {
+      // Direct update for program-scoped member or org-level edit
+      const { data, error } = await supabase
+        .from('organization_members')
+        .update({ role_id: roleId })
+        .eq('id', memberId)
+        .eq('organization_id', orgId)
+        .select()
+        .single();
+      return { data, error };
+    } else {
+      // Org-wide member edited from an event-specific page:
+      // Insert/upsert a new program-scoped membership, leaving org-wide row alone.
+      const { data, error } = await supabase
+        .from('organization_members')
+        .upsert({
+          organization_id: orgId,
+          program_id: programId,
+          user_id: memberRow.user_id,
+          role_id: roleId,
+          status: 'active',
+          invited_by: memberRow.invited_by,
+          invited_at: memberRow.invited_at,
+          joined_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id,user_id,program_id' })
+        .select()
+        .single();
+      return { data, error };
+    }
   },
 
   // Direct-add user to org by email. If the user hasn't signed up yet, creates a pending invite instead.
