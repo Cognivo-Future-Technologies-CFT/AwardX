@@ -755,6 +755,12 @@ export const programs = {
     judging_type: 'parallel' | 'auto_assign';
     visibility: string;
     timezone: string;
+    kyc_enabled: boolean;
+    kyc_provider: string;
+    application_mode: string;
+    require_github_auth: boolean;
+    allow_multiple_submissions: boolean;
+    max_submissions: number;
   }>) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };

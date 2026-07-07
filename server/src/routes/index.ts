@@ -22,6 +22,7 @@ import announcementsRouter from './announcements.js';
 import certificatesRouter from './certificates.js';
 import attendanceRouter from './attendance.js';
 import uploadsRouter from './uploads.js';
+import submissionEligibilityRouter from './submissionEligibility.js';
 
 const router = Router();
 
@@ -48,5 +49,6 @@ router.use('/announcements', announcementsRouter);
 router.use('/certificates', certificatesRouter);
 router.use('/attendance', attendanceRouter);
 router.use('/uploads', uploadsRouter);
+router.use('/programs', submissionEligibilityRouter);
 
 export default router;

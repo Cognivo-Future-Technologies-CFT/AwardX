@@ -4,6 +4,14 @@
 
 import { getSupabaseAdmin } from '../supabase.js';
 import { buildPublicVotingSlug } from '../lib/votingSlug.js';
+import { isPublicVotingRoundRecord } from '../lib/votingRoundTypes.js';
+
+/** Disambiguate rounds → programs embed (certificate_round_display_labels added a second FK path). */
+const ROUND_PROGRAM_SELECT =
+  '*, programs!rounds_program_id_fkey(id, title, slug, cover_image_url, organization_id, kyc_enabled, kyc_provider)';
+
+export const ALREADY_VOTED_IN_ROUND_MESSAGE =
+  'You have already voted for this submission in this round.';
 
 export type VotingAccessMode = 'open' | 'org_only' | 'authenticated';
 
@@ -31,8 +39,6 @@ interface VotingResults {
   totalVotes: number;
 }
 
-const VOTING_ROUND_TYPES = ['Public Voting', 'Public Rating', 'public'];
-
 async function getVotingConfig(roundId: string) {
   const supabase = getSupabaseAdmin();
   const { data } = await supabase
@@ -43,6 +49,12 @@ async function getVotingConfig(roundId: string) {
   return data;
 }
 
+export async function getOrCreateVotingConfig(roundId: string) {
+  const existing = await getVotingConfig(roundId);
+  if (existing) return existing;
+  return ensureVotingConfigForRound(roundId);
+}
+
 async function ensureVotingConfigForRound(roundId: string) {
   const supabase = getSupabaseAdmin();
   const existing = await getVotingConfig(roundId);
@@ -50,7 +62,7 @@ async function ensureVotingConfigForRound(roundId: string) {
 
   const { data: round } = await supabase
     .from('rounds')
-    .select('id, title, programs(id, slug)')
+    .select('id, title, programs!rounds_program_id_fkey(id, slug)')
     .eq('id', roundId)
     .single();
 
@@ -92,12 +104,12 @@ async function getVotingRoundById(roundId: string) {
   const supabase = getSupabaseAdmin();
   const { data } = await supabase
     .from('rounds')
-    .select('*, programs(id, title, slug, cover_image_url, organization_id, kyc_enabled, kyc_provider)')
+    .select(ROUND_PROGRAM_SELECT)
     .eq('id', roundId)
     .single();
 
   if (!data) return null;
-  if (!VOTING_ROUND_TYPES.includes(data.type)) return null;
+  if (!isPublicVotingRoundRecord(data)) return null;
   return data;
 }
 
@@ -113,42 +125,53 @@ async function getVotingRoundBySlug(slug: string) {
   return getVotingRoundById(config.round_id);
 }
 
+function applyVoterScopeToQuery<T extends {
+  eq: (column: string, value: string) => T;
+  is: (column: string, value: null) => T;
+}>(query: T, voterInfo: VoterInfo): T | null {
+  if (voterInfo.userId) {
+    return query.eq('user_id', voterInfo.userId);
+  }
+  if (voterInfo.ipAddress) {
+    return query.eq('ip_address', voterInfo.ipAddress).is('user_id', null);
+  }
+  return null;
+}
+
 async function getVoterVoteCount(roundId: string, voterInfo: VoterInfo) {
   const supabase = getSupabaseAdmin();
-  let query = supabase
+  const baseQuery = supabase
     .from('public_votes')
-    .select('id, submission_id', { count: 'exact' })
+    .select('id, submission_id')
     .eq('round_id', roundId);
 
-  if (voterInfo.userId) {
-    query = query.eq('user_id', voterInfo.userId);
-  } else if (voterInfo.ipAddress) {
-    query = query.eq('ip_address', voterInfo.ipAddress);
-    if (voterInfo.userAgent) {
-      query = query.eq('user_agent', voterInfo.userAgent);
-    }
+  const scopedQuery = applyVoterScopeToQuery(baseQuery, voterInfo);
+  if (!scopedQuery) {
+    return { total: 0, submissionIds: [] as string[] };
   }
 
-  const { data, count } = await query;
+  const { data } = await scopedQuery;
+  const submissionIds = (data || []).map((v) => v.submission_id);
+  return { total: submissionIds.length, submissionIds };
+}
 
-  if (!voterInfo.userId && voterInfo.ipAddress) {
-    const { count: ipOnlyCount } = await supabase
-      .from('public_votes')
-      .select('id', { count: 'exact' })
-      .eq('round_id', roundId)
-      .eq('ip_address', voterInfo.ipAddress)
-      .is('user_id', null);
+async function hasExistingVoteForSubmission(
+  roundId: string,
+  submissionId: string,
+  voterInfo: VoterInfo,
+): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  const baseQuery = supabase
+    .from('public_votes')
+    .select('id', { count: 'exact', head: true })
+    .eq('round_id', roundId)
+    .eq('submission_id', submissionId);
 
-    return {
-      total: Math.max(count || 0, ipOnlyCount || 0),
-      submissionIds: (data || []).map((v) => v.submission_id),
-    };
-  }
+  const scopedQuery = applyVoterScopeToQuery(baseQuery, voterInfo);
+  if (!scopedQuery) return false;
 
-  return {
-    total: count || 0,
-    submissionIds: (data || []).map((v) => v.submission_id),
-  };
+  const { count } = await scopedQuery;
+  return (count || 0) > 0;
 }
 
 async function checkVoterAccess(
@@ -267,7 +290,7 @@ export async function getVotingRoundPublic(roundIdOrSlug: string) {
   if (!round) return null;
 
   let config = await getVotingConfig(roundId);
-  if (!config && VOTING_ROUND_TYPES.includes(round.type)) {
+  if (!config && isPublicVotingRoundRecord(round)) {
     config = await ensureVotingConfigForRound(roundId);
   }
 
@@ -312,21 +335,18 @@ export async function getMyVotes(roundIdOrSlug: string, voterInfo: VoterInfo) {
   if (!roundId) return null;
 
   const supabase = getSupabaseAdmin();
-  let query = supabase
+  const baseQuery = supabase
     .from('public_votes')
     .select('id, submission_id, created_at, submissions(id, title, applicant_name, cover_image_url)')
     .eq('round_id', roundId)
     .order('created_at', { ascending: false });
 
-  if (voterInfo.userId) {
-    query = query.eq('user_id', voterInfo.userId);
-  } else if (voterInfo.ipAddress) {
-    query = query.eq('ip_address', voterInfo.ipAddress).is('user_id', null);
-  } else {
+  const scopedQuery = applyVoterScopeToQuery(baseQuery, voterInfo);
+  if (!scopedQuery) {
     return { votes: [], total: 0 };
   }
 
-  const { data } = await query;
+  const { data } = await scopedQuery;
   return {
     votes: (data || []).map((v: any) => ({
       id: v.id,
@@ -378,9 +398,13 @@ export async function castVote(
     if (config.votes_per_submission > 0) {
       const votesForSubmission = voterVotes.submissionIds.filter((id) => id === submissionId).length;
       if (votesForSubmission >= config.votes_per_submission) {
-        return { ok: false, error: 'You have already voted for this submission.' };
+        return { ok: false, error: ALREADY_VOTED_IN_ROUND_MESSAGE };
       }
     }
+  }
+
+  if (await hasExistingVoteForSubmission(roundId, submissionId, voterInfo)) {
+    return { ok: false, error: ALREADY_VOTED_IN_ROUND_MESSAGE };
   }
 
   const supabase = getSupabaseAdmin();
@@ -408,7 +432,12 @@ export async function castVote(
     .select('id')
     .single();
 
-  if (insertError) return { ok: false, error: insertError.message };
+  if (insertError) {
+    if (insertError.code === '23505') {
+      return { ok: false, error: ALREADY_VOTED_IN_ROUND_MESSAGE };
+    }
+    return { ok: false, error: insertError.message };
+  }
 
   return { ok: true };
 }
@@ -465,7 +494,7 @@ export async function upsertVotingConfig(
   const round = await getVotingRoundById(roundId);
 
   let slug = config.public_voting_slug as string | undefined;
-  if (!slug && round && VOTING_ROUND_TYPES.includes(round.type)) {
+  if (!slug && round && isPublicVotingRoundRecord(round)) {
     slug = buildPublicVotingSlug(round.programs?.slug, round.title || 'voting');
   }
 

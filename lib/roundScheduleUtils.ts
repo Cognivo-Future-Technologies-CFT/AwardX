@@ -15,8 +15,9 @@ export const SCHEDULER_ROUND_TYPES = [
 
 export type SchedulerRoundType = (typeof SCHEDULER_ROUND_TYPES)[number];
 
-export function isVotingRoundType(type: Round['type']): boolean {
-  return type === 'Public Voting' || type === 'Public Rating' || type === 'public';
+export function isVotingRoundType(type: Round['type'] | string | null | undefined): boolean {
+  const normalized = String(type || '').toLowerCase().trim();
+  return ['public voting', 'public rating', 'public', 'voting'].includes(normalized);
 }
 
 export function isJudgingRoundType(type: Round['type']): boolean {

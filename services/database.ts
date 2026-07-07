@@ -110,6 +110,15 @@ export interface ApplicantPortalData {
   drafts: ApplicantDraftItem[];
 }
 
+/** Thrown when a participant has reached the submission limit for a program. */
+export class SubmissionLimitError extends Error {
+  code = 'SUBMISSION_LIMIT_REACHED';
+  constructor() {
+    super('You have already reached the submission limit for this program.');
+    this.name = 'SubmissionLimitError';
+  }
+}
+
 // --- Event Overview Page Service ---
 export const programPages = {
   // Config
@@ -844,6 +853,8 @@ class DatabaseService {
       kycProvider: program.kyc_provider || 'didit',
       applicationMode: program.application_mode || 'standard',
       requireGithubAuth: program.require_github_auth ?? false,
+      allowMultipleSubmissions: program.allow_multiple_submissions ?? false,
+      maxSubmissions: program.max_submissions ?? 1,
       visibility: program.visibility ? (program.visibility.charAt(0).toUpperCase() + program.visibility.slice(1)) as 'Public' | 'Private' : 'Public',
       timezone: program.timezone || 'UTC',
       activeFormId: program.active_form_id ?? null,
@@ -1053,6 +1064,10 @@ class DatabaseService {
       kyc_provider: program.kycProvider || 'didit',
       application_mode: program.applicationMode || 'standard',
       require_github_auth: program.requireGithubAuth ?? false,
+      allow_multiple_submissions: program.allowMultipleSubmissions ?? false,
+      max_submissions: program.allowMultipleSubmissions
+        ? Math.max(1, program.maxSubmissions ?? 2)
+        : 1,
     });
     if (error) {
       const errorMessage = error?.message || 'Failed to update program';
@@ -2901,18 +2916,27 @@ class DatabaseService {
     };
 
     const formRecord = form as any;
-    const allowMultipleNominations = !!formRecord.allow_multiple_nominations;
-    const configuredMaxNominations = Math.max(1, Number(formRecord.max_nominations_per_person || 1));
-    const nominationLimit = allowMultipleNominations ? configuredMaxNominations : 1;
     const autoAcceptSubmissions = formRecord.auto_accept_submissions !== false;
+
+    // Load program-level submission policy
+    const { data: programPolicy } = await supabase
+      .from('programs')
+      .select('allow_multiple_submissions, max_submissions')
+      .eq('id', form.program_id)
+      .maybeSingle();
+
+    const allowMultiple = !!programPolicy?.allow_multiple_submissions;
+    const submissionLimit = allowMultiple
+      ? Math.max(1, Number(programPolicy?.max_submissions ?? 2))
+      : 1;
 
     const applicantEmail = String(profile?.data?.email || extractEmailFromResponses(formData) || '').trim();
     const applicantName = String(profile?.data?.full_name || '').trim();
 
-    // Enforce nomination limits for the same form + person identity.
+    // Enforce submission limits per participant.
     // Submissions with payment_status='pending' are not counted (payment was not completed).
-    if (nominationLimit > 0) {
-      let existingQuery = supabase
+    if (submissionLimit > 0) {
+      let existingQuery: any = supabase
         .from('submissions')
         .select('id', { count: 'exact', head: true })
         .eq('program_id', form.program_id)
@@ -2924,20 +2948,17 @@ class DatabaseService {
       } else if (applicantEmail) {
         existingQuery = existingQuery.ilike('applicant_email', applicantEmail);
       } else {
-        existingQuery = null as any;
+        existingQuery = null;
       }
 
       if (existingQuery) {
         const { count: existingCount, error: existingCountError } = await existingQuery;
         if (existingCountError) {
-          throw new Error(existingCountError.message || 'Failed to validate nomination limit');
+          throw new Error(existingCountError.message || 'Failed to validate submission limit');
         }
 
-        if ((existingCount || 0) >= nominationLimit) {
-          if (allowMultipleNominations) {
-            throw new Error(`Nomination limit reached. Maximum allowed is ${nominationLimit} submissions.`);
-          }
-          throw new Error('You have already submitted this nomination form.');
+        if ((existingCount || 0) >= submissionLimit) {
+          throw new SubmissionLimitError();
         }
       }
 

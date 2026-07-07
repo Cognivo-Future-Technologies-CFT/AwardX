@@ -224,6 +224,8 @@ export interface Database {
           updated_at: string
           created_by: string | null
           active_form_id: string | null
+          allow_multiple_submissions: boolean
+          max_submissions: number
         }
         Insert: {
           id?: string
@@ -243,6 +245,8 @@ export interface Database {
           updated_at?: string
           created_by?: string | null
           active_form_id?: string | null
+          allow_multiple_submissions?: boolean
+          max_submissions?: number
         }
         Update: {
           id?: string
@@ -262,6 +266,8 @@ export interface Database {
           updated_at?: string
           created_by?: string | null
           active_form_id?: string | null
+          allow_multiple_submissions?: boolean
+          max_submissions?: number
         }
       }
       program_payment_configs: {

@@ -8,6 +8,7 @@ import {
   getMyVotes,
   upsertVotingConfig,
   resolveRoundId,
+  getOrCreateVotingConfig,
 } from '../services/votingEngine.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
@@ -135,15 +136,7 @@ router.get('/:roundId/config', requireAuth, async (req, res) => {
     const resolvedId = await resolveRoundId(roundId);
     if (!resolvedId) return res.status(404).json({ error: 'Voting round not found.' });
 
-    const { data, error } = await supabase
-      .from('voting_configs')
-      .select('*')
-      .eq('round_id', resolvedId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      return res.status(500).json({ error: error.message });
-    }
+    const data = await getOrCreateVotingConfig(resolvedId);
     return res.json({ data: data || null });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });

@@ -65,6 +65,8 @@ export interface Program {
   applicationMode?: 'standard' | 'hackathon';
   requireGithubAuth?: boolean;
   activeFormId?: string | null;
+  allowMultipleSubmissions?: boolean;
+  maxSubmissions?: number;
   integrationSources?: {
     resend?: string | null;
     didit?: string | null;

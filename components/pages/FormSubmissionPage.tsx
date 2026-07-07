@@ -12,7 +12,7 @@ import { PaymentConfig } from '../../services/models';
 import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
 import { getCategorySelectorLabels } from '../../lib/judgingType';
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles, Send, Eye, FileText, PencilLine } from 'lucide-react';
 import { storage } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -231,6 +231,14 @@ export const FormSubmissionPage: React.FC = () => {
   const [applicationMode, setApplicationMode] = useState<'standard' | 'hackathon'>('standard');
   const [requireGithubAuth, setRequireGithubAuth] = useState(false);
   const [kycEnabled, setKycEnabled] = useState(false);
+  const [eligibility, setEligibility] = useState<{
+    status: 'loading' | 'eligible' | 'ineligible';
+    code?: string;
+    hasExistingSubmissions?: boolean;
+    hasDraft?: boolean;
+    draft?: any;
+  }>({ status: 'loading' });
+  const [eligibilityGateDismissed, setEligibilityGateDismissed] = useState(false);
 
   const needsGithubApplication = applicationMode === 'hackathon' || requireGithubAuth;
 
@@ -366,6 +374,39 @@ export const FormSubmissionPage: React.FC = () => {
           setIsError('Submissions are not yet open. This program is not live.');
           setIsLoading(false);
           return;
+        }
+
+        // Check submission eligibility via backend API
+        try {
+          const { session } = await auth.getSession();
+          const token = session?.access_token || '';
+          const eligRes = await fetch(`/api/programs/${form.program_id}/submission-eligibility`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          const eligData = await eligRes.json();
+
+          if (eligData.eligible === false) {
+            setEligibility({
+              status: 'ineligible',
+              code: eligData.code,
+              hasExistingSubmissions: false,
+            });
+            setIsLoading(false);
+            return;
+          }
+
+          if (eligData.eligible === true) {
+            setEligibility({
+              status: 'eligible',
+              hasExistingSubmissions: !!eligData.hasExistingSubmissions,
+              hasDraft: !!eligData.hasDraft,
+              draft: eligData.draft || null,
+            });
+            // Early return here means form doesn't render — we need to show the gate first
+            // But we also need to continue loading if eligible. Let's keep going.
+          }
+        } catch (e) {
+          console.warn('Eligibility check failed, proceeding to form:', e);
         }
 
         const mode = (programRow?.application_mode as 'standard' | 'hackathon') || 'standard';
@@ -905,6 +946,84 @@ case 'award_selector': {
 
     return acc;
   }, {} as Record<string, string[]>);
+
+  // Eligibility gate — show welcome screen before form when eligible
+  if (eligibility.status === 'eligible' && !eligibilityGateDismissed && !isSubmitted) {
+    const hasExisting = eligibility.hasExistingSubmissions;
+    const hasDraft = eligibility.hasDraft;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50/30 flex items-center justify-center px-4 py-12">
+        <div className="max-w-2xl w-full">
+          <div className="bg-white rounded-[32px] shadow-xl border border-slate-100 p-8 sm:p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+              <Sparkles className="w-8 h-8 text-emerald-600" />
+            </div>
+
+            {hasExisting ? (
+              <>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+                  You can submit another entry.
+                </h1>
+                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
+                  Continue where you left off or start a new application.
+                </p>
+              </>
+            ) : hasDraft ? (
+              <>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+                  You have a saved draft.
+                </h1>
+                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
+                  Pick up where you left off or start fresh.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+                  Ready to submit
+                </h1>
+                <p className="text-slate-500 mb-8 text-base leading-relaxed max-w-md mx-auto">
+                  Complete the form below to submit your entry.
+                </p>
+              </>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              {hasDraft ? (
+                <Button
+                  onClick={() => setEligibilityGateDismissed(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <PencilLine className="w-4 h-4 mr-2" />
+                  Continue Draft
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setEligibilityGateDismissed(true)}
+                  className="w-full sm:w-auto"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  {hasExisting ? 'New Submission' : 'Start Submission'}
+                </Button>
+              )}
+
+              {hasExisting && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/my-submissions')}
+                  className="w-full sm:w-auto"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Submission
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative space-y-2 overflow-visible">
@@ -1498,6 +1617,84 @@ const renderSectionFields = (fields: FormField[]) => {
         </div>
       </div>
     );
+  }
+
+  // Eligibility gate — shown before the form when the participant is ineligible
+  if (eligibility.status === 'ineligible') {
+    const code = eligibility.code;
+
+    if (code === 'ALREADY_SUBMITTED') {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 flex items-center justify-center px-4">
+          <div className="max-w-lg w-full rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-lg">
+            <CheckCircle2 className="w-14 h-14 mx-auto mb-4 text-amber-500" />
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">You have already submitted this program.</h2>
+            <p className="text-slate-500 mb-8 text-sm leading-relaxed">
+              Additional submissions are not allowed.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button
+                onClick={() => navigate('/my-submissions')}
+                className="w-full sm:w-auto"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                View Submission
+              </Button>
+              <Button
+                disabled
+                variant="outline"
+                className="w-full sm:w-auto opacity-50"
+              >
+                Already Submitted
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (code === 'SUBMISSION_LIMIT_REACHED') {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 flex items-center justify-center px-4">
+          <div className="max-w-lg w-full rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-lg">
+            <AlertCircle className="w-14 h-14 mx-auto mb-4 text-slate-400" />
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              You have reached the submission limit for this program.
+            </h2>
+            <div className="mt-8">
+              <Button
+                onClick={() => navigate('/my-submissions')}
+                className="w-full sm:w-auto"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                View Previous Submissions
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Generic ineligible fallback
+    return (
+      <div className="min-h-screen bg-white">
+        <div className="min-h-[60vh] flex items-center justify-center px-4">
+          <div className="text-center max-w-md">
+            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Not eligible to submit</h2>
+            <p className="text-slate-600 mb-6">
+              You are not eligible to submit to this program at this time.
+            </p>
+            <Button onClick={() => navigate('/')}>Go Home</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Eligible but need to gate before showing form (first time or returning)
+  if (eligibility.status === 'eligible' && !error && !isSubmitted && formFields.length === 0 && programId) {
+    // Don't gate here — formFields won't be loaded yet. The gate is before form renders.
   }
 
   if (error) {

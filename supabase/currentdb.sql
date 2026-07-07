@@ -105,6 +105,8 @@ CREATE TABLE public.programs (
   application_mode character varying DEFAULT 'standard'::character varying CHECK (application_mode::text = ANY (ARRAY['standard'::character varying, 'hackathon'::character varying]::text[])),
   require_github_auth boolean DEFAULT false,
   integration_sources jsonb NOT NULL DEFAULT '{}'::jsonb,
+  allow_multiple_submissions boolean NOT NULL DEFAULT false,
+  max_submissions integer NOT NULL DEFAULT 1,
   CONSTRAINT programs_pkey PRIMARY KEY (id),
   CONSTRAINT programs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT programs_event_type_id_fkey FOREIGN KEY (event_type_id) REFERENCES public.event_types(id),

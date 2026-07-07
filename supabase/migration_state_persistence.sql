@@ -277,14 +277,23 @@ BEGIN
   END IF;
 END $$;
 
--- public_votes: prevent double-voting per user per submission
+-- public_votes: prevent double-voting per user or IP within a round
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'public_votes_user_submission_unique'
+    SELECT 1 FROM pg_indexes WHERE indexname = 'public_votes_round_user_submission_unique'
   ) THEN
-    ALTER TABLE public.public_votes
-      ADD CONSTRAINT public_votes_user_submission_unique UNIQUE (submission_id, user_id);
+    CREATE UNIQUE INDEX public_votes_round_user_submission_unique
+      ON public.public_votes (round_id, submission_id, user_id)
+      WHERE round_id IS NOT NULL AND user_id IS NOT NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes WHERE indexname = 'public_votes_round_ip_submission_unique'
+  ) THEN
+    CREATE UNIQUE INDEX public_votes_round_ip_submission_unique
+      ON public.public_votes (round_id, submission_id, ip_address)
+      WHERE round_id IS NOT NULL AND user_id IS NULL AND ip_address IS NOT NULL;
   END IF;
 END $$;
 
@@ -546,7 +555,8 @@ CREATE POLICY timeline_milestones_access ON public.program_timeline_milestones
 --   • social_accounts(organization_id, platform, handle)
 --   • scores(submission_judge_id, criterion_id)
 --   • judges(email, program_id)
---   • public_votes(submission_id, user_id)
+--   • public_votes(round_id, submission_id, user_id) where user_id is not null
+--   • public_votes(round_id, submission_id, ip_address) where user_id is null
 --
 -- NEW INDEXES (14 performance indexes)
 -- MATERIALIZED VIEW: program_stats

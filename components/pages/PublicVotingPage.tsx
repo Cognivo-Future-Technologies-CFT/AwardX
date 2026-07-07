@@ -115,7 +115,7 @@ export const PublicVotingPage: React.FC = () => {
 
   const fetchPath = slug ? `/voting/s/${slug}` : `/voting/${votingKey}`;
 
-  const { data: roundData, isLoading: roundLoading } = useQuery({
+  const { data: roundData, isLoading: roundLoading, isError: roundError } = useQuery({
     queryKey: queryKeys.voting.round(votingKey),
     queryFn: async () => {
       const res = await fetch(apiUrl(fetchPath));
@@ -253,7 +253,7 @@ export const PublicVotingPage: React.FC = () => {
     );
   }
 
-  if (!round) {
+  if (!round && (roundError || !roundLoading)) {
     return (
       <EmptyState
         icon={AlertCircle}

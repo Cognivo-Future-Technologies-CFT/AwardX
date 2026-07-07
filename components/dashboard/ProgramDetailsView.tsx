@@ -8,6 +8,7 @@ import { getProgramMediaAssets, invalidateOverviewCache } from '../../services/o
 import { useAuth } from '../../contexts/AuthContext';
 import {
     Calendar,
+    FileCheck,
     Image as ImageIcon,
     Type,
     Link as LinkIcon,
@@ -149,6 +150,8 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
             category: activeEvent.category,
             applicationMode: activeEvent.applicationMode || 'standard',
             requireGithubAuth: activeEvent.requireGithubAuth ?? false,
+            allowMultipleSubmissions: activeEvent.allowMultipleSubmissions ?? false,
+            maxSubmissions: activeEvent.maxSubmissions ?? 2,
         });
     }, [activeEvent]);
 
@@ -620,6 +623,68 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                     <strong>Schedule &amp; Rounds</strong>. Connect DIDIT in{' '}
                                     <strong>Settings → Integrations</strong> first.
                                 </p>
+                            </div>
+                        </SectionCard>
+
+                        <SectionCard
+                            icon={<FileCheck className="w-4 h-4" />}
+                            title="Submission Settings"
+                            description="Control how many times participants can submit"
+                        >
+                            <div className="space-y-4">
+                                <label className="flex items-center justify-between cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <div>
+                                        <span className="text-sm font-semibold text-slate-900">Allow Multiple Submissions</span>
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            Let participants submit more than one application
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const newVal = !formData.allowMultipleSubmissions;
+                                            setFormData({
+                                                ...formData,
+                                                allowMultipleSubmissions: newVal,
+                                                maxSubmissions: newVal ? Math.max(2, formData.maxSubmissions ?? 2) : 1,
+                                            });
+                                        }}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                            formData.allowMultipleSubmissions ? 'bg-indigo-600' : 'bg-slate-300'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                                                formData.allowMultipleSubmissions ? 'translate-x-6' : 'translate-x-1'
+                                            }`}
+                                        />
+                                    </button>
+                                </label>
+
+                                {formData.allowMultipleSubmissions && (
+                                    <div className="space-y-1.5 pl-2">
+                                        <FieldLabel hint="minimum 2">Maximum Submissions Per Participant</FieldLabel>
+                                        <input
+                                            type="number"
+                                            min={2}
+                                            value={formData.maxSubmissions ?? 2}
+                                            onChange={(e) => {
+                                                const val = Math.max(2, parseInt(e.target.value) || 2);
+                                                setFormData({ ...formData, maxSubmissions: val });
+                                            }}
+                                            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        />
+                                        <p className="text-xs text-slate-400">
+                                            Maximum number of completed submissions a participant can make for this program.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!formData.allowMultipleSubmissions && (
+                                    <p className="text-xs text-slate-400">
+                                        Each participant may submit only one completed application.
+                                    </p>
+                                )}
                             </div>
                         </SectionCard>
                     </div>
