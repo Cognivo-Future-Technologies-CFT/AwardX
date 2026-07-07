@@ -1,10 +1,5 @@
-// Ensure env vars are loaded when running inside the Express server.
+// Env vars are loaded by server/src/index.ts before this module is imported.
 // In Vercel serverless, env vars are injected automatically.
-import { config as dotenvConfig } from 'dotenv';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-const __registryDir = dirname(fileURLToPath(import.meta.url));
-dotenvConfig({ path: resolve(__registryDir, '../../.env') });
 
 export type ApiHandler = (req: any, res: any) => Promise<void> | void;
 
