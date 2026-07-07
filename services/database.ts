@@ -675,7 +675,7 @@ class DatabaseService {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profile?.organization_id === this.currentOrgId) {
+    if (profile?.organization_id && profile.organization_id === this.currentOrgId) {
       const { data: membership } = await supabase
         .from('organization_members')
         .select('id, role_id, roles(name, permissions)')
@@ -693,6 +693,12 @@ class DatabaseService {
           this.permissionsLoaded = true;
           return;
         }
+      } else {
+        // Creator of the org, but no membership row: grant owner access
+        this.cachedRoleName = 'Owner';
+        this.cachedPermissions = new Set(['all']);
+        this.permissionsLoaded = true;
+        return;
       }
     }
 
@@ -1665,6 +1671,12 @@ class DatabaseService {
       date: s.submitted_at ? new Date(s.submitted_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       image: s.cover_image_url || `https://picsum.photos/seed/${encodeURIComponent(s.id || 'submission')}/50/50`,
       assignedJudges: s.submission_judges?.map((sj: any) => sj.judge_id) || [],
+      assignedJudgeDetails: s.submission_judges?.map((sj: any) => ({
+        id: sj.judge_id,
+        name: sj.judges?.name || 'Unknown Judge',
+        email: sj.judges?.email || '',
+        avatar: sj.judges?.avatar_url || '',
+      })).filter((j: any) => j.id) || [],
       votes: s.votes_count || s.submission_data?.votes || 0,
       submissionData: s.submission_data || {},
       description: s.description || undefined,
@@ -3338,6 +3350,10 @@ class DatabaseService {
     // Look up actual role from organization_members
     let roleName = 'Member';
     try {
+      if (profile.organization_id && this.currentOrgId && profile.organization_id === this.currentOrgId) {
+        roleName = 'Owner';
+      }
+
       if (this.cachedRoleName) {
         roleName = this.cachedRoleName;
       } else if (this.currentOrgId) {

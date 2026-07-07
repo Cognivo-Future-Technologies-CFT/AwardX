@@ -70,39 +70,34 @@ async function canManageOrganizationProgram(userId: string, organizationId: stri
   }
 
   return (memberships || []).some((membership: any) => {
-    // Org-wide membership (not scoped to a specific program) holds management rights over all programs.
-    if (membership.program_id === null) {
-      return true;
+    // If program-specific membership, it must match the current programId
+    if (membership.program_id !== null && programId && membership.program_id !== programId) {
+      return false;
     }
 
-    // Program-specific membership is allowed if it matches the current programId
-    if (programId && membership.program_id === programId) {
-      const roleName = String(membership.roles?.name || '').toLowerCase().trim();
+    const roleName = String(membership.roles?.name || '').toLowerCase().trim();
 
-      // Check role name directly — known management roles pass immediately
-      if (MANAGEMENT_ROLE_NAMES.has(roleName)) return true;
+    // Check role name directly — known management roles pass immediately
+    if (MANAGEMENT_ROLE_NAMES.has(roleName)) return true;
 
-      // Collect permissions from both sources:
-      // 1. The legacy roles.permissions array column (may be populated in older setups)
-      const permsFromArray: string[] = Array.isArray(membership.roles?.permissions)
-        ? membership.roles.permissions.map((value: unknown) => String(value).toLowerCase().trim())
-        : [];
+    // Collect permissions from both sources:
+    // 1. The legacy roles.permissions array column (may be populated in older setups)
+    const permsFromArray: string[] = Array.isArray(membership.roles?.permissions)
+      ? membership.roles.permissions.map((value: unknown) => String(value).toLowerCase().trim())
+      : [];
 
-      // 2. The role_permissions junction table (authoritative source)
-      const permsFromJunction: string[] = Array.isArray(membership.roles?.role_permissions)
-        ? membership.roles.role_permissions
-            .map((rp: any) => rp?.permissions?.key)
-            .filter(Boolean)
-            .map((key: string) => key.toLowerCase().trim())
-        : [];
+    // 2. The role_permissions junction table (authoritative source)
+    const permsFromJunction: string[] = Array.isArray(membership.roles?.role_permissions)
+      ? membership.roles.role_permissions
+          .map((rp: any) => rp?.permissions?.key)
+          .filter(Boolean)
+          .map((key: string) => key.toLowerCase().trim())
+      : [];
 
-      const allPermissions = [...permsFromArray, ...permsFromJunction];
+    const allPermissions = [...permsFromArray, ...permsFromJunction];
 
-      // If the role has ANY recognized permission, it's a valid program member with access rights.
-      return allPermissions.some((permission: string) => MANAGEMENT_PERMISSION_KEYS.has(permission));
-    }
-
-    return false;
+    // If the role has ANY recognized permission, it's a valid program member with access rights.
+    return allPermissions.some((permission: string) => MANAGEMENT_PERMISSION_KEYS.has(permission));
   });
 }
 

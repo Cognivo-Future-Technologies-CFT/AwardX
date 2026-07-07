@@ -1081,7 +1081,24 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                            </td> */}
                            <td className="p-5">
                               <div className="flex items-center -space-x-2">
-                                 {(sub.assignedJudges || []).length > 0 ? (
+                                 {(sub.assignedJudgeDetails && sub.assignedJudgeDetails.length > 0) ? (
+                                    <>
+                                       {sub.assignedJudgeDetails.slice(0, 3).map((j, i) => {
+                                          return j.avatar ? (
+                                             <img key={i} src={j.avatar} className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-slate-100 shadow-sm object-cover" title={j.name} alt="" />
+                                          ) : (
+                                             <div key={i} className="w-7 h-7 rounded-full border-2 border-white ring-1 ring-slate-100 shadow-sm bg-indigo-500 flex items-center justify-center text-white text-[10px] font-bold" title={j.name}>
+                                                {j.name?.charAt(0).toUpperCase() || 'J'}
+                                             </div>
+                                          );
+                                       })}
+                                       {sub.assignedJudgeDetails.length > 3 && (
+                                          <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-50 ring-1 ring-slate-100 flex items-center justify-center text-[9px] text-slate-500 font-bold shadow-sm">
+                                             +{sub.assignedJudgeDetails.length - 3}
+                                          </div>
+                                       )}
+                                    </>
+                                 ) : (sub.assignedJudges || []).length > 0 ? (
                                     <>
                                        {(sub.assignedJudges || []).slice(0, 3).map((jid, i) => {
                                           const j = judges.find(judge => judge.id === jid);
