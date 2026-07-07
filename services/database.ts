@@ -675,7 +675,7 @@ class DatabaseService {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profile?.organization_id === this.currentOrgId) {
+    if (profile?.organization_id && profile.organization_id === this.currentOrgId) {
       const { data: membership } = await supabase
         .from('organization_members')
         .select('id, role_id, roles(name, permissions)')
@@ -693,6 +693,12 @@ class DatabaseService {
           this.permissionsLoaded = true;
           return;
         }
+      } else {
+        // Creator of the org, but no membership row: grant owner access
+        this.cachedRoleName = 'Owner';
+        this.cachedPermissions = new Set(['all']);
+        this.permissionsLoaded = true;
+        return;
       }
     }
 
@@ -3324,6 +3330,10 @@ class DatabaseService {
     // Look up actual role from organization_members
     let roleName = 'Member';
     try {
+      if (profile.organization_id && this.currentOrgId && profile.organization_id === this.currentOrgId) {
+        roleName = 'Owner';
+      }
+
       if (this.cachedRoleName) {
         roleName = this.cachedRoleName;
       } else if (this.currentOrgId) {

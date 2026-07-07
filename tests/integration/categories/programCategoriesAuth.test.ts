@@ -68,6 +68,15 @@ describe('program categories API', () => {
             insert,
           };
         }
+        if (table === 'programs') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
+              }),
+            }),
+          };
+        }
         throw new Error(`Unexpected table ${table}`);
       },
     });
@@ -112,6 +121,15 @@ describe('program categories API', () => {
           return {
             delete: () => ({
               eq: deleteMock,
+            }),
+          };
+        }
+        if (table === 'programs') {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { organization_id: 'org-1' }, error: null }),
+              }),
             }),
           };
         }
