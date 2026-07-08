@@ -157,6 +157,11 @@ export async function sendJudgeInviteEmail(payload: JudgeInvitePayload, options?
   return postJson('/api/invites/judge', payload, options?.onTrace);
 }
 
+export async function sendRoleChangeEmail(payload: { email: string; userName?: string; roleName?: string; programTitle: string; organizationId?: string; programId?: string; oldRoleName?: string; newPermissions?: string[] }, options?: { onTrace?: EmailTraceCallback }) {
+  if (!payload.email) return;
+  return postJson('/api/invites/notify-role-change', payload, options?.onTrace);
+}
+
 export async function resendTeamInvite(
   inviteId: string,
   programTitleFallback?: string,

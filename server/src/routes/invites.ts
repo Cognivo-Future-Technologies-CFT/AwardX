@@ -1180,6 +1180,171 @@ router.post('/team', async (req, res) => {
 	}
 });
 
+// ── POST /api/invites/notify-role-change ─────────────────────────────────────
+
+router.post('/notify-role-change', async (req, res) => {
+	try {
+		const { email, roleName, programTitle, organizationId, oldRoleName, userName, newPermissions } = req.body || {};
+		if (!email || !programTitle) {
+			return res.status(400).json({ error: 'email and programTitle are required' });
+		}
+		const normalizedEmail = email.toLowerCase().trim();
+
+		const authResult = await getAuthUser(req);
+		if (!authResult?.user) {
+			return res.status(401).json({ error: 'Authentication required' });
+		}
+
+		if (!isSupabaseConfigured()) {
+			return res.status(503).json({ error: 'Database not configured' });
+		}
+		const supabase = getSupabaseAdmin();
+
+		const mailer = await getOrgResendMailer(supabase, organizationId || null);
+		if (!mailer) {
+			return res.status(200).json({
+				ok: true,
+				emailSent: false,
+				warning: RESEND_NOT_CONFIGURED_MESSAGE,
+			});
+		}
+
+		const previewText = `Your role for ${programTitle} has been updated.`;
+		const subject = `Your Role Has Been Updated`;
+		const roleLine = roleName ? `New role: ${roleName}` : 'Your role has been updated.';
+
+		const permissionMap: Record<string, string> = {
+			'view_overview': 'View dashboard overview',
+			'manage_programs': 'Edit event settings',
+			'view_submissions': 'Review submissions',
+			'manage_submissions': 'Manage participants and submissions',
+			'view_judging': 'View judging progress',
+			'manage_judging': 'Manage judges and scoring',
+			'manage_forms': 'Edit application forms',
+			'view_analytics': 'View reports and analytics',
+			'manage_teams': 'Manage team members and roles',
+			'view_logs': 'View audit logs',
+			'manage_settings': 'Manage organization settings',
+			'mark_attendance': 'Scan QR passes and mark attendance',
+		};
+
+		let currentPermissionsHtml = '';
+		if (newPermissions && newPermissions.length > 0) {
+			const items = newPermissions.map((p: string) => `
+				<div style="display:flex;align-items:flex-start;margin-bottom:12px;">
+					<span style="display:inline-block;margin-right:12px;font-size:16px;">✅</span>
+					<span style="font-size:15px;color:#334155;line-height:1.5;">${permissionMap[p] || p}</span>
+				</div>
+			`).join('');
+			currentPermissionsHtml = `
+				<h3 style="margin:24px 0 16px;font-size:18px;font-weight:600;color:#1e293b;">Your Current Permissions</h3>
+				<div style="margin-bottom:24px;">
+					${items}
+				</div>
+			`;
+		}
+
+		const { data: mailData, error: sendError } = await mailer.resend.emails.send({
+			from: mailer.from,
+			to: normalizedEmail,
+			subject,
+			text: `Your role for ${programTitle} has been changed.\n${roleLine}\nLog in to view your new permissions.`,
+			html: `<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+    <span style="display:none;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">${escapeHtml(previewText)}</span>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;">
+      <tr>
+        <td align="center" style="padding:40px 20px;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="560" style="width:560px;max-width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <tr>
+              <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
+                <img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px;">
+                <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">Your Role Has Been Updated</h2>
+                
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi${userName ? ' ' + escapeHtml(userName) : ''},</p>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">
+                  Your role in <strong>${escapeHtml(programTitle)}</strong> has been updated by an administrator.
+                </p>
+
+                <!-- Info Grid -->
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0;background-color:#f1f5f9;border-radius:8px;padding:20px;border-left:4px solid #4f46e5;">
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;width:100px;vertical-align:top;"><strong>Event:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(programTitle)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Previous Role:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(oldRoleName || 'Member')}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>New Role:</strong></td>
+                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(roleName || 'Member')}</td>
+                  </tr>
+                </table>
+
+                ${currentPermissionsHtml}
+
+                <p style="margin:24px 0 24px;font-size:14px;line-height:1.6;color:#64748b;background-color:#f8fafc;padding:16px;border-radius:8px;">
+                  These permissions are determined by your assigned role. If you believe this update was made in error, please contact your event administrator.
+                </p>
+
+                <!-- CTA Button -->
+                <div style="text-align:center;margin:32px 0 16px;">
+                  <a href="${getSiteUrl()}" style="background:#4f46e5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;display:inline-block;box-shadow:0 2px 4px rgba(79,70,229,0.3);">Go to Dashboard</a>
+                </div>
+                
+                <div style="text-align:center;margin-bottom:32px;">
+                  <a href="${getSiteUrl()}" style="color:#4f46e5;text-decoration:underline;font-size:14px;font-weight:500;">View Event</a>
+                </div>
+
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The Team</strong></p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
+                <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
+                  You're receiving this email because your access permissions were updated for this event.<br />
+                  470 Noor Ave STE B #1148, South San Francisco, CA 94080
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+		});
+
+		if (sendError) {
+			console.error('Resend error (role change):', sendError);
+			return res.status(200).json({
+				ok: true,
+				emailSent: false,
+				warning: sendError.message || 'Email provider rejected the send',
+			});
+		}
+
+		return res.json({ ok: true, id: mailData?.id, emailSent: true });
+	} catch (err: any) {
+		console.error('Role change notification error:', err);
+		return res.status(500).json({ error: err?.message || 'Failed to send role change notification' });
+	}
+});
+
 // ── POST /api/invites/judge ────────────────────────────────────────────────
 
 router.post('/judge', async (req, res) => {

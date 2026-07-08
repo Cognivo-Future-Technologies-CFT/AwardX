@@ -262,8 +262,8 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
     });
 
     const roleChangeMutation = useMutation({
-        mutationFn: (vars: { memberId: string; roleId: string }) =>
-            db.updateTeamMemberRole(vars.memberId, vars.roleId, eventId),
+        mutationFn: (vars: { memberId: string; roleId: string; email: string; userName: string; roleName: string; programTitle: string; oldRoleName: string; newPermissions: string[] }) =>
+            db.updateTeamMemberRole(vars.memberId, vars.roleId, eventId, vars.email, vars.roleName, vars.programTitle, vars.oldRoleName, vars.userName, vars.newPermissions),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: queryKeys.teams.members(eventId) });
             toast.success('Role updated');
@@ -1051,7 +1051,22 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
                         <Button
                             onClick={() => {
                                 if (changingMember && newRoleId) {
-                                    roleChangeMutation.mutate({ memberId: changingMember.memberId, roleId: newRoleId });
+                                    const oldRole = roles.find(r => r.id === changingMember.roleId);
+                                    const newRole = roles.find(r => r.id === newRoleId);
+                                    const oldRoleName = oldRole?.name || 'Member';
+                                    const roleName = newRole?.name || 'Member';
+                                    const newPerms = newRole?.permissions || [];
+                                    
+                                    roleChangeMutation.mutate({ 
+                                        memberId: changingMember.memberId, 
+                                        roleId: newRoleId,
+                                        email: changingMember.email,
+                                        userName: changingMember.name,
+                                        roleName,
+                                        programTitle: eventId ? eventTitle : 'the organization',
+                                        oldRoleName,
+                                        newPermissions: newPerms
+                                    });
                                 }
                             }}
                             disabled={roleChangeMutation.isPending}

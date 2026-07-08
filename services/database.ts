@@ -2459,7 +2459,68 @@ class DatabaseService {
     return members;
   }
 
-  async updateTeamMemberRole(memberId: string, roleId: string, programId?: string) {
+  async updateTeamMemberRole(
+    memberId: string, 
+    roleId: string, 
+    programId?: string, 
+    providedEmail?: string, 
+    providedRoleName?: string, 
+    providedProgramTitle?: string,
+    oldRoleName?: string,
+    userName?: string,
+    newPermissions?: string[]
+  ) {
+    let memberEmail = providedEmail || '';
+    let roleName = providedRoleName || 'Member';
+    let programTitle = providedProgramTitle || 'the organization';
+    let organizationId = this.currentOrgId || undefined;
+
+    try {
+      const { data: memberData } = await this.client
+        .from('organization_members')
+        .select('user_id, email, organization_id, program_id')
+        .eq('id', memberId)
+        .maybeSingle();
+
+      if (memberData) {
+        organizationId = memberData.organization_id || organizationId;
+        const activeProgramId = programId || memberData.program_id;
+        
+        if (!memberEmail) {
+          let profileEmail = '';
+          if (memberData.user_id) {
+            const { data: profile } = await this.client
+              .from('profiles')
+              .select('email')
+              .eq('id', memberData.user_id)
+              .maybeSingle();
+            if (profile?.email) profileEmail = profile.email;
+          }
+          memberEmail = profileEmail || memberData.email || '';
+        }
+
+        if (!providedProgramTitle && activeProgramId) {
+          const { data: program } = await this.client
+            .from('programs')
+            .select('title')
+            .eq('id', activeProgramId)
+            .maybeSingle();
+          if (program?.title) programTitle = program.title;
+        }
+      }
+
+      if (!providedRoleName) {
+        const { data: roleData } = await this.client
+          .from('roles')
+          .select('name')
+          .eq('id', roleId)
+          .maybeSingle();
+        if (roleData?.name) roleName = roleData.name;
+      }
+    } catch (e) {
+      console.warn('Could not fetch details for role change email:', e);
+    }
+
     const { error } = await team.updateMemberRole(memberId, roleId, programId);
     if (error) throw new Error(error.message || 'Failed to update member role');
     await this.safeAuditLog({
@@ -2467,7 +2528,7 @@ class DatabaseService {
       actionType: 'update',
       resourceType: 'organization_member',
       resourceId: memberId,
-      metadata: { roleId },
+      details: { roleId, programId },
     });
 
     if (!isDemoMode()) {
@@ -2481,6 +2542,24 @@ class DatabaseService {
         entityType: 'organization_member',
         view: 'teams',
       });
+
+      if (memberEmail) {
+        try {
+          const { sendRoleChangeEmail } = await import('./email');
+          await sendRoleChangeEmail({
+            email: memberEmail,
+            roleName,
+            programTitle,
+            organizationId,
+            programId,
+            oldRoleName,
+            userName,
+            newPermissions
+          });
+        } catch (e) {
+          console.warn('Failed to send role change email:', e);
+        }
+      }
     }
   }
 
