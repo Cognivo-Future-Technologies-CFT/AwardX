@@ -67,6 +67,9 @@ export interface Program {
   activeFormId?: string | null;
   allowMultipleSubmissions?: boolean;
   maxSubmissions?: number;
+  submissionMode?: 'individual' | 'group';
+  minTeamSize?: number;
+  maxTeamSize?: number;
   integrationSources?: {
     resend?: string | null;
     didit?: string | null;

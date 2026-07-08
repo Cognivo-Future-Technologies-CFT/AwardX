@@ -856,6 +856,9 @@ class DatabaseService {
       requireGithubAuth: program.require_github_auth ?? false,
       allowMultipleSubmissions: program.allow_multiple_submissions ?? false,
       maxSubmissions: program.max_submissions ?? 1,
+      submissionMode: program.submission_mode || 'individual',
+      minTeamSize: program.min_team_size ?? 2,
+      maxTeamSize: program.max_team_size ?? 5,
       visibility: program.visibility ? (program.visibility.charAt(0).toUpperCase() + program.visibility.slice(1)) as 'Public' | 'Private' : 'Public',
       timezone: program.timezone || 'UTC',
       activeFormId: program.active_form_id ?? null,
@@ -1069,6 +1072,9 @@ class DatabaseService {
       max_submissions: program.allowMultipleSubmissions
         ? Math.max(1, program.maxSubmissions ?? 2)
         : 1,
+      submission_mode: program.submissionMode || 'individual',
+      min_team_size: program.minTeamSize ?? 2,
+      max_team_size: program.maxTeamSize ?? 5,
     });
     if (error) {
       const errorMessage = error?.message || 'Failed to update program';

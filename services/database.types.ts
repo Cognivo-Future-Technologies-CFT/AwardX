@@ -226,6 +226,9 @@ export interface Database {
           active_form_id: string | null
           allow_multiple_submissions: boolean
           max_submissions: number
+          submission_mode: string
+          min_team_size: number
+          max_team_size: number
         }
         Insert: {
           id?: string
@@ -247,6 +250,9 @@ export interface Database {
           active_form_id?: string | null
           allow_multiple_submissions?: boolean
           max_submissions?: number
+          submission_mode?: string
+          min_team_size?: number
+          max_team_size?: number
         }
         Update: {
           id?: string
@@ -268,6 +274,9 @@ export interface Database {
           active_form_id?: string | null
           allow_multiple_submissions?: boolean
           max_submissions?: number
+          submission_mode?: string
+          min_team_size?: number
+          max_team_size?: number
         }
       }
       program_payment_configs: {
@@ -572,6 +581,87 @@ export interface Database {
           vote_count?: number | null
           was_at_cutoff_boundary?: boolean
           override_reason?: string | null
+          created_at?: string
+        }
+      }
+      submission_teams: {
+        Row: {
+          id: string
+          program_id: string
+          name: string
+          team_lead_id: string
+          submission_id: string | null
+          invite_code: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          program_id: string
+          name: string
+          team_lead_id: string
+          submission_id?: string | null
+          invite_code?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          program_id?: string
+          name?: string
+          team_lead_id?: string
+          submission_id?: string | null
+          invite_code?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      submission_team_members: {
+        Row: {
+          id: string
+          team_id: string
+          user_id: string
+          role: string
+          joined_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          user_id: string
+          role?: string
+          joined_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          user_id?: string
+          role?: string
+          joined_at?: string
+        }
+      }
+      team_chat_messages: {
+        Row: {
+          id: string
+          team_id: string
+          sender_id: string
+          message: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          sender_id: string
+          message: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          sender_id?: string
+          message?: string
           created_at?: string
         }
       }
@@ -1590,6 +1680,9 @@ export type RoundSubmission = Tables<'round_submissions'>
 export type VotingConfig = Tables<'voting_configs'>
 export type AdvancementEvent = Tables<'advancement_events'>
 export type AdvancementDetail = Tables<'advancement_details'>
+export type SubmissionTeam = Tables<'submission_teams'>
+export type SubmissionTeamMember = Tables<'submission_team_members'>
+export type TeamChatMessage = Tables<'team_chat_messages'>
 
 // View types
 export type SubmissionDetail = Views<'submission_details'>

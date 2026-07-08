@@ -37,7 +37,7 @@ router.get('/:programId/submission-eligibility', async (req, res) => {
     // 1. Load program
     const { data: program, error: programError } = await supabase
       .from('programs')
-      .select('id, title, status, deadline, allow_multiple_submissions, max_submissions, active_form_id')
+      .select('id, title, status, deadline, allow_multiple_submissions, max_submissions, active_form_id, submission_mode, min_team_size, max_team_size')
       .eq('id', programId)
       .maybeSingle();
 
@@ -88,6 +88,37 @@ router.get('/:programId/submission-eligibility', async (req, res) => {
       const submissionLimit = allowMultiple
         ? Math.max(1, Number(program.max_submissions ?? 2))
         : 1;
+
+      // For group submissions, check that the user is a team lead with a ready/forming team
+      if ((program as any).submission_mode === 'group') {
+        const { data: teamMembership } = await supabase
+          .from('submission_team_members')
+          .select('id, role, team_id, submission_teams!inner(id, program_id, status, team_lead_id)')
+          .eq('user_id', userId)
+          .eq('submission_teams.program_id', programId)
+          .neq('submission_teams.status', 'disbanded')
+          .maybeSingle();
+
+        // Include group info in eligibility response
+        const teamInfo = teamMembership
+          ? {
+              hasTeam: true,
+              isLead: (teamMembership as any).submission_teams?.team_lead_id === userId,
+              teamStatus: (teamMembership as any).submission_teams?.status,
+              teamId: teamMembership.team_id,
+            }
+          : { hasTeam: false, isLead: false, teamStatus: null, teamId: null };
+
+        // If user has a team that already submitted, they're done
+        if (teamInfo.hasTeam && teamInfo.teamStatus === 'submitted') {
+          return res.json({
+            eligible: false,
+            code: 'TEAM_ALREADY_SUBMITTED',
+            message: 'Your team has already submitted.',
+            team: teamInfo,
+          });
+        }
+      }
 
       // Count completed (non-pending-payment) submissions for this user
       const { count: submittedCount, error: countError } = await supabase

@@ -22,6 +22,7 @@ import {
     Globe,
     Settings2,
     Sparkles,
+    Users,
 } from 'lucide-react';
 import { todayDateString } from '../../lib/utils';
 
@@ -152,6 +153,9 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
             requireGithubAuth: activeEvent.requireGithubAuth ?? false,
             allowMultipleSubmissions: activeEvent.allowMultipleSubmissions ?? false,
             maxSubmissions: activeEvent.maxSubmissions ?? 2,
+            submissionMode: activeEvent.submissionMode || 'individual',
+            minTeamSize: activeEvent.minTeamSize ?? 2,
+            maxTeamSize: activeEvent.maxTeamSize ?? 5,
         });
     }, [activeEvent]);
 
@@ -684,6 +688,71 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                     <p className="text-xs text-slate-400">
                                         Each participant may submit only one completed application.
                                     </p>
+                                )}
+                            </div>
+                        </SectionCard>
+
+                        <SectionCard
+                            icon={<Users className="w-4 h-4" />}
+                            title="Submission Mode"
+                            description="Individual or team-based submissions"
+                        >
+                            <div className="space-y-4">
+                                <div>
+                                    <FieldLabel>Submission Type</FieldLabel>
+                                    <select
+                                        value={formData.submissionMode || 'individual'}
+                                        onChange={(e) =>
+                                            setFormData({
+                                                ...formData,
+                                                submissionMode: e.target.value as 'individual' | 'group',
+                                            })
+                                        }
+                                        className="w-full mt-1.5 px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    >
+                                        <option value="individual">Individual (one person per submission)</option>
+                                        <option value="group">Group / Team (team lead submits for the group)</option>
+                                    </select>
+                                </div>
+
+                                {formData.submissionMode === 'group' && (
+                                    <div className="space-y-4 pl-2 border-l-2 border-indigo-200 ml-2">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <FieldLabel>Min Team Size</FieldLabel>
+                                                <input
+                                                    type="number"
+                                                    min={2}
+                                                    max={formData.maxTeamSize || 50}
+                                                    value={formData.minTeamSize ?? 2}
+                                                    onChange={(e) => {
+                                                        const val = Math.max(2, parseInt(e.target.value) || 2);
+                                                        setFormData({ ...formData, minTeamSize: val });
+                                                    }}
+                                                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                />
+                                            </div>
+                                            <div>
+                                                <FieldLabel>Max Team Size</FieldLabel>
+                                                <input
+                                                    type="number"
+                                                    min={formData.minTeamSize || 2}
+                                                    max={50}
+                                                    value={formData.maxTeamSize ?? 5}
+                                                    onChange={(e) => {
+                                                        const val = Math.max(formData.minTeamSize || 2, parseInt(e.target.value) || 5);
+                                                        setFormData({ ...formData, maxTeamSize: Math.min(val, 50) });
+                                                    }}
+                                                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-500">
+                                            The team lead creates a team and shares an invite code. Members join using the code.
+                                            The team lead's submission counts as the team's submission. Teams have a private chat
+                                            that expires after the announcement round ends.
+                                        </p>
+                                    </div>
                                 )}
                             </div>
                         </SectionCard>

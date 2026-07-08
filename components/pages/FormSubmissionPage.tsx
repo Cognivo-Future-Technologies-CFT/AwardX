@@ -16,6 +16,8 @@ import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedir
 import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, FileIcon, ImageIcon, Sparkles, Send, Eye, FileText, PencilLine } from 'lucide-react';
 import { storage } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { TeamGate } from '../dashboard/SubmissionTeamGate';
+import { linkSubmissionToTeam } from '../../services/submissionTeamsApi';
 
 const defaultTheme: FormTheme = {
   primaryColor: '#6366f1',
@@ -252,6 +254,11 @@ export const FormSubmissionPage: React.FC = () => {
   const [applicationMode, setApplicationMode] = useState<'standard' | 'hackathon'>('standard');
   const [requireGithubAuth, setRequireGithubAuth] = useState(false);
   const [kycEnabled, setKycEnabled] = useState(false);
+  const [submissionMode, setSubmissionMode] = useState<'individual' | 'group'>('individual');
+  const [minTeamSize, setMinTeamSize] = useState(2);
+  const [maxTeamSize, setMaxTeamSize] = useState(5);
+  const [teamGatePassed, setTeamGatePassed] = useState(false);
+  const [activeTeam, setActiveTeam] = useState<any>(null);
   const [eligibility, setEligibility] = useState<{
     status: 'loading' | 'eligible' | 'ineligible';
     code?: string;
@@ -383,7 +390,7 @@ export const FormSubmissionPage: React.FC = () => {
 
         const { data: programRow } = await supabase
           .from('programs')
-          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status, integration_sources, judging_type')
+          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status, integration_sources, judging_type, submission_mode, min_team_size, max_team_size')
           .eq('id', form.program_id)
           .maybeSingle();
 
@@ -437,6 +444,9 @@ export const FormSubmissionPage: React.FC = () => {
         setApplicationMode(mode);
         setRequireGithubAuth(githubRequired);
         setKycEnabled(!!programRow?.kyc_enabled);
+        setSubmissionMode((programRow as any)?.submission_mode || 'individual');
+        setMinTeamSize((programRow as any)?.min_team_size ?? 2);
+        setMaxTeamSize((programRow as any)?.max_team_size ?? 5);
 
         if (githubRequired || mode === 'hackathon') {
           const { session, user } = await auth.getSession();
@@ -760,6 +770,16 @@ const fieldsByStep = useMemo(() => {
             paymentAmount: Number(paymentConfig?.fee || 0),
           }
         : undefined);
+
+      // If this is a group submission, link the submission to the team
+      if (submissionMode === 'group' && activeTeam?.id && submission?.id) {
+        try {
+          await linkSubmissionToTeam(activeTeam.id, submission.id);
+        } catch (linkErr: any) {
+          console.warn('Failed to link submission to team:', linkErr);
+          // Non-fatal — the submission was still created
+        }
+      }
 
       if (paymentRequired && submission?.id && programId) {
         const { session } = await auth.getSession();
@@ -1798,6 +1818,25 @@ const renderSectionFields = (fields: FormField[]) => {
               )}
             </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Group submission team gate — shown after eligibility but before the form
+  if (submissionMode === 'group' && !teamGatePassed && programId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 flex items-center justify-center px-4 py-12">
+        <div className="max-w-2xl w-full">
+          <TeamGate
+            programId={programId}
+            minTeamSize={minTeamSize}
+            maxTeamSize={maxTeamSize}
+            onProceed={(team) => {
+              setActiveTeam(team);
+              setTeamGatePassed(true);
+            }}
+          />
         </div>
       </div>
     );

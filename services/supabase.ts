@@ -761,6 +761,9 @@ export const programs = {
     require_github_auth: boolean;
     allow_multiple_submissions: boolean;
     max_submissions: number;
+    submission_mode: string;
+    min_team_size: number;
+    max_team_size: number;
   }>) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: null, error: { message: 'Not authenticated' } };
