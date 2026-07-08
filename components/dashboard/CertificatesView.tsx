@@ -17,6 +17,7 @@ import {
   Pencil,
   Link as LinkIcon,
   Copy,
+  AlertTriangle,
 } from 'lucide-react';
 import { Program, Round } from '../../services/models';
 import { db as databaseService } from '../../services/database';
@@ -284,6 +285,11 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
     return map;
   }, [roundLabelsQuery.data]);
 
+  const allRoundsCompleted = React.useMemo(() => {
+    const rounds = roundsQuery.data || [];
+    return rounds.length > 0 && rounds.every(round => round.status === 'Completed');
+  }, [roundsQuery.data]);
+
   const certificateData: ParticipantCertData[] = React.useMemo(() => {
     const submissions = submissionsQuery.data || [];
     const rounds = roundsQuery.data || [];
@@ -302,8 +308,10 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
         else roundsCleared++;
       }
       let certificateType: CertificateType = 'participation';
-      if (roundsCleared === totalRounds && !eliminatedAtRound) certificateType = 'winner';
-      else if (roundsCleared > 0) certificateType = 'round_advance';
+      if (allRoundsCompleted) {
+        if (roundsCleared === totalRounds && !eliminatedAtRound) certificateType = 'winner';
+        else if (roundsCleared > 0) certificateType = 'round_advance';
+      }
 
       return {
         submissionId: sub.id,
@@ -483,6 +491,16 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
   const handleEmailOne = async (participant: ParticipantCertData) => {
     if (!participant.applicantEmail) { toast.error('No email address for this participant'); return; }
     if (!activeEvent?.id) return;
+
+    if (!allRoundsCompleted) {
+      const rounds = roundsQuery.data || [];
+      if (rounds.length === 0) {
+        toast.error('Certificates cannot be delivered because no workflow rounds have been configured.');
+      } else {
+        toast.error('Certificates cannot be delivered until all workflow rounds are completed.');
+      }
+      return;
+    }
     setIsSending(true);
     try {
       const dataUrl = generateCertificateDataUrl(participant);
@@ -502,7 +520,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       toast.success(`Certificate emailed to ${participant.applicantEmail}`);
       queryClient.invalidateQueries({ queryKey: ['certificate-deliveries', activeEvent.id] });
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to send email');
+      if (err?.status === 409 && err?.data?.incompleteRounds) {
+        const names = err.data.incompleteRounds.map((r: any) => `${r.name} (${r.status})`).join(', ');
+        toast.error(`${err.message} Incomplete: ${names}`);
+      } else {
+        toast.error(err?.message || 'Failed to send email');
+      }
     } finally {
       setIsSending(false);
     }
@@ -510,6 +533,19 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
 
   const handleDeliverAll = async () => {
     if (!activeEvent?.id || !filtered.length) return;
+
+    // Prevent delivery if rounds are not fully completed
+    if (!allRoundsCompleted) {
+      const rounds = roundsQuery.data || [];
+      const incompleteRounds = rounds.filter(r => r.status !== 'Completed');
+      if (rounds.length === 0) {
+        toast.error('Certificates cannot be delivered because no workflow rounds have been configured.');
+      } else {
+        const names = incompleteRounds.map(r => `${r.title} (${r.status})`).join(', ');
+        toast.error(`Certificates cannot be delivered yet. Complete all workflow rounds first. Incomplete: ${names}`);
+      }
+      return;
+    }
     const withEmail = filtered.filter((p) => p.applicantEmail && !deliveredMap.has(p.submissionId));
     
     if (!withEmail.length) {
@@ -584,7 +620,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       toast.success(`Delivered ${totalSent} certificates via email!`);
       queryClient.invalidateQueries({ queryKey: ['certificate-deliveries', activeEvent.id] });
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to deliver certificates');
+      if (err?.status === 409 && err?.data?.incompleteRounds) {
+        const names = err.data.incompleteRounds.map((r: any) => `${r.name} (${r.status})`).join(', ');
+        toast.error(`${err.message} Incomplete: ${names}`);
+      } else {
+        toast.error(err?.message || 'Failed to deliver certificates');
+      }
     } finally {
       setIsDelivering(false);
     }
@@ -645,7 +686,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           </button>
           <button
             onClick={handleDeliverAll}
-            disabled={!filtered.length || isLoading || isDelivering}
+            disabled={!filtered.length || isLoading || isDelivering || !allRoundsCompleted}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="w-4 h-4" />
@@ -677,6 +718,33 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
           <option value="participation">Participation ({certificateData.filter((p) => p.certificateType === 'participation').length})</option>
         </select>
       </div>
+
+      {!isLoading && !allRoundsCompleted && certificateData.length > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-800">
+            <p className="font-semibold">Certificates cannot be delivered yet.</p>
+            <p className="mt-0.5">Complete all workflow rounds before sending certificates.</p>
+            {(() => {
+              const rounds = roundsQuery.data || [];
+              const incomplete = rounds.filter(r => r.status !== 'Completed');
+              if (incomplete.length > 0) {
+                return (
+                  <ul className="mt-1.5 list-disc list-inside text-amber-700">
+                    {incomplete.map(r => (
+                      <li key={r.id}>{r.title} — <span className="font-medium">{r.status}</span></li>
+                    ))}
+                  </ul>
+                );
+              }
+              if (rounds.length === 0) {
+                return <p className="mt-1 text-amber-700">No workflow rounds have been configured yet.</p>;
+              }
+              return null;
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Participant List */}
       {isLoading ? (
@@ -788,7 +856,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
               </button>
               <button
                 onClick={() => handleEmailOne(selectedParticipant)}
-                disabled={!selectedParticipant.applicantEmail || isSending}
+                disabled={!selectedParticipant.applicantEmail || isSending || !allRoundsCompleted}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Mail className="w-4 h-4" /> {isSending ? 'Sending...' : delivery ? 'Resend' : 'Email Certificate'}

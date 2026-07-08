@@ -68,7 +68,11 @@ export async function fetchBackendJson<T = unknown>(
             message = `${message}: ${fieldMsgs}`;
           }
         }
-        lastError = new Error(message);
+        // Attach the full parsed body so callers can access structured error data
+        const error = new Error(message);
+        (error as any).status = resp.status;
+        (error as any).data = parsed;
+        lastError = error;
         continue;
       }
 

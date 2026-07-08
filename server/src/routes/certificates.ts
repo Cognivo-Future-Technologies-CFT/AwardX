@@ -50,6 +50,29 @@ router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), 
 
 	if (!program) return res.status(404).json({ error: 'Program not found' });
 
+	// Validate that all workflow rounds are completed before allowing delivery
+	const { data: rounds } = await supabase
+		.from('rounds')
+		.select('id, title, status')
+		.eq('program_id', programId)
+		.order('sort_order', { ascending: true });
+
+	if (!rounds || rounds.length === 0) {
+		return res.status(400).json({ error: 'Certificates cannot be delivered because no workflow rounds have been configured.' });
+	}
+
+	const incompleteRounds = rounds.filter((r) => r.status !== 'completed');
+	if (incompleteRounds.length > 0) {
+		return res.status(409).json({
+			error: 'Certificates cannot be delivered until all workflow rounds are completed.',
+			incompleteRounds: incompleteRounds.map((r) => ({
+				id: r.id,
+				name: r.title,
+				status: r.status,
+			})),
+		});
+	}
+
 	const mailer = await getOrgResendMailer(supabase, program.organization_id);
 	if (!mailer) return res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
 
