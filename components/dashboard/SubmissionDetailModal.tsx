@@ -27,9 +27,10 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({ is
     };
 
     const paymentStatusConfig: any = {
-        'paid': { color: 'text-green-600 bg-green-50 border-green-100', label: 'Paid' },
-        'pending': { color: 'text-amber-600 bg-amber-50 border-amber-100', label: 'Payment Pending' },
-        'failed': { color: 'text-red-600 bg-red-50 border-red-100', label: 'Payment Failed' },
+        'paid': { label: 'Paid', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+        'pending': { label: 'Payment Pending', color: 'text-amber-600 bg-amber-50 border-amber-100' },
+        'failed': { label: 'Payment Failed', color: 'text-red-600 bg-red-50 border-red-100' },
+        'not_required': { label: 'Not Required', color: 'bg-slate-50 text-slate-700 border-slate-200' }
     };
 
     const submissionData = (submission.submissionData || {}) as Record<string, any>;

@@ -78,6 +78,11 @@ const PaymentStatusBadge = ({ status }: { status: string | null | undefined }) =
          container: 'bg-rose-50 text-rose-700 border-rose-100/50',
          dot: 'bg-rose-400',
          label: 'Failed'
+      },
+      'not_required': {
+         container: 'bg-slate-50 text-slate-700 border-slate-200/50',
+         dot: 'bg-slate-400',
+         label: 'Not Required'
       }
    };
    const variant = variants[normalized] || variants['pending'];

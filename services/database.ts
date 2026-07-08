@@ -3096,7 +3096,7 @@ class DatabaseService {
       title: form.title || 'Form Submission',
       description: `Form submission for ${form.title}`,
       status: autoAcceptSubmissions ? 'accepted' : 'pending',
-      payment_status: options?.paymentRequired ? 'pending' : 'paid',
+      payment_status: options?.paymentRequired ? 'pending' : 'not_required',
       payment_amount: options?.paymentRequired ? Number(options.paymentAmount || 0) : 0,
       applicant_name: applicantName || undefined,
       applicant_email: applicantEmail || undefined,

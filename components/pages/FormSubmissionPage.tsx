@@ -60,7 +60,7 @@ const syncAwardSelectorOptions = (
           ...field,
           label: field.label || labels.defaultLabel,
           placeholder: field.placeholder || labels.defaultPlaceholder,
-          required: isAutoAssign ? true : field.required,
+          required: true,
           options,
         }
       : field,

@@ -158,7 +158,9 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   const fieldTypes = React.useMemo(() => buildFieldTypes(isAutoAssignJudging), [isAutoAssignJudging]);
 
   // --- State ---
-  const [fields, setFields] = useState<FormField[]>(initialFields);
+  const [fields, setFields] = useState<FormField[]>(() => {
+    return initialFields.map(f => f.type === 'award_selector' ? { ...f, required: true } : f);
+  });
   const [pages, setPages] = useState<FormPage[]>(
     initialPages && initialPages.length > 0
       ? initialPages
@@ -348,7 +350,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       label: type === 'award_selector' ? selectorLabels.defaultLabel : (fieldDef?.label || 'New Field'),
       placeholder: type === 'award_selector' ? selectorLabels.defaultPlaceholder : '',
       helpText: '',
-      required: type === 'award_selector' && isAutoAssignJudging,
+      required: type === 'award_selector' ? true : false,
       pageId: selectedPageId,
       ...(type === 'select' || type === 'radio' || type === 'checkbox'
         ? { options: ['Option 1', 'Option 2', 'Option 3'] }
@@ -794,11 +796,11 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (isAutoAssignJudging && field.type === 'award_selector') return;
+                              if (field.type === 'award_selector') return;
                               updateField(field.id, { required: !field.required });
                             }}
-                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'} ${isAutoAssignJudging && field.type === 'award_selector' ? 'cursor-not-allowed opacity-70' : ''}`}
-                            title={isAutoAssignJudging && field.type === 'award_selector' ? 'Required for Auto Assign Judging' : (field.required ? 'Mark optional' : 'Mark required')}
+                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'} ${field.type === 'award_selector' ? 'cursor-not-allowed opacity-70' : ''}`}
+                            title={field.type === 'award_selector' ? 'Required for submission categorization' : (field.required ? 'Mark optional' : 'Mark required')}
                           >
                             <span className="text-[10px] px-0.5">{field.required ? 'REQ' : 'OPT'}</span>
                           </button>
