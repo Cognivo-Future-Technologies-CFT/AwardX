@@ -148,7 +148,7 @@ const DISPLAY_FIELD_TYPES = new Set([
 
 const FILE_FIELD_TYPES = new Set(['file', 'image', 'video']);
 
-const renderFieldCell = (type: string, value: unknown): React.ReactNode => {
+const renderFieldCell = (type: string, value: unknown, onClick?: () => void): React.ReactNode => {
 console.log('FIELD TYPE:', type);
 console.log('FIELD VALUE:', value);
 
@@ -249,10 +249,26 @@ if (type === 'image' && url) {
    }
 
    if (typeof value === 'object') {
-      return <span className="text-[11px] font-mono text-slate-500 max-w-[180px] truncate inline-block">{JSON.stringify(value)}</span>;
+      return (
+         <span 
+            className={`text-[11px] font-mono text-slate-500 max-w-[280px] line-clamp-2 break-words ${onClick ? 'cursor-pointer hover:text-indigo-600' : ''}`}
+            onClick={onClick}
+            title={JSON.stringify(value)}
+         >
+            {JSON.stringify(value)}
+         </span>
+      );
    }
 
-   return <span className="text-[12px] text-slate-700">{String(value)}</span>;
+   return (
+      <span 
+         className={`text-[13px] font-medium text-slate-700 max-w-[400px] w-full line-clamp-2 break-words ${onClick ? 'cursor-pointer hover:text-indigo-600 transition-colors' : ''}`}
+         onClick={onClick}
+         title={String(value)}
+      >
+         {String(value)}
+      </span>
+   );
 };
 
 // Renders an editable input for a single form field inside the manual-entry modal.
@@ -1111,8 +1127,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               </div>
                            </td>
                            {responseColumns.map((column) => (
-                              <td key={column.id} className="p-5 align-middle min-w-[160px]">
-                                 {renderFieldCell(column.type, responses[column.id])}
+                              <td key={column.id} className="p-5 align-middle min-w-[240px] max-w-[400px]">
+                                 {renderFieldCell(column.type, responses[column.id], () => handleView(sub))}
                               </td>
                            ))}
                            {/* <td className="p-5">

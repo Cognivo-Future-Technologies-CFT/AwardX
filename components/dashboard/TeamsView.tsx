@@ -18,6 +18,14 @@ import { sendTeamInviteEmail, resendTeamInvite, type EmailApiRequestTrace } from
 import { queryKeys } from '../../services/queryKeys';
 import { isPersistedUuid } from '../../lib/ids';
 import { TableSkeleton } from '../SkeletonLoader';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuPortal,
+    DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+
 
 const PERMISSION_GROUPS = [
     {
@@ -130,12 +138,9 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [roleFilter, setRoleFilter] = useState('');
     const [roleFilterOpen, setRoleFilterOpen] = useState(false);
     const [memberPage, setMemberPage] = useState(1);
-    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [resendingId, setResendingId] = useState<string | null>(null);
     const [revokingId, setRevokingId] = useState<string | null>(null);
-    const menuRef = useRef<HTMLDivElement>(null);
     const eventId = activeEvent?.id ?? '';
-    const [openRoleMenuId, setOpenRoleMenuId] = useState<string | null>(null);
     const eventTitle = activeEvent?.title || 'your workspace';
 
     const appendRequestTrace = (trace: EmailApiRequestTrace) => {
@@ -151,37 +156,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [isChangeRoleModalOpen, setIsChangeRoleModalOpen] = useState(false);
     const [changingMember, setChangingMember] = useState<TeamMember | null>(null);
     const [newRoleId, setNewRoleId] = useState('');
-const roleMenuRef = useRef<HTMLDivElement>(null);
     const [editingRole, setEditingRole] = useState<Partial<Role>>({
         name: '',
         permissions: [],
         color: 'bg-slate-100 text-slate-700'
     });
-
-    // Close menu on outside click
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setOpenMenuId(null);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
-
-    useEffect(() => {
-    const handler = (e: MouseEvent) => {
-        if (
-            roleMenuRef.current &&
-            !roleMenuRef.current.contains(e.target as Node)
-        ) {
-            setOpenRoleMenuId(null);
-        }
-    };
-
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-}, []);
 
     // ── Queries ────────────────────────────────────────────────────────────────
     const { data: members = [], isLoading: membersLoading } = useQuery({
@@ -765,37 +744,32 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
 
                                                         {/* Actions */}
                                                         <td className="p-4 text-right">
-                                                            <div className="relative flex justify-end" ref={openMenuId === item.id ? menuRef : undefined}>
-                                                                <button
-                                                                    onClick={() => setOpenMenuId(prev => prev === item.id ? null : item.id)}
-                                                                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                                                >
-                                                                    <MoreVertical className="w-4 h-4" />
-                                                                </button>
-                                                                {openMenuId === item.id && (
-                                                                    <div className="absolute right-0 top-9 z-10 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1 text-left">
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                handleResend(invite);
-                                                                                setOpenMenuId(null);
-                                                                            }}
-                                                                            disabled={resendingId === invite.id}
-                                                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 disabled:opacity-50"
-                                                                        >
-                                                                            <RefreshCw className={`w-4 h-4 ${resendingId === invite.id ? 'animate-spin' : ''}`} /> Resend Invite
+                                                            <div className="flex justify-end">
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors outline-none data-[state=open]:bg-slate-100 data-[state=open]:text-slate-600">
+                                                                            <MoreVertical className="w-4 h-4" />
                                                                         </button>
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                handleRevoke(invite);
-                                                                                setOpenMenuId(null);
-                                                                            }}
-                                                                            disabled={revokingId === invite.id}
-                                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
-                                                                        >
-                                                                            <Trash2 className="w-4 h-4" /> Revoke Invite
-                                                                        </button>
-                                                                    </div>
-                                                                )}
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuPortal>
+                                                                        <DropdownMenuContent align="end" className="w-44 z-[100] bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => handleResend(invite)}
+                                                                                disabled={resendingId === invite.id}
+                                                                                className="flex items-center gap-2 cursor-pointer px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:text-slate-700 outline-none w-full data-[disabled]:opacity-50"
+                                                                            >
+                                                                                <RefreshCw className={`w-4 h-4 ${resendingId === invite.id ? 'animate-spin' : ''}`} /> Resend Invite
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => handleRevoke(invite)}
+                                                                                disabled={revokingId === invite.id}
+                                                                                className="text-red-600 focus:text-red-600 focus:bg-red-50 hover:bg-red-50 flex items-center gap-2 cursor-pointer px-4 py-2 text-sm outline-none w-full data-[disabled]:opacity-50"
+                                                                            >
+                                                                                <Trash2 className="w-4 h-4" /> Revoke Invite
+                                                                            </DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenuPortal>
+                                                                </DropdownMenu>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -848,42 +822,41 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
                                                     </td>
                                                     <td className="p-4 text-sm text-slate-500">{member.lastActive}</td>
                                                     <td className="p-4 text-right">
-                                                        <div className="relative flex justify-end" ref={openMenuId === member.id ? menuRef : undefined}>
-                                                            <button
-                                                                onClick={() => setOpenMenuId(prev => prev === member.id ? null : member.id)}
-                                                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                                            >
-                                                                <MoreVertical className="w-4 h-4" />
-                                                            </button>
-                                                            {openMenuId === member.id && (
-                                                                <div className="absolute right-0 top-9 z-10 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1">
-                                                                    {member.role !== 'Judge' && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setChangingMember(member as any);
-                                                                                setNewRoleId(member.roleId ?? rawRoles[0]?.id ?? '');
-                                                                                setIsChangeRoleModalOpen(true);
-                                                                                setOpenMenuId(null);
-                                                                            }}
-                                                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                                                        >
-                                                                            <UserCog className="w-4 h-4" /> Change Role
-                                                                        </button>
-                                                                    )}
-                                                                    {(!currentUserId || member.userId !== currentUserId) && (
-                                                                        <button
-                                                                            onClick={async () => {
-                                                                                setOpenMenuId(null);
-                                                                                const ok = await confirm({ title: 'Remove member?', description: `Remove ${member.name} from this program?`, confirmLabel: 'Remove' });
-                                                                                if (ok) removeMutation.mutate(member.id);
-                                                                            }}
-                                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                                                        >
-                                                                            <Trash2 className="w-4 h-4" /> Remove
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            )}
+                                                        <div className="flex justify-end">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors outline-none data-[state=open]:bg-slate-100 data-[state=open]:text-slate-600">
+                                                                        <MoreVertical className="w-4 h-4" />
+                                                                    </button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuPortal>
+                                                                    <DropdownMenuContent align="end" className="w-40 z-[100] bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+                                                                        {member.role !== 'Judge' && (
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => {
+                                                                                    setChangingMember(member as any);
+                                                                                    setNewRoleId(member.roleId ?? rawRoles[0]?.id ?? '');
+                                                                                    setIsChangeRoleModalOpen(true);
+                                                                                }}
+                                                                                className="flex items-center gap-2 cursor-pointer px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:text-slate-700 outline-none w-full"
+                                                                            >
+                                                                                <UserCog className="w-4 h-4" /> Change Role
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                        {(!currentUserId || member.userId !== currentUserId) && (
+                                                                            <DropdownMenuItem
+                                                                                onClick={async () => {
+                                                                                    const ok = await confirm({ title: 'Remove member?', description: `Remove ${member.name} from this program?`, confirmLabel: 'Remove' });
+                                                                                    if (ok) removeMutation.mutate(member.id);
+                                                                                }}
+                                                                                className="text-red-600 hover:bg-red-50 focus:text-red-600 focus:bg-red-50 flex items-center gap-2 cursor-pointer px-4 py-2 text-sm outline-none w-full"
+                                                                            >
+                                                                                <Trash2 className="w-4 h-4" /> Remove
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenuPortal>
+                                                            </DropdownMenu>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -929,81 +902,65 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${role.color.split(' ')[0]}`}>
                                     <Shield className={`w-6 h-6 ${role.color.split(' ')[1]}`} />
                                 </div>
-<div
-    className="relative"
-    ref={openRoleMenuId === role.id ? roleMenuRef : undefined}
->
-    <button
-        onClick={() =>
-            setOpenRoleMenuId(
-                openRoleMenuId === role.id ? null : role.id
-            )
-        }
-        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
-    >
-        <MoreVertical className="w-4 h-4" />
-    </button>
-
-    {openRoleMenuId === role.id && (
-        <div className="absolute right-0 top-10 z-20 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1">
-            <button
-                onClick={() => {
-                    openRoleModal(role);
-                    setOpenRoleMenuId(null);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-            >
-                <Edit2 className="w-4 h-4" />
-                Edit Role
+<div className="relative">
+    <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+            <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg outline-none data-[state=open]:bg-slate-100 data-[state=open]:text-slate-600">
+                <MoreVertical className="w-4 h-4" />
             </button>
+        </DropdownMenuTrigger>
 
-            <button
-                onClick={() => {
-                    duplicateRole(role);
-                    setOpenRoleMenuId(null);
-                }}
-                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-            >
-                <Copy className="w-4 h-4" />
-                Duplicate Role
-            </button>
-<button
-    disabled={role.usersCount > 0}
-    onClick={async () => {
-        setOpenRoleMenuId(null);
+        <DropdownMenuPortal>
+            <DropdownMenuContent align="end" className="w-44 z-[100] bg-white border border-slate-200 rounded-xl shadow-lg py-1">
+                <DropdownMenuItem
+                    onClick={() => openRoleModal(role)}
+                    className="flex items-center gap-2 cursor-pointer px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:text-slate-700 outline-none w-full"
+                >
+                    <Edit2 className="w-4 h-4" />
+                    Edit Role
+                </DropdownMenuItem>
 
-        const ok = await confirm({
-            title: `Delete "${role.name}"?`,
-            description: 'This action cannot be undone.',
-            confirmLabel: 'Delete Role',
-        });
+                <DropdownMenuItem
+                    onClick={() => duplicateRole(role)}
+                    className="flex items-center gap-2 cursor-pointer px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 focus:bg-slate-50 focus:text-slate-700 outline-none w-full"
+                >
+                    <Copy className="w-4 h-4" />
+                    Duplicate Role
+                </DropdownMenuItem>
 
-        if (!ok) return;
+                <DropdownMenuItem
+                    disabled={role.usersCount > 0}
+                    onClick={async () => {
+                        const ok = await confirm({
+                            title: `Delete "${role.name}"?`,
+                            description: 'This action cannot be undone.',
+                            confirmLabel: 'Delete Role',
+                        });
 
-        try {
-            await db.deleteRole(role.id);
+                        if (!ok) return;
 
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.teams.roles(eventId),
-            });
-
-            toast.success('Role deleted');
-        } catch {
-            toast.error('Failed to delete role');
-        }
-    }}
-    className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-        role.usersCount > 0
-            ? 'text-slate-400 cursor-not-allowed'
-            : 'text-red-600 hover:bg-red-50'
-    }`}
->
-    <Trash2 className="w-4 h-4" />
-    Delete Role
-</button>
-
-        </div>
-    )}
+                        try {
+                            await db.deleteRole(role.id);
+                            queryClient.invalidateQueries({
+                                queryKey: queryKeys.teams.roles(eventId),
+                            });
+                            toast.success('Role deleted');
+                        } catch {
+                            toast.error('Failed to delete role');
+                        }
+                    }}
+                    className={`flex items-center gap-2 cursor-pointer px-4 py-2 text-sm outline-none w-full data-[disabled]:opacity-50 ${
+                        role.usersCount > 0
+                            ? 'text-slate-400'
+                            : 'text-red-600 hover:bg-red-50 focus:text-red-600 focus:bg-red-50'
+                    }`}
+                >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Role
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenuPortal>
+    </DropdownMenu>
 </div>
                             </div>
                             <h3 className="text-lg font-bold text-slate-900 mb-2">{role.name}</h3>

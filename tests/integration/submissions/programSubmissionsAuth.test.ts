@@ -87,7 +87,7 @@ describe('program submissions API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programSubmissionsRouter);
+    app.use('/programs', programSubmissionsRouter as any);
 
     const res = await request(app)
       .post('/programs/program-1/submissions')
@@ -107,7 +107,7 @@ describe('program submissions API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programSubmissionsRouter);
+    app.use('/programs', programSubmissionsRouter as any);
 
     const res = await request(app)
       .post('/programs/program-1/submissions')
@@ -151,7 +151,7 @@ describe('program submissions API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programSubmissionsRouter);
+    app.use('/programs', programSubmissionsRouter as any);
 
     const res = await request(app).get('/programs/program-1/submissions?page=1&pageSize=15');
 
@@ -200,7 +200,7 @@ describe('program submissions API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programSubmissionsRouter);
+    app.use('/programs', programSubmissionsRouter as any);
 
     const res = await request(app).get(
       '/programs/program-1/submissions?page=1&pageSize=15&formId=form-abc',

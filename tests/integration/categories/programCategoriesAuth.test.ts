@@ -74,7 +74,7 @@ describe('program categories API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programCategoriesRouter);
+    app.use('/programs', programCategoriesRouter as any);
 
     const res = await request(app)
       .post('/programs/program-1/categories')
@@ -94,7 +94,7 @@ describe('program categories API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programCategoriesRouter);
+    app.use('/programs', programCategoriesRouter as any);
 
     const res = await request(app)
       .post('/programs/program-1/categories')
@@ -121,7 +121,7 @@ describe('program categories API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/programs', programCategoriesRouter);
+    app.use('/programs', programCategoriesRouter as any);
 
     const res = await request(app)
       .delete('/programs/program-1/categories');

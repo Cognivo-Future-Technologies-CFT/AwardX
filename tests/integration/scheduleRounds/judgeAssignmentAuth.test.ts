@@ -67,7 +67,7 @@ describe('judgeAssignment route authorization and validation', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(judgeAssignmentRouter);
+    app.use(judgeAssignmentRouter as any);
 
     const response = await request(app).post('/rounds/round-1/assign-judges').send({
       strategy: 'random',
@@ -82,7 +82,7 @@ describe('judgeAssignment route authorization and validation', () => {
   it('derives program_id from round server-side', async () => {
     const app = express();
     app.use(express.json());
-    app.use(judgeAssignmentRouter);
+    app.use(judgeAssignmentRouter as any);
 
     const response = await request(app).post('/rounds/round-1/assign-judges').send({
       strategy: 'random',
@@ -97,7 +97,7 @@ describe('judgeAssignment route authorization and validation', () => {
   it('returns field-level 400 errors for invalid assignment config', async () => {
     const app = express();
     app.use(express.json());
-    app.use(judgeAssignmentRouter);
+    app.use(judgeAssignmentRouter as any);
 
     const response = await request(app).post('/rounds/round-1/assign-judges').send({
       strategy: 'random',

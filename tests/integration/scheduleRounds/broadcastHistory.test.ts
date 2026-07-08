@@ -142,7 +142,7 @@ describe('Broadcasts Integration Routes', () => {
     it('returns history list of email logs', async () => {
       const app = express();
       app.use(express.json());
-      app.use(massEmailRouter);
+      app.use(massEmailRouter as any);
 
       const response = await request(app).get('/program-1/history').send();
 
@@ -219,6 +219,6 @@ describe('Broadcasts Integration Routes', () => {
 function RouterApp() {
   const app = express();
   app.use(express.json());
-  app.use(massEmailRouter);
+  app.use(massEmailRouter as any);
   return app;
 }

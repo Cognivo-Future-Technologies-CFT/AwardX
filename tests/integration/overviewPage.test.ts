@@ -81,7 +81,7 @@ describe('overviewPage API', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/overview', overviewRouter);
+    app.use('/overview', overviewRouter as any);
 
     const res = await request(app).get('/overview/public/program-123');
 

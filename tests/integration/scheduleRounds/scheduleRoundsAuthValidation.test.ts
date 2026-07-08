@@ -99,7 +99,7 @@ describe('scheduleRounds mutation authorization and validation', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(scheduleRoundsRouter);
+    app.use(scheduleRoundsRouter as any);
 
     const response = await request(app).post('/program-1/rounds').send({
       title: 'Round 1',
@@ -113,7 +113,7 @@ describe('scheduleRounds mutation authorization and validation', () => {
   it('returns 400 with field hints for invalid round payload', async () => {
     const app = express();
     app.use(express.json());
-    app.use(scheduleRoundsRouter);
+    app.use(scheduleRoundsRouter as any);
 
     const response = await request(app).post('/program-1/rounds').send({
       title: '',
@@ -131,7 +131,7 @@ describe('scheduleRounds mutation authorization and validation', () => {
   it('rejects non-array edge payloads with structured 400', async () => {
     const app = express();
     app.use(express.json());
-    app.use(scheduleRoundsRouter);
+    app.use(scheduleRoundsRouter as any);
 
     const response = await request(app).put('/program-1/edges').send({ edges: 'bad' });
 

@@ -150,7 +150,7 @@ describe('POST /rounds/:roundId/inform', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(advancementRouter);
+    app.use(advancementRouter as any);
 
     const response = await request(app).post('/rounds/round-1/inform').send({});
 
@@ -164,7 +164,7 @@ describe('POST /rounds/:roundId/inform', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(advancementRouter);
+    app.use(advancementRouter as any);
 
     const response = await request(app).post('/rounds/missing-round/inform').send({});
 
@@ -178,7 +178,7 @@ describe('POST /rounds/:roundId/inform', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(advancementRouter);
+    app.use(advancementRouter as any);
 
     const response = await request(app).post('/rounds/round-1/inform').send({});
 
@@ -190,7 +190,7 @@ describe('POST /rounds/:roundId/inform', () => {
   it('successfully triggers Resend emails and logs to email_logs', async () => {
     const app = express();
     app.use(express.json());
-    app.use(advancementRouter);
+    app.use(advancementRouter as any);
 
     const response = await request(app).post('/rounds/round-1/inform').send({});
 
@@ -228,7 +228,7 @@ describe('POST /rounds/:roundId/inform', () => {
 
     const app = express();
     app.use(express.json());
-    app.use(advancementRouter);
+    app.use(advancementRouter as any);
 
     const response = await request(app).post('/rounds/round-1/inform').send({});
 
