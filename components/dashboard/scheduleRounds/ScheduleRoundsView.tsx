@@ -993,6 +993,11 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
             onEdgeUpdate={handleEdgeUpdate}
             onEdgeDelete={handleEdgeDelete}
             programId={activeEvent.id}
+            onAdvanceRound={handleRunPipelineAction}
+            onPromoteRound={handlePromoteRound}
+            onInformParticipants={handleInformParticipants}
+            roundInsights={roundInsights}
+            insightsLoading={isInsightsLoading}
           />
         ) : (
           <TileView

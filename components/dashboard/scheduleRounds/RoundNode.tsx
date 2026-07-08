@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import RoundType, { Round, RoundEdge, OutputPort } from '../../../types/scheduleRounds';
-import { formatRoundTypeWithAudience } from '../../../lib/roundScheduleUtils';
-import { Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, MoreVertical, Sparkles } from 'lucide-react';
+import { formatRoundTypeWithAudience, primaryActionLabel, shortlistRuleSummary } from '../../../lib/roundScheduleUtils';
+import { Users, Globe, Shield, Settings, CheckCircle2, Clock, XCircle, MoreVertical, Sparkles, Play, Mail } from 'lucide-react';
+import { RoundCardShareLinks } from './RoundCardShareLinks';
 
 interface RoundNodeData {
   round: Round;
@@ -13,10 +14,21 @@ interface RoundNodeData {
   outgoingEdges?: RoundEdge[]; // Edges going out of this node
   onPortClick?: (portId: string, type: 'input' | 'output') => void;
   allRounds?: Round[]; // All rounds for resolving output port streams
+  roundIndex?: number;
+  totalRounds?: number;
+  onAdvanceRound?: (roundId: string) => void;
+  onPromoteRound?: (roundId: string) => void;
+  onInformParticipants?: (roundId: string) => Promise<void>;
+  roundInsights?: Record<string, any>;
+  insightsLoading?: boolean;
 }
 
 export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
-  const { round, onSelect, isSelected, onCreateChild, incomingEdges = [], outgoingEdges = [], onPortClick, allRounds = [] } = data;
+  const { round, onSelect, isSelected, onCreateChild, incomingEdges = [], outgoingEdges = [], onPortClick, allRounds = [], roundIndex = 0, totalRounds = 0, onAdvanceRound, onPromoteRound, onInformParticipants, roundInsights, insightsLoading } = data;
+  const [loadingInform, setLoadingInform] = useState(false);
+
+  const hasNextRound = roundIndex < totalRounds - 1;
+  const pipelineAction = primaryActionLabel(round, hasNextRound);
 
   // Get input ports from round metadata or create defaults
   const inputPorts = useMemo(() => {
@@ -133,7 +145,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
       onClick={onSelect}
       data-demo-target={round.id === 'round-1' ? 'schedule-round-node-1' : undefined}
       className={`
-        relative w-[280px] rounded-xl border bg-white transition-all duration-200 group
+        relative w-[280px] min-h-[220px] flex flex-col rounded-xl border bg-white transition-all duration-200 group
         ${isSelected
           ? 'border-indigo-500 shadow-xl shadow-indigo-500/10 ring-1 ring-indigo-500/20 z-10'
           : 'border-slate-200 shadow-sm hover:shadow-lg hover:border-indigo-300 hover:-translate-y-0.5'
@@ -170,7 +182,7 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
         );
       })}
 
-      <div className="p-4">
+      <div className="p-4 flex flex-col flex-1">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -228,6 +240,89 @@ export const RoundNode: React.FC<NodeProps<RoundNodeData>> = ({ data }) => {
               + Add Child Round
             </button>
           )}
+
+          {/* Shortlist Rule Summary */}
+          {(round.shortlistConfig.enabled || round.type === 'Shortlisting' || round.type === 'Public Voting') && (
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <span className="text-xs text-indigo-600 font-medium">
+                {shortlistRuleSummary(round.shortlistConfig, round.type)}
+              </span>
+            </div>
+          )}
+
+          <RoundCardShareLinks round={round} programId={round.programId} />
+
+          {/* Workflow Action Buttons */}
+          <div className="mt-auto pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap min-h-[44px]">
+            {((pipelineAction && !round.isFinalized && onAdvanceRound) ||
+              (round.type?.toLowerCase() === 'nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound) ||
+              ((round.status === 'active' || round.status === 'completed') && onInformParticipants) ||
+              (round.status === 'completed' && !round.isFinalized && onAdvanceRound)) && (
+              <>
+              {pipelineAction && !round.isFinalized && onAdvanceRound && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdvanceRound(round.id);
+                  }}
+                  disabled={round.id.startsWith('round-')}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Play className="w-3 h-3" />
+                  {pipelineAction}
+                </button>
+              )}
+              {round.type?.toLowerCase() === 'nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPromoteRound(round.id);
+                  }}
+                  disabled={round.id.startsWith('round-')}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Play className="w-3 h-3" />
+                  Promote
+                </button>
+              )}
+              {round.status === 'completed' && !round.isFinalized && onAdvanceRound && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdvanceRound(round.id);
+                  }}
+                  disabled={round.id.startsWith('round-')}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Play className="w-3 h-3" />
+                  View Results
+                </button>
+              )}
+              {(round.status === 'active' || round.status === 'completed') && onInformParticipants && (
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setLoadingInform(true);
+                    try {
+                      await onInformParticipants(round.id);
+                    } finally {
+                      setLoadingInform(false);
+                    }
+                  }}
+                  disabled={round.id.startsWith('round-') || loadingInform}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Mail className="w-3 h-3" />
+                  {loadingInform ? 'Informing...' : 'Inform Participants'}
+                </button>
+              )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 

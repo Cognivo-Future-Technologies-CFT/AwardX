@@ -340,7 +340,8 @@ export const TileView: React.FC<TileViewProps> = ({
 
                     {((pipelineAction && !round.isFinalized && onAdvanceRound) ||
                       (round.type?.toLowerCase() === 'nomination' && !insightsLoading && roundInsights?.[round.id]?.participantTotal === 0 && onPromoteRound) ||
-                      ((round.status === 'active' || round.status === 'completed') && onInformParticipants)) && (
+                      ((round.status === 'active' || round.status === 'completed') && onInformParticipants) ||
+                      (round.status === 'completed' && !round.isFinalized && onAdvanceRound)) && (
                       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
                         {pipelineAction && !round.isFinalized && onAdvanceRound && (
                           <button
@@ -368,6 +369,20 @@ export const TileView: React.FC<TileViewProps> = ({
                           >
                             <Play className="w-3.5 h-3.5" />
                             Promote
+                          </button>
+                        )}
+                        {round.status === 'completed' && !round.isFinalized && onAdvanceRound && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onAdvanceRound(round.id);
+                            }}
+                            disabled={round.id.startsWith('round-')}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            View Results
                           </button>
                         )}
                         {(round.status === 'active' || round.status === 'completed') && onInformParticipants && (

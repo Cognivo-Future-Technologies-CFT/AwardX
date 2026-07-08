@@ -30,6 +30,11 @@ interface WorkflowViewProps {
   onEdgeUpdate: (edge: RoundEdge) => void;
   onEdgeDelete: (edgeId: string) => void;
   programId: string;
+  onAdvanceRound?: (roundId: string) => void;
+  onPromoteRound?: (roundId: string) => void;
+  onInformParticipants?: (roundId: string) => Promise<void>;
+  roundInsights?: Record<string, any>;
+  insightsLoading?: boolean;
 }
 
 // Define nodeTypes outside component to avoid recreation warning
@@ -49,6 +54,11 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   onEdgeUpdate,
   onEdgeDelete,
   programId,
+  onAdvanceRound,
+  onPromoteRound,
+  onInformParticipants,
+  roundInsights,
+  insightsLoading,
 }) => {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -198,12 +208,20 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
           onCreateChild: () => handleCreateChildRound(round.id),
           incomingEdges: incoming,
           outgoingEdges: outgoing,
-          allRounds: rounds, // Pass all rounds for resolving output port streams
+          allRounds: rounds,
+          // Action handlers for workflow buttons
+          roundIndex: index,
+          totalRounds: rounds.length,
+          onAdvanceRound,
+          onPromoteRound,
+          onInformParticipants,
+          roundInsights,
+          insightsLoading,
         },
       };
     });
     return roundNodes;
-  }, [rounds, edges, selectedRoundId, onRoundSelect, handleCreateChildRound]);
+  }, [rounds, edges, selectedRoundId, onRoundSelect, handleCreateChildRound, onAdvanceRound, onPromoteRound, onInformParticipants, roundInsights, insightsLoading]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(initialEdges);

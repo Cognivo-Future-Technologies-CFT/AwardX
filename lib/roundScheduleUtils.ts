@@ -219,12 +219,15 @@ export function formatRoundTypeWithAudience(type?: string | null): string {
 
 export function primaryActionLabel(round: Round, hasNextRound: boolean): string | null {
   if (round.isFinalized) return null;
-  if (round.status === 'draft' || round.status === 'scheduled') return 'Start round';
+  if (round.status === 'draft' || round.status === 'scheduled') return 'Start Round';
+  
   if (round.status === 'active') {
-    return roundUsesShortlist(round) ? 'End & shortlist' : 'End round';
+    const typeStr = round.type?.toLowerCase() || '';
+    if (typeStr === 'nomination') return 'End Nomination';
+    if (isVotingRoundType(round.type)) return 'End Voting';
+    if (typeStr === 'announce') return 'Announce Winners';
+    return 'End & Shortlist';
   }
-  if (round.status === 'completed') {
-    return roundUsesShortlist(round) ? 'Run shortlist' : hasNextRound ? 'Advance participants' : 'Finalize round';
-  }
+  
   return null;
 }
