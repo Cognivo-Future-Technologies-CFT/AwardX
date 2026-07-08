@@ -245,7 +245,13 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
     });
 
     const removeMutation = useMutation({
-        mutationFn: (memberId: string) => db.removeTeamMember(memberId),
+        mutationFn: async (memberId: string) => {
+            const member = members.find(m => m.memberId === memberId);
+            if (member?.role === 'Judge') {
+                return db.deleteJudge(memberId);
+            }
+            return db.removeTeamMember(memberId);
+        },
         onMutate: async (memberId) => {
             await queryClient.cancelQueries({ queryKey: queryKeys.teams.members(eventId) });
             const previous = queryClient.getQueryData<TeamMember[]>(queryKeys.teams.members(eventId));
@@ -851,17 +857,19 @@ const roleMenuRef = useRef<HTMLDivElement>(null);
                                                             </button>
                                                             {openMenuId === member.id && (
                                                                 <div className="absolute right-0 top-9 z-10 w-40 bg-white border border-slate-200 rounded-xl shadow-lg py-1">
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setChangingMember(member as any);
-                                                                            setNewRoleId(member.roleId ?? rawRoles[0]?.id ?? '');
-                                                                            setIsChangeRoleModalOpen(true);
-                                                                            setOpenMenuId(null);
-                                                                        }}
-                                                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                                                                    >
-                                                                        <UserCog className="w-4 h-4" /> Change Role
-                                                                    </button>
+                                                                    {member.role !== 'Judge' && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setChangingMember(member as any);
+                                                                                setNewRoleId(member.roleId ?? rawRoles[0]?.id ?? '');
+                                                                                setIsChangeRoleModalOpen(true);
+                                                                                setOpenMenuId(null);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                                        >
+                                                                            <UserCog className="w-4 h-4" /> Change Role
+                                                                        </button>
+                                                                    )}
                                                                     {(!currentUserId || member.userId !== currentUserId) && (
                                                                         <button
                                                                             onClick={async () => {

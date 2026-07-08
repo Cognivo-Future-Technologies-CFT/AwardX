@@ -73,7 +73,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ activeEvent }) =
       /* verbose= */ false
     );
 
+    let isProcessing = false;
+
     const onScanSuccess = async (decodedText: string) => {
+      if (isProcessing) return;
+      isProcessing = true;
+
       // Decode decodedText - check if it is a full URL or a raw token
       let token = decodedText.trim();
       if (token.includes('token=')) {
@@ -85,19 +90,42 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ activeEvent }) =
         setScanResult(null);
         const result = await scanParticipantQr(token);
         if (result.ok) {
+          // Stop scanner immediately
+          scanner.clear().catch((err) => console.warn('Failed to clear scanner:', err));
+          setScanning(false);
+
           setScanResult({
             type: 'success',
             message: `Successfully checked in: ${result.participant.name} (${result.participant.email})`
           });
           toast.success(`Checked in ${result.participant.name}`);
           fetchRecords(); // Refresh list
+
+          // Automatically close modal after 2.5 seconds
+          setTimeout(() => {
+            setShowScanner(false);
+          }, 2500);
+
+          // Keep isProcessing = true to prevent any race condition subsequent scans
+          return;
         }
       } catch (error: any) {
+        const msg = error.message || 'Failed to verify QR code';
         setScanResult({
           type: 'error',
-          message: error.message || 'Failed to verify QR code'
+          message: msg
         });
+        
+        // If participant is already checked in, stop scanning
+        if (msg.toLowerCase().includes('already')) {
+          scanner.clear().catch((err) => console.warn('Failed to clear scanner:', err));
+          setScanning(false);
+          setTimeout(() => setShowScanner(false), 2500);
+          return;
+        }
+
         toast.error('Verification failed');
+        isProcessing = false;
       }
     };
 
