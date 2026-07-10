@@ -19,6 +19,7 @@ interface RoundParticipantInsight {
   votes?: number;
 }
 
+
 interface RoundJudgeInsight {
   id: string;
   name: string;
