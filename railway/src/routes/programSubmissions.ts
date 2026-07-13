@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
-import { ensureCanManageProgram } from '../middleware/programManagement.js';
+import { ensureHasProgramPermission } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { enrollSubmissionsInRootRound } from '../services/roundEngine.js';
 
@@ -30,6 +30,7 @@ function mapSubmissionRow(row: Record<string, unknown>, categoryTitle?: string |
     cover_image_url: row.cover_image_url,
     category_title: categoryTitle ?? null,
     submission_data: row.submission_data ?? null,
+    payment_status: row.payment_status ?? null,
   };
 }
 
@@ -75,7 +76,10 @@ router.get('/:programId/submissions', requireAuth, async (req: AuthenticatedRequ
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, [
+      'view_submissions',
+      'manage_submissions',
+    ]);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -92,6 +96,7 @@ router.get('/:programId/submissions', requireAuth, async (req: AuthenticatedRequ
         { count: 'exact' },
       )
       .eq('program_id', programId)
+      .neq('payment_status', 'pending')
       .order('submitted_at', { ascending: false });
 
     if (search) {
@@ -161,7 +166,9 @@ router.post('/:programId/submissions', requireAuth, async (req: AuthenticatedReq
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, [
+      'manage_submissions',
+    ]);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -258,7 +265,9 @@ router.patch('/:programId/submissions/bulk', requireAuth, async (req: Authentica
   const dbStatus = UI_TO_DB_STATUS[statusRaw] || statusRaw.toLowerCase();
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, [
+      'manage_submissions',
+    ]);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -292,7 +301,9 @@ router.delete('/:programId/submissions', requireAuth, async (req: AuthenticatedR
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, [
+      'manage_submissions',
+    ]);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }

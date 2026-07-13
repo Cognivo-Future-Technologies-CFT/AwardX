@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
-import { canAccessProgram } from '../middleware/programAccess.js';
+import { ensureHasProgramPermission } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { createNotification } from '../services/notifications.js';
 
@@ -13,17 +13,12 @@ function resolveFieldId(rawId: unknown): string {
   return typeof rawId === 'string' && UUID_RE.test(rawId) ? rawId : randomUUID();
 }
 
-async function ensureCanAccessProgram(req: AuthenticatedRequest, programId: string) {
+async function ensureCanEditForms(req: AuthenticatedRequest, programId: string) {
   if (!req.userId) {
-    return { ok: false as const, status: 401, error: 'Missing authenticated user' };
+    return { ok: false as const, status: 401 as const, error: 'Missing authenticated user' };
   }
 
-  const permitted = await canAccessProgram(req.userId, programId);
-  if (!permitted) {
-    return { ok: false as const, status: 403, error: 'You do not have access to this program' };
-  }
-
-  return { ok: true as const };
+  return ensureHasProgramPermission(req.userId, programId, ['manage_forms']);
 }
 
 async function resolveFormProgram(formId: string): Promise<{ id: string; program_id: string } | null> {
@@ -43,7 +38,7 @@ router.get('/:programId', requireAuth, async (req, res) => {
   }
 
   try {
-    const access = await ensureCanAccessProgram(req, programId);
+    const access = await ensureCanEditForms(req, programId);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -72,7 +67,7 @@ router.post('/:programId', requireAuth, async (req, res) => {
   }
 
   try {
-    const access = await ensureCanAccessProgram(req, programId);
+    const access = await ensureCanEditForms(req, programId);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -143,7 +138,7 @@ router.put('/:formId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
-    const access = await ensureCanAccessProgram(req, form.program_id);
+    const access = await ensureCanEditForms(req, form.program_id);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -238,7 +233,7 @@ router.delete('/:formId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
-    const access = await ensureCanAccessProgram(req, form.program_id);
+    const access = await ensureCanEditForms(req, form.program_id);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -297,7 +292,7 @@ router.put('/:formId/fields', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Form not found' });
     }
 
-    const access = await ensureCanAccessProgram(req, form.program_id);
+    const access = await ensureCanEditForms(req, form.program_id);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }

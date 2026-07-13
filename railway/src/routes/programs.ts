@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getSupabaseAdmin } from '../supabase.js';
-import { ensureCanManageProgram } from '../middleware/programManagement.js';
+import { ensureHasProgramPermission } from '../middleware/programManagement.js';
 import { canAccessOrganization, requireProgramAccess } from '../middleware/programAccess.js';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
@@ -108,7 +108,8 @@ router.get('/:id/stats', requireAuth, requireProgramAccess('id'), async (req, re
 				supabase
 					.from('submissions')
 					.select('status,payment_status,payment_amount,submitted_at')
-					.eq('program_id', id),
+					.eq('program_id', id)
+					.neq('payment_status', 'pending'),
 				supabase
 					.from('judges')
 					.select('id', { count: 'exact', head: true })
@@ -291,7 +292,7 @@ router.put('/:id', requireAuth, requireProgramAccess('id'), async (req: Authenti
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const manageCheck = await ensureCanManageProgram(userId, id);
+	const manageCheck = await ensureHasProgramPermission(userId, id, ['manage_programs']);
 	if (!manageCheck.ok) {
 		return res.status(manageCheck.status).json({ error: manageCheck.error });
 	}
@@ -370,7 +371,7 @@ router.delete('/:id', requireAuth, requireProgramAccess('id'), async (req: Authe
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const manageCheck = await ensureCanManageProgram(userId, id);
+	const manageCheck = await ensureHasProgramPermission(userId, id, ['manage_programs']);
 	if (!manageCheck.ok) {
 		return res.status(manageCheck.status).json({ error: manageCheck.error });
 	}

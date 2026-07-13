@@ -790,29 +790,15 @@ class DatabaseService {
     return this.permissionsLoaded;
   }
 
-  private async requireProgramManageAccess(): Promise<void> {
-    // Ensure we have the freshest role/permission state before enforcing.
+  private async requirePermission(...keys: string[]): Promise<void> {
     await this.refreshPermissionCache();
-
-    const roleName = (this.cachedRoleName || '').toLowerCase();
-    const isManagementRole = ['admin', 'owner', 'superadmin', 'program manager', 'lead judge', 'event manager'].includes(roleName);
-    const hasManagePermission = !!this.cachedPermissions && (
-      this.cachedPermissions.has('all') ||
-      this.cachedPermissions.has('manage_programs') ||
-      this.cachedPermissions.has('manage_judging') ||
-      this.cachedPermissions.has('manage_submissions') ||
-      this.cachedPermissions.has('manage_forms') ||
-      this.cachedPermissions.has('manage_teams') ||
-      this.cachedPermissions.has('manage_settings')
-    );
-
-    if (isManagementRole || hasManagePermission) return;
-    throw new Error('You do not have permission to manage programs');
+    if (keys.some((key) => this.hasPermission(key))) return;
+    throw new Error('You do not have permission for this action');
   }
 
   async canManagePrograms(): Promise<boolean> {
     try {
-      await this.requireProgramManageAccess();
+      await this.requirePermission('manage_programs');
       return true;
     } catch {
       return false;
@@ -1049,7 +1035,7 @@ class DatabaseService {
       return demoDb.updateDemoProgram(program);
     }
 
-    await this.requireProgramManageAccess();
+    await this.requirePermission('manage_programs');
 
     const { data, error } = await supabasePrograms.update(program.id, {
       title: program.title,
@@ -1139,7 +1125,7 @@ class DatabaseService {
   }
 
   async deleteProgram(programId: string): Promise<void> {
-    await this.requireProgramManageAccess();
+    await this.requirePermission('manage_programs');
 
     if (!supabase) throw new Error('Supabase not configured');
 

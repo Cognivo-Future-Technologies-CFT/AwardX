@@ -33,33 +33,33 @@ const PERMISSION_GROUPS = [
     {
         label: "Submissions & Entries",
         items: [
-            { key: PERMISSIONS.VIEW_SUBMISSIONS, label: "View Submissions" },
-            { key: PERMISSIONS.MANAGE_SUBMISSIONS, label: "Manage Status (Accept/Reject)" },
-            { key: PERMISSIONS.MANAGE_FORMS, label: "Edit Submission Forms" },
-            { key: PERMISSIONS.MARK_ATTENDANCE, label: "Mark Attendance" },
+            { key: PERMISSIONS.VIEW_SUBMISSIONS, label: "Submissions page (view)" },
+            { key: PERMISSIONS.MANAGE_SUBMISSIONS, label: "Submissions page (accept / reject)" },
+            { key: PERMISSIONS.MANAGE_FORMS, label: "Form Builder page" },
+            { key: PERMISSIONS.MARK_ATTENDANCE, label: "Attendance page" },
         ]
     },
     {
         label: "Judging",
         items: [
-            { key: PERMISSIONS.VIEW_JUDGING, label: "View Judging Panels" },
-            { key: PERMISSIONS.MANAGE_JUDGING, label: "Assign Judges & Configure Criteria" },
+            { key: PERMISSIONS.VIEW_JUDGING, label: "Judging page (view)" },
+            { key: PERMISSIONS.MANAGE_JUDGING, label: "Judging page (assign & configure)" },
         ]
     },
     {
         label: "Program Management",
         items: [
-            { key: PERMISSIONS.VIEW_OVERVIEW, label: "View Dashboard Stats" },
-            { key: PERMISSIONS.MANAGE_PROGRAMS, label: "Edit Program Schedule & Awards" },
-            { key: PERMISSIONS.VIEW_ANALYTICS, label: "View Analytics" },
+            { key: PERMISSIONS.VIEW_OVERVIEW, label: "Overview page" },
+            { key: PERMISSIONS.MANAGE_PROGRAMS, label: "Program Details, Schedule & Awards" },
+            { key: PERMISSIONS.VIEW_ANALYTICS, label: "Analytics page" },
         ]
     },
     {
         label: "Administration",
         items: [
-            { key: PERMISSIONS.MANAGE_TEAMS, label: "Manage Teams & Roles" },
-            { key: PERMISSIONS.MANAGE_SETTINGS, label: "Access Global Settings" },
-            { key: PERMISSIONS.VIEW_LOGS, label: "View Audit Logs" },
+            { key: PERMISSIONS.MANAGE_TEAMS, label: "Teams & Roles page" },
+            { key: PERMISSIONS.MANAGE_SETTINGS, label: "Settings page" },
+            { key: PERMISSIONS.VIEW_LOGS, label: "Audit Logs page" },
         ]
     }
 ];

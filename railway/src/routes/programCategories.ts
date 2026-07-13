@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
-import { ensureCanManageProgram } from '../middleware/programManagement.js';
+import { ensureHasProgramPermission } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { createNotification } from '../services/notifications.js';
 
@@ -26,7 +26,15 @@ router.get('/:programId/categories', requireAuth, async (req: AuthenticatedReque
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, [
+      'manage_programs',
+      'view_submissions',
+      'manage_submissions',
+      'manage_forms',
+      'view_judging',
+      'manage_judging',
+      'view_overview',
+    ]);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -61,7 +69,7 @@ router.post('/:programId/categories', requireAuth, async (req: AuthenticatedRequ
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, ['manage_programs']);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -132,7 +140,7 @@ router.delete('/:programId/categories', requireAuth, async (req: AuthenticatedRe
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, ['manage_programs']);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
@@ -160,7 +168,7 @@ router.delete('/:programId/categories/:categoryId', requireAuth, async (req: Aut
   }
 
   try {
-    const access = await ensureCanManageProgram(req.userId || '', programId);
+    const access = await ensureHasProgramPermission(req.userId || '', programId, ['manage_programs']);
     if (!access.ok) {
       return res.status(access.status).json({ error: access.error });
     }
