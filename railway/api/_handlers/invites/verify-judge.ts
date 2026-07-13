@@ -4,7 +4,8 @@ import { verifyJudgeSchema } from '../../_utils/validation';
 import { isAutoAssignJudging } from '../../../lib/judgingType';
 
 async function loadScopedCategoryIds(
-  supabase: ReturnType<typeof createClient>,
+  // ponytail: createClient ReturnType is a generic default that rejects the runtime client
+  supabase: any,
   judgeId: string,
   programId: string,
 ): Promise<Set<string>> {
