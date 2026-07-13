@@ -1,4 +1,4 @@
-cccsss  dd<p align="center">
+cccccccsss  dd<p align="center">
   <img src="public/logo.png" alt="" width="360" />
 </p>
 
