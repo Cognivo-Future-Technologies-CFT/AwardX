@@ -73,10 +73,24 @@ Deno.serve(async (req) => {
     })()
     const scanUrl = `${siteUrl}/attendance/scan?token=${record.qr_code_token}`
 
+    // Host QR on public HTTPS — CID embeds break in Gmail
     const qrDataUrl = await qrcode(scanUrl, { size: 300 })
     const qrBase64 = String(qrDataUrl).includes(',')
       ? String(qrDataUrl).split(',')[1]
       : String(qrDataUrl)
+    const binary = Uint8Array.from(atob(qrBase64), (c) => c.charCodeAt(0))
+    const qrPath = `attendance-qr/${record.qr_code_token}.png`
+    const { error: uploadError } = await supabaseClient.storage
+      .from('media')
+      .upload(qrPath, binary, { contentType: 'image/png', upsert: true })
+    if (uploadError) {
+      return new Response(JSON.stringify({ error: `Failed to host QR: ${uploadError.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const { data: publicData } = supabaseClient.storage.from('media').getPublicUrl(qrPath)
+    const qrImageUrl = `${publicData.publicUrl}?v=${Date.now()}`
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (!resendApiKey) {
@@ -94,6 +108,7 @@ Deno.serve(async (req) => {
     const safeEmail = escapeHtml(String(record.email || ''))
     const safeTitle = escapeHtml(String(program.title || ''))
     const safeScanUrl = escapeHtml(scanUrl)
+    const safeQrImageUrl = escapeHtml(qrImageUrl)
 
     const html = `<!doctype html>
 <html>
@@ -121,7 +136,7 @@ Deno.serve(async (req) => {
                   Here is your attendance check-in pass for <strong>${safeTitle}</strong>. Please display the QR code below at the reception desk to check in:
                 </p>
                 <div style="text-align:center;margin:0 0 24px;background-color:#f8fafc;padding:16px;border-radius:12px;border:1px solid #f1f5f9;">
-                  <img src="cid:attendance-qr" alt="Check-in Pass QR Code" style="display:block;width:220px;height:220px;margin:0 auto;" />
+                  <img src="${safeQrImageUrl}" alt="Check-in Pass QR Code" width="220" height="220" style="display:block;width:220px;height:220px;margin:0 auto;border:0;" />
                 </div>
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
                   <tr>
@@ -180,7 +195,6 @@ Deno.serve(async (req) => {
         {
           filename: 'qr.png',
           content: qrBase64,
-          contentId: 'attendance-qr',
         },
       ],
     })

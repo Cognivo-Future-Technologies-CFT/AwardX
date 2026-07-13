@@ -616,17 +616,17 @@ if (!newEvent.deadline) {
             }`}
          >
             <div className={`h-auto min-h-[5rem] flex flex-col border-b border-slate-50 transition-all ${!isSidebarExpanded ? 'items-center py-4' : 'p-4'}`}>
-               {/* Back to Console Button */}
+               {/* Back to Organization Console */}
                {isSidebarExpanded && (
                   <button
-                     onClick={() => navigate('/admin')}
+                     onClick={onSwitchOrganization}
                      className="flex items-center text-xs font-bold text-slate-400 hover:text-emerald-600 mb-4 transition-colors group"
                   >
                      <ArrowLeft className="w-3 h-3 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Console
                   </button>
                )}
                {!isSidebarExpanded && (
-                  <button onClick={() => navigate('/admin')} className="mb-4 text-slate-400 hover:text-emerald-600" title="Back to Console">
+                  <button onClick={onSwitchOrganization} className="mb-4 text-slate-400 hover:text-emerald-600" title="Back to Console">
                      <ArrowLeft className="w-4 h-4" />
                   </button>
                )}

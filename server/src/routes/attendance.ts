@@ -241,9 +241,20 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 
 		const siteUrl = resolveEmailSiteUrl();
 		const scanUrl = `${siteUrl}/attendance/scan?token=${record.qr_code_token}`;
-		
-		const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 300, margin: 2 });
-		const qrBase64 = qrDataUrl.split(',')[1];
+
+		// Host QR on public HTTPS — Gmail/webmail break CID images; Resend 3.x ignores contentId
+		const qrBuffer = await QRCode.toBuffer(scanUrl, { type: 'png', width: 300, margin: 2 });
+		const qrPath = `attendance-qr/${record.qr_code_token}.png`;
+		const { error: uploadError } = await supabase.storage
+			.from('media')
+			.upload(qrPath, qrBuffer, { contentType: 'image/png', upsert: true });
+		if (uploadError) {
+			console.error('[attendance-email] QR upload failed:', uploadError);
+			return { ok: false, error: 'Failed to host attendance QR image' };
+		}
+		const { data: publicData } = supabase.storage.from('media').getPublicUrl(qrPath);
+		const qrImageUrl = `${publicData.publicUrl}?v=${Date.now()}`;
+		const qrBase64 = qrBuffer.toString('base64');
 
 		const resendApiKey = process.env.RESEND_API_KEY;
 		if (!resendApiKey) return { ok: false, error: 'RESEND_API_KEY environment variable is not set.' };
@@ -256,6 +267,7 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 		const safeEmail = escapeHtml(String(record.email || ''));
 		const safeTitle = escapeHtml(String(program.title || ''));
 		const safeScanUrl = escapeHtml(scanUrl);
+		const safeQrImageUrl = escapeHtml(qrImageUrl);
 
 		const html = `<!doctype html>
 <html>
@@ -283,7 +295,7 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
                   Here is your attendance check-in pass for <strong>${safeTitle}</strong>. Please display the QR code below at the reception desk to check in:
                 </p>
                 <div style="text-align:center;margin:0 0 24px;background-color:#f8fafc;padding:16px;border-radius:12px;border:1px solid #f1f5f9;">
-                  <img src="cid:attendance-qr" alt="Check-in Pass QR Code" style="display:block;width:220px;height:220px;margin:0 auto;" />
+                  <img src="${safeQrImageUrl}" alt="Check-in Pass QR Code" width="220" height="220" style="display:block;width:220px;height:220px;margin:0 auto;border:0;" />
                 </div>
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
                   <tr>
@@ -342,7 +354,6 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 				{
 					filename: 'qr.png',
 					content: qrBase64,
-					contentId: 'attendance-qr',
 				}
 			]
 		});
