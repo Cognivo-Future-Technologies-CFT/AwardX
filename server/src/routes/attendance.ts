@@ -251,17 +251,11 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 		const resend = new Resend(resendApiKey);
 		const fromEmail = process.env.RESEND_FROM || 'onboarding@resend.dev';
 		const subject = `Your Attendance Pass for ${program.title}`;
-
 		const previewText = `Your attendance pass for ${program.title} is ready.`;
-		
-		function escapeHtml(str: string): string {
-			return String(str)
-				.replace(/&/g, '&amp;')
-				.replace(/</g, '&lt;')
-				.replace(/>/g, '&gt;')
-				.replace(/"/g, '&quot;')
-				.replace(/'/g, '&#039;');
-		}
+		const safeName = escapeHtml(String(record.name || ''));
+		const safeEmail = escapeHtml(String(record.email || ''));
+		const safeTitle = escapeHtml(String(program.title || ''));
+		const safeScanUrl = escapeHtml(scanUrl);
 
 		const html = `<!doctype html>
 <html>
@@ -276,52 +270,59 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
       <tr>
         <td align="center" style="padding:40px 20px;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="560" style="width:560px;max-width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-            <!-- Header -->
             <tr>
               <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:32px 40px;text-align:center;">
-                <img src="https://www.awardx.one/logo.png" alt="" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
+                <img src="https://www.awardx.one/logo.png" alt="AwardX" height="44" style="height:44px;width:auto;display:block;margin:0 auto 8px;" />
               </td>
             </tr>
-            <!-- Body -->
             <tr>
               <td style="padding:40px;">
-                <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">Attendance Pass</h2>
-                
-                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi ${escapeHtml(record.name)},</p>
+                <h2 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#1e293b;line-height:1.3;">Attendance Check-In Pass</h2>
+                <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#334155;">Hi ${safeName},</p>
                 <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#334155;">
-                  Here is your attendance pass for <strong>${escapeHtml(program.title)}</strong>. Present the QR code below to the event organizers to check in.
+                  Here is your attendance check-in pass for <strong>${safeTitle}</strong>. Please display the QR code below at the reception desk to check in:
                 </p>
-
-                <!-- QR Container -->
                 <div style="text-align:center;margin:0 0 24px;background-color:#f8fafc;padding:16px;border-radius:12px;border:1px solid #f1f5f9;">
-                  <img src="cid:qr.png" alt="Check-in Pass QR Code" style="display:block;width:220px;height:220px;margin:0 auto;" />
+                  <img src="cid:attendance-qr" alt="Check-in Pass QR Code" style="display:block;width:220px;height:220px;margin:0 auto;" />
                 </div>
-
-                <!-- Info Grid -->
-                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0;background-color:#f1f5f9;border-radius:8px;padding:20px;border-left:4px solid #4f46e5;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 24px;">
                   <tr>
-                    <td style="padding:6px 0;font-size:14px;color:#475569;width:100px;vertical-align:top;"><strong>Event:</strong></td>
-                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(program.title)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Participant:</strong></td>
-                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(record.name)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Email:</strong></td>
-                    <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${escapeHtml(record.email)}</td>
+                    <td align="center">
+                      <a href="${safeScanUrl}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:12px 28px;border-radius:10px;">Open Digital Pass</a>
+                    </td>
                   </tr>
                 </table>
-
-                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>The Team</strong></p>
+                <p style="margin:0 0 24px;font-size:12px;line-height:1.5;color:#64748b;text-align:center;">
+                  If the button above does not work, copy and paste this URL into your browser:<br />
+                  <a href="${safeScanUrl}" style="color:#4f46e5;word-break:break-all;">${safeScanUrl}</a>
+                </p>
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:24px 0;background-color:#f1f5f9;border-radius:8px;border-left:4px solid #4f46e5;">
+                  <tr>
+                    <td style="padding:16px 20px;">
+                      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#475569;width:100px;vertical-align:top;"><strong>Event:</strong></td>
+                          <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${safeTitle}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Participant:</strong></td>
+                          <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${safeName}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#475569;vertical-align:top;"><strong>Email:</strong></td>
+                          <td style="padding:6px 0;font-size:14px;color:#1e293b;font-weight:600;vertical-align:top;">${safeEmail}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#334155;">Best regards,<br /><strong>AwardX</strong></p>
               </td>
             </tr>
-            <!-- Footer -->
             <tr>
               <td style="background:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;text-align:center;">
-                  This email was sent on behalf of the program organizer.<br />
-                  470 Noor Ave STE B #1148, South San Francisco, CA 94080
+                  Sent via AwardX. Please do not reply directly to this email.
                 </p>
               </td>
             </tr>
@@ -341,8 +342,8 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 				{
 					filename: 'qr.png',
 					content: qrBase64,
-					content_id: 'qr.png'
-				} as any
+					contentId: 'attendance-qr',
+				}
 			]
 		});
 

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { 
   Users, Mail, Trash2, Check, RefreshCw, Plus, 
   Camera, X, Search, CheckCircle, Clock, AlertCircle, Sparkles, AlertTriangle
 } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { Program } from '../../services/models';
 import { 
   getAttendanceList, 
@@ -15,6 +15,18 @@ import {
   sendBulkQrPasses,
   scanParticipantQr
 } from '../../services/attendance';
+
+/** Prime camera permission inside a user gesture (required on iOS Safari). */
+async function requestCameraPermission(): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Camera is not supported in this browser. Use HTTPS or a modern browser.');
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' } },
+    audio: false,
+  });
+  stream.getTracks().forEach((track) => track.stop());
+}
 
 interface AttendanceViewProps {
   activeEvent: Program | null;
@@ -40,6 +52,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ activeEvent }) =
   const [scanResult, setScanResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [manualToken, setManualToken] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   const fetchRecords = async () => {
     if (!activeEvent) return;
@@ -58,85 +73,159 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ activeEvent }) =
     fetchRecords();
   }, [activeEvent]);
 
-  // Set up and teardown html5-qrcode scanner
+  const stopScanner = async () => {
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    if (!scanner) return;
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      await scanner.clear();
+    } catch {
+      // ponytail: teardown best-effort; DOM may already be gone
+    }
+  };
+
+  const startScanner = async () => {
+    setCameraError(null);
+    setCameraStarting(true);
+    setScanning(false);
+
+    try {
+      await stopScanner();
+
+      // Prefer rear camera on phones; fall back to first device on desktops
+      let cameraConfig: string | MediaTrackConstraints = { facingMode: 'environment' };
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        if (!cameras.length) {
+          throw new Error('No camera found on this device.');
+        }
+        // Desktop usually has no "environment" camera — use first listed device
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (!isMobile) {
+          cameraConfig = cameras[0].id;
+        }
+      } catch (err: any) {
+        // getCameras itself triggers the permission popup when not yet granted
+        if (err?.name === 'NotAllowedError' || /permission|denied|NotAllowed/i.test(String(err?.message || err))) {
+          throw new Error('Camera permission was denied. Allow camera access in your browser settings, then try again.');
+        }
+        throw err;
+      }
+
+      const scanner = new Html5Qrcode('attendance-qr-reader');
+      scannerRef.current = scanner;
+
+      let isProcessing = false;
+      const onScanSuccess = async (decodedText: string) => {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        let token = decodedText.trim();
+        if (token.includes('token=')) {
+          const urlParams = new URLSearchParams(token.split('?')[1] || '');
+          token = urlParams.get('token') || token;
+        }
+
+        try {
+          setScanResult(null);
+          const result = await scanParticipantQr(token);
+          if (result.ok) {
+            await stopScanner();
+            setScanning(false);
+            setScanResult({
+              type: 'success',
+              message: `Successfully checked in: ${result.participant.name} (${result.participant.email})`
+            });
+            toast.success(`Checked in ${result.participant.name}`);
+            fetchRecords();
+            setTimeout(() => setShowScanner(false), 2500);
+            return;
+          }
+        } catch (error: any) {
+          const msg = error.message || 'Failed to verify QR code';
+          setScanResult({ type: 'error', message: msg });
+          if (msg.toLowerCase().includes('already')) {
+            await stopScanner();
+            setScanning(false);
+            setTimeout(() => setShowScanner(false), 2500);
+            return;
+          }
+          toast.error('Verification failed');
+          isProcessing = false;
+        }
+      };
+
+      try {
+        await scanner.start(
+          cameraConfig,
+          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.333 },
+          onScanSuccess,
+          () => {}
+        );
+      } catch {
+        // environment facingMode failed — retry with first camera id
+        const cameras = await Html5Qrcode.getCameras();
+        if (!cameras.length) throw new Error('No camera found on this device.');
+        await scanner.start(
+          cameras[0].id,
+          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.333 },
+          onScanSuccess,
+          () => {}
+        );
+      }
+
+      setScanning(true);
+    } catch (err: any) {
+      const msg =
+        err?.name === 'NotAllowedError'
+          ? 'Camera permission was denied. Allow camera access in your browser settings, then try again.'
+          : err?.message || 'Could not start the camera.';
+      setCameraError(msg);
+      setScanning(false);
+      await stopScanner();
+    } finally {
+      setCameraStarting(false);
+    }
+  };
+
+  const openScanner = async () => {
+    setScanResult(null);
+    setCameraError(null);
+    // Request permission in the same tap so iOS/Android show the system popup
+    try {
+      await requestCameraPermission();
+    } catch (err: any) {
+      setShowScanner(true);
+      if (err?.name === 'NotAllowedError') {
+        setCameraError('Camera permission was denied. Allow camera access, then tap Enable Camera.');
+      } else {
+        setCameraError(err?.message || 'Could not access the camera. Tap Enable Camera to try again.');
+      }
+      return;
+    }
+    setShowScanner(true);
+  };
+
   useEffect(() => {
     if (!showScanner) {
       setScanResult(null);
       setScanning(false);
+      setCameraStarting(false);
+      stopScanner();
       return;
     }
 
-    setScanning(true);
-    const scanner = new Html5QrcodeScanner(
-      'attendance-qr-reader',
-      { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
-      /* verbose= */ false
-    );
-
-    let isProcessing = false;
-
-    const onScanSuccess = async (decodedText: string) => {
-      if (isProcessing) return;
-      isProcessing = true;
-
-      // Decode decodedText - check if it is a full URL or a raw token
-      let token = decodedText.trim();
-      if (token.includes('token=')) {
-        const urlParams = new URLSearchParams(token.split('?')[1]);
-        token = urlParams.get('token') || token;
-      }
-
-      try {
-        setScanResult(null);
-        const result = await scanParticipantQr(token);
-        if (result.ok) {
-          // Stop scanner immediately
-          scanner.clear().catch((err) => console.warn('Failed to clear scanner:', err));
-          setScanning(false);
-
-          setScanResult({
-            type: 'success',
-            message: `Successfully checked in: ${result.participant.name} (${result.participant.email})`
-          });
-          toast.success(`Checked in ${result.participant.name}`);
-          fetchRecords(); // Refresh list
-
-          // Automatically close modal after 2.5 seconds
-          setTimeout(() => {
-            setShowScanner(false);
-          }, 2500);
-
-          // Keep isProcessing = true to prevent any race condition subsequent scans
-          return;
-        }
-      } catch (error: any) {
-        const msg = error.message || 'Failed to verify QR code';
-        setScanResult({
-          type: 'error',
-          message: msg
-        });
-        
-        // If participant is already checked in, stop scanning
-        if (msg.toLowerCase().includes('already')) {
-          scanner.clear().catch((err) => console.warn('Failed to clear scanner:', err));
-          setScanning(false);
-          setTimeout(() => setShowScanner(false), 2500);
-          return;
-        }
-
-        toast.error('Verification failed');
-        isProcessing = false;
-      }
-    };
-
-    scanner.render(onScanSuccess, (error) => {
-      // Silent error logging to avoid console noise
-    });
+    // DOM node must exist before Html5Qrcode mounts
+    const t = window.setTimeout(() => {
+      void startScanner();
+    }, 50);
 
     return () => {
-      scanner.clear().catch((err) => {
-        console.warn('Failed to clear scanner on unmount:', err);
-      });
+      clearTimeout(t);
+      void stopScanner();
     };
   }, [showScanner]);
 
@@ -288,7 +377,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ activeEvent }) =
           </button>
           
           <button 
-            onClick={() => setShowScanner(true)}
+            onClick={() => void openScanner()}
             className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-md transition-all font-bold text-sm"
           >
             <Camera className="w-4 h-4" />
@@ -543,47 +632,38 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ activeEvent }) =
                 </div>
               )}
 
+              {cameraError && (
+                <div className="p-4 border border-amber-200 bg-amber-50 text-amber-900 rounded-xl space-y-3">
+                  <p className="text-sm font-medium">{cameraError}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          await requestCameraPermission();
+                        } catch (err: any) {
+                          if (err?.name === 'NotAllowedError') {
+                            setCameraError('Camera permission was denied. Allow camera access in your browser settings, then try again.');
+                            return;
+                          }
+                        }
+                        await startScanner();
+                      })();
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold"
+                  >
+                    Enable Camera
+                  </button>
+                </div>
+              )}
+
               {/* Camera Reader Area */}
-              <style>{`
-                #attendance-qr-reader button {
-                  background-color: #4f46e5 !important;
-                  color: white !important;
-                  border: none !important;
-                  padding: 8px 16px !important;
-                  border-radius: 8px !important;
-                  font-weight: 600 !important;
-                  margin: 8px auto !important;
-                  cursor: pointer !important;
-                  display: block !important;
-                  font-size: 14px !important;
-                  transition: background-color 0.2s !important;
-                  font-family: inherit !important;
-                }
-                #attendance-qr-reader button:hover {
-                  background-color: #4338ca !important;
-                }
-                #attendance-qr-reader a {
-                  color: #818cf8 !important;
-                  font-weight: 600 !important;
-                  cursor: pointer !important;
-                  text-decoration: underline !important;
-                  display: inline-block !important;
-                  margin-top: 8px !important;
-                }
-                #attendance-qr-reader {
-                  border: none !important;
-                  color: #94a3b8 !important;
-                }
-                #attendance-qr-reader__status_span {
-                  color: #94a3b8 !important;
-                  font-size: 14px !important;
-                }
-                #attendance-qr-reader__header_message {
-                  color: #94a3b8 !important;
-                  font-size: 14px !important;
-                }
-              `}</style>
               <div className="relative bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl overflow-hidden aspect-video flex items-center justify-center">
+                {cameraStarting && !cameraError && (
+                  <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/70 text-white text-sm font-semibold">
+                    Requesting camera access…
+                  </div>
+                )}
                 {scanning && (
                   <div className="absolute inset-0 bg-transparent pointer-events-none z-10 flex flex-col justify-between p-4">
                     <div className="flex justify-between">
