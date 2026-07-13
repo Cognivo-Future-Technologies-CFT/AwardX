@@ -25,6 +25,7 @@ import { roundSubmissions } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { TableSkeleton } from '../SkeletonLoader';
 import { fetchBackendJson } from '../../services/backendApi';
+import { resolvePublicSiteUrl } from '../../lib/siteUrl';
 import { Modal } from '../Modal';
 
 interface CertificatesViewProps {
@@ -811,7 +812,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ activeEvent 
       <Modal isOpen={!!selectedParticipant} onClose={() => setSelectedParticipant(null)} title="Certificate Preview">
         {selectedParticipant && (() => {
           const delivery = deliveredMap.get(selectedParticipant.submissionId);
-          const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
+          const siteUrl = resolvePublicSiteUrl();
           const verifyUrl = delivery ? `${siteUrl}/certificates/verify/${delivery.verificationCode}` : null;
           return (
           <div className="space-y-4">

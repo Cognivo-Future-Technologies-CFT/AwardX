@@ -5,6 +5,7 @@ import { Modal } from '../../Modal';
 import { Category, Judge, JudgeGroup, TeamMember } from '../../../services/models';
 import { db } from '../../../services/database';
 import { sendJudgeInviteEmail } from '../../../services/email';
+import { resolvePublicSiteUrl } from '../../../lib/siteUrl';
 import { toast } from 'sonner';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -342,7 +343,7 @@ export const AddJudgeToGroupModal: React.FC<AddJudgeToGroupModalProps> = ({
           organizationId: judgeData?.organization_id,
           programId: judgeData?.program_id || programId,
           inviteId: judgeData?.id,
-          inviteUrl: `${window.location.origin}/judge/${inviteToken}`,
+          inviteUrl: `${resolvePublicSiteUrl()}/judge/${inviteToken}`,
         });
       }
       

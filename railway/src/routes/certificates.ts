@@ -13,6 +13,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { requireProgramAccess } from '../middleware/programAccess.js';
+import { resolveEmailSiteUrl } from '../lib/emailSiteUrl.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import {
 	getOrgResendMailer,
@@ -53,7 +54,7 @@ router.post('/:programId/send', requireAuth, requireProgramAccess('programId'), 
 	const mailer = await getOrgResendMailer(supabase, program.organization_id);
 	if (!mailer) return res.status(503).json({ error: RESEND_NOT_CONFIGURED_MESSAGE });
 
-	const siteUrl = (process.env.VITE_SITE_URL || process.env.SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
+	const siteUrl = resolveEmailSiteUrl();
 
 	const results: Array<{ email: string; success: boolean; verificationCode?: string; error?: string }> = [];
 

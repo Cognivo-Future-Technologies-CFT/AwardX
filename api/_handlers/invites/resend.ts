@@ -6,6 +6,7 @@ import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
 import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { resendInviteSchema } from '../../_utils/validation';
 import { createEmailLog, updateEmailLog } from '../../_utils/emailLogs';
+import { resolveEmailSiteUrl } from '../../_utils/siteUrl.js';
 
 const INVITE_TTL_DAYS = 30;
 
@@ -128,7 +129,7 @@ export default async function handler(req: any, res: any) {
         return;
       }
 
-      const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
+      const siteUrl = resolveEmailSiteUrl();
       const inviteUrl = `${siteUrl}/team-invite/${rotatedToken}`;
       const programTitle = (inviteRow as any).programs?.title || programTitleFallback || 'your workspace';
       const roleName = (inviteRow as any).roles?.name || 'Team member';
@@ -314,7 +315,7 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
+    const siteUrl = resolveEmailSiteUrl();
     const inviteUrl = `${siteUrl}/judge/${rotatedToken}`;
     const programTitle = (judgeRow as any).programs?.title || programTitleFallback || 'your workspace';
     const judgeName = judgeRow.name || 'Judge';

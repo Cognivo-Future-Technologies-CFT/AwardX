@@ -6,6 +6,7 @@ import {
 	getOrgResendMailer,
 } from '../services/orgResend.js';
 import { canManageOrganizationInvites } from '../lib/orgAccess.js';
+import { resolveEmailActionUrl, resolveEmailSiteUrl } from '../lib/emailSiteUrl.js';
 import { createNotification } from '../services/notifications.js';
 
 const router = Router();
@@ -70,7 +71,7 @@ function escapeHtml(str: string): string {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function getSiteUrl() {
-	return (process.env.SITE_URL || process.env.VITE_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
+	return resolveEmailSiteUrl();
 }
 
 async function getAuthUser(req: any) {
@@ -1407,7 +1408,10 @@ router.post('/judge', async (req, res) => {
 		}
 
 		const siteUrl = getSiteUrl();
-		const actionUrl = passedUrl || (inviteId ? `${siteUrl}/judge/${inviteId}` : siteUrl);
+		const actionUrl = resolveEmailActionUrl(
+			passedUrl,
+			inviteId ? `/judge/${inviteId}` : '',
+		) || siteUrl;
 		const judgeName = name || 'Judge';
 		const subject = `You're invited to judge: ${programTitle}`;
 		const previewText = `You have been invited to judge ${programTitle}. Click to access your judging portal.`;

@@ -5,6 +5,7 @@ import { supabase, getCurrentOrgId } from '../../services/supabase';
 import { db } from '../../services/database';
 import { Judge, Program } from '../../services/models';
 import { sendJudgeInviteEmail } from '../../services/email';
+import { resolvePublicSiteUrl } from '../../lib/siteUrl';
 import { Plus, Trash2, Mail, UserPlus, Users } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
@@ -143,7 +144,7 @@ export const JudgeGroups: React.FC<Props> = ({ activeEvent, judges }) => {
       const inviteToken = judgeData?.invite_token;
       let emailWarning = '';
       if (inviteToken && judgeData?.status !== 'active') {
-        const magicLinkUrl = `${window.location.origin}/judge/${inviteToken}`;
+        const magicLinkUrl = `${resolvePublicSiteUrl()}/judge/${inviteToken}`;
         const inviteResult = await sendJudgeInviteEmail({
           email: inviteForm.email.trim(),
           name: inviteForm.name.trim(),

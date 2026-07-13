@@ -1,3 +1,15 @@
+/** Public production origin used in outbound emails when local/dev URLs would be useless. */
+export const PUBLIC_SITE_URL = 'https://www.awardx.one';
+
+export function isLocalDevHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  } catch {
+    return /localhost|127\.0\.0\.1|\[::1\]/i.test(url);
+  }
+}
+
 /**
  * Canonical app origin for OAuth redirects, emails, and absolute links.
  * Local dev always uses http:// — Vite does not serve HTTPS on localhost.
@@ -14,6 +26,23 @@ export function resolveSiteUrl(): string {
   }
 
   return 'http://localhost:3000';
+}
+
+/**
+ * Origin for links that must work for recipients (invite/certificate emails).
+ * Never returns localhost — uses VITE_SITE_URL when non-local, else production.
+ */
+export function resolvePublicSiteUrl(): string {
+  const configured = (import.meta.env.VITE_SITE_URL || '').trim().replace(/\/$/, '');
+  if (configured && !isLocalDevHost(configured)) {
+    return configured.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location?.origin && !isLocalDevHost(window.location.origin)) {
+    return window.location.origin.replace(/\/$/, '');
+  }
+
+  return PUBLIC_SITE_URL;
 }
 
 export function resolveAuthCallbackUrl(): string {

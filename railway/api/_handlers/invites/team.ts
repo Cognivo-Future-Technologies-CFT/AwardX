@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { getAuthenticatedUser } from '../../_utils/authUser';
 import { createEmailLog, updateEmailLog } from '../../_utils/emailLogs';
 import { canManageInvites } from '../../_utils/invitePermissions';
+import { resolveEmailSiteUrl } from '../../_utils/siteUrl.js';
 
 const INVITE_TTL_DAYS = 30;
 
@@ -173,7 +174,7 @@ export default async function handler(req: any, res: any) {
 
     const subject = `Team invite: ${programTitle}`;
     const roleLine = roleName ? `Assigned role: ${roleName}` : 'Assigned role: Team member';
-    const siteUrl = (process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app').replace(/\/$/, '');
+    const siteUrl = resolveEmailSiteUrl();
     const resolvedInviteUrl = resolveSafeInviteUrl(siteUrl, inviteUrl, inviteRow.token);
 
     let deadlineText = '';

@@ -17,6 +17,7 @@ import { useConfirm } from '../ConfirmDialog';
 import { sendTeamInviteEmail, resendTeamInvite, type EmailApiRequestTrace } from '../../services/email';
 import { queryKeys } from '../../services/queryKeys';
 import { isPersistedUuid } from '../../lib/ids';
+import { resolvePublicSiteUrl } from '../../lib/siteUrl';
 import { TableSkeleton } from '../SkeletonLoader';
 import {
     DropdownMenu,
@@ -494,7 +495,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // ── Pagination ─────────────────────────────────────────────────────────────
     const membersPerPage = 10;
-    const siteOrigin = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '');
+    const siteOrigin = resolvePublicSiteUrl();
 
     // Filter pending invites for this program only.
     const filteredPendingInvites = pendingInvites.filter(

@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '../supabase.js';
 import { encryptValue, decryptValue } from '../utils/crypto.js';
 import { logAuditAction } from '../utils/audit.js';
 import { Resend } from 'resend';
+import { resolveEmailSiteUrl } from '../lib/emailSiteUrl.js';
 
 const router = Router();
 
@@ -184,7 +185,7 @@ router.put('/users/:userId/grant-super-admin', async (req: AuthenticatedRequest,
             <p>You now have full access to manage the entire platform, including organizations, billing, programs, API keys, and system settings.</p>
             <p>Please use these privileges responsibly.</p>
             <div style="margin: 30px 0;">
-              <a href="${process.env.VITE_SITE_URL}/admin" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Access Admin Dashboard</a>
+              <a href="${resolveEmailSiteUrl()}/admin" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Access Admin Dashboard</a>
             </div>
             <p>Best regards,<br/>The AwardX System</p>
           </div>

@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { createEmailLog, updateEmailLog } from '../../_utils/emailLogs';
 import { getAuthenticatedUser } from '../../_utils/authUser';
 import { canManageInvites } from '../../_utils/invitePermissions';
+import { resolveEmailActionUrl, resolveEmailSiteUrl } from '../../_utils/siteUrl.js';
 function escapeHtml(str) {
     return str
         .replace(/&/g, '&amp;')
@@ -38,8 +39,8 @@ export default async function handler(req, res) {
     }
     const subject = `You're invited to judge: ${programTitle}`;
     const previewText = `You have been invited to judge ${programTitle}. Click to access your judging portal.`;
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VITE_SITE_URL || 'https://awardstuff.vercel.app';
-    const actionUrl = inviteUrl || `${siteUrl}/judge/verify?token=${encodeURIComponent(inviteId || '')}`;
+    const siteUrl = resolveEmailSiteUrl();
+    const actionUrl = resolveEmailActionUrl(inviteUrl, inviteId ? `/judge/verify?token=${encodeURIComponent(inviteId)}` : '') || siteUrl;
     const judgeName = name || 'Judge';
     const normalizedEmail = email.toLowerCase().trim();
     let supabase;

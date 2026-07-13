@@ -4,6 +4,7 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { requireProgramAccess, canAccessProgram } from '../middleware/programAccess.js';
 import { Resend } from 'resend';
 import QRCode from 'qrcode';
+import { resolveEmailSiteUrl } from '../lib/emailSiteUrl.js';
 
 const router = Router();
 
@@ -238,7 +239,7 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 		const program = record.programs as any;
 		if (!program) return { ok: false, error: 'Associated program not found' };
 
-		const siteUrl = (process.env.FRONTEND_URL || process.env.VITE_SITE_URL || 'http://localhost:3000').split(',')[0].replace(/\/$/, '');
+		const siteUrl = resolveEmailSiteUrl();
 		const scanUrl = `${siteUrl}/attendance/scan?token=${record.qr_code_token}`;
 		
 		const qrDataUrl = await QRCode.toDataURL(scanUrl, { width: 300, margin: 2 });

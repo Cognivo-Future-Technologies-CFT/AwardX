@@ -49,7 +49,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    const siteUrl = (Deno.env.get('SITE_URL') || Deno.env.get('VITE_SITE_URL') || 'http://localhost:3000').replace(/\/$/, '')
+    const siteUrl = (() => {
+      for (const raw of [Deno.env.get('SITE_URL'), Deno.env.get('VITE_SITE_URL')]) {
+        const configured = (raw || '').trim().replace(/\/$/, '')
+        if (configured && !/localhost|127\.0\.0\.1|\[::1\]/i.test(configured)) return configured
+      }
+      return 'https://www.awardx.one'
+    })()
     const scanUrl = `${siteUrl}/attendance/scan?token=${record.qr_code_token}`
 
     // Generate QR base64 data URL using Deno QR library (returns PNG data url)
