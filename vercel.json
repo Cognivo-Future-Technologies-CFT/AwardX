@@ -13,12 +13,10 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    {
+      "source": "/api/:path*",
+      "destination": "https://awardx-production.up.railway.app/api/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/[...path].ts": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }

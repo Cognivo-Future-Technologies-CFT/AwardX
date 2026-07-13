@@ -2,10 +2,12 @@ import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, Mail, UserPlus, XCircle } from 'lucide-react';
 import { auth } from '../../services/supabase';
+import { resolveBackendPath } from '../../services/backendApi';
 import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
 
 type InviteContext = {
   organizationId?: string;
+  organizationName?: string;
   programId?: string;
   email?: string;
 };
@@ -94,7 +96,7 @@ export const TeamInvitePage: React.FC = () => {
         const accessToken = session?.access_token;
         setIsAuthenticated(!!accessToken);
 
-        const resp = await fetch(`/api/invites/verify-team?token=${encodeURIComponent(token)}`, {
+        const resp = await fetch(resolveBackendPath(`/api/invites/verify-team?token=${encodeURIComponent(token)}`), {
           headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         });
         const body = await resp.json().catch(() => ({}));
@@ -141,7 +143,7 @@ export const TeamInvitePage: React.FC = () => {
         return;
       }
 
-      const resp = await fetch('/api/invites/verify-team', {
+      const resp = await fetch(resolveBackendPath('/api/invites/verify-team'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,7 +182,7 @@ export const TeamInvitePage: React.FC = () => {
         return;
       }
 
-      const resp = await fetch('/api/invites/verify-team', {
+      const resp = await fetch(resolveBackendPath('/api/invites/verify-team'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

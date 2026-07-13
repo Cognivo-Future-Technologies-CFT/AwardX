@@ -30,6 +30,7 @@ import { Submission, JudgingCriterion } from '../../services/models';
 import { formatRoundTypeLabel } from '../../lib/roundScheduleUtils';
 import { fireCelebrationConfetti } from '../../lib/confetti';
 import { useAuth } from '../../contexts/AuthContext';
+import { resolveBackendPath } from '../../services/backendApi';
 
 interface JudgeInfo {
   id: string;
@@ -87,7 +88,7 @@ export const JudgePortalPage: React.FC = () => {
 
   // Task 14: separate function that only re-fetches assignments/criteria (no token re-verify)
   const fetchAssignments = useMemo(() => async (token: string) => {
-    const resp = await fetch(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`);
+    const resp = await fetch(resolveBackendPath(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`));
     const data = await resp.json();
     if (!resp.ok) return;
     const allAssignments: AssignmentInfo[] = data.assignments || [];
@@ -117,7 +118,7 @@ export const JudgePortalPage: React.FC = () => {
           return;
         }
 
-        const resp = await fetch(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`);
+        const resp = await fetch(resolveBackendPath(`/api/invites/verify-judge?token=${encodeURIComponent(token)}`));
         const data = await resp.json();
 
         if (!resp.ok) {
@@ -164,7 +165,7 @@ export const JudgePortalPage: React.FC = () => {
 
     setAccepting(true);
     try {
-      const resp = await fetch('/api/invites/verify-judge', {
+      const resp = await fetch(resolveBackendPath('/api/invites/verify-judge'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'accept' }),
@@ -198,7 +199,7 @@ export const JudgePortalPage: React.FC = () => {
 
     setDeclining(true);
     try {
-      const resp = await fetch('/api/invites/verify-judge', {
+      const resp = await fetch(resolveBackendPath('/api/invites/verify-judge'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, action: 'decline' }),
