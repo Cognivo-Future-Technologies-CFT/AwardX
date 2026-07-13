@@ -68,6 +68,7 @@ interface ExecuteResult {
   eventId?: string;
   advancedCount?: number;
   eliminatedCount?: number;
+  alreadyFinalized?: boolean;
   error?: string;
 }
 
@@ -398,6 +399,55 @@ function roundIsAnnounceType(type?: string | null): boolean {
   return String(type || '').toLowerCase() === 'announce';
 }
 
+/** Publish winner_announcements from whatever is enrolled in an Announce round. */
+export async function publishWinnersFromAnnounceRound(
+  roundId: string,
+  announcedBy?: string | null,
+): Promise<{ ok: boolean; published: number; error?: string }> {
+  const round = await getRound(roundId);
+  if (!round) return { ok: false, published: 0, error: 'Round not found' };
+  if (!roundIsAnnounceType(round.type)) {
+    return { ok: false, published: 0, error: 'Round is not an Announce round' };
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: enrollments, error } = await supabase
+    .from('round_submissions')
+    .select('submission_id, carried_score, status')
+    .eq('round_id', roundId)
+    .in('status', ['active', 'advanced', 'shortlisted']);
+
+  if (error) return { ok: false, published: 0, error: error.message };
+  if (!enrollments?.length) return { ok: true, published: 0 };
+
+  const submissionIds = enrollments.map((e) => e.submission_id).filter(Boolean);
+  const { data: votes } = await supabase
+    .from('public_votes')
+    .select('submission_id')
+    .in('submission_id', submissionIds);
+
+  const voteCounts: Record<string, number> = {};
+  for (const vote of votes || []) {
+    voteCounts[vote.submission_id] = (voteCounts[vote.submission_id] || 0) + 1;
+  }
+
+  const ranked = [...enrollments]
+    .map((row) => ({
+      submissionId: row.submission_id,
+      score: Number(row.carried_score ?? 0),
+      voteCount: voteCounts[row.submission_id] || 0,
+      rank: 0,
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return b.voteCount - a.voteCount;
+    })
+    .map((row, idx) => ({ ...row, rank: idx + 1 }));
+
+  await publishWinnerAnnouncements(round.program_id, ranked, { announcedBy: announcedBy || null });
+  return { ok: true, published: ranked.length };
+}
+
 // ---- Public API ----
 
 /**
@@ -478,7 +528,8 @@ export async function executeAdvancement(
     return { ok: false, error: 'Round must be completed before advancing participants.' };
   }
   if (round.is_finalized) {
-    return { ok: false, error: 'Round is already finalized.' };
+    // Idempotent — advancement already finished; UI can still activate the next round.
+    return { ok: true, alreadyFinalized: true, advancedCount: 0, eliminatedCount: 0 };
   }
 
   try {

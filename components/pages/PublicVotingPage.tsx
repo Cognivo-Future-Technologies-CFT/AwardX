@@ -57,6 +57,7 @@ interface VotingRound {
   start_date: string;
   end_date: string;
   public_voting_slug?: string;
+  accepting_votes?: boolean;
 }
 
 interface VotingSubmission {
@@ -263,7 +264,17 @@ export const PublicVotingPage: React.FC = () => {
     );
   }
 
-  const isActive = round.status === 'active';
+  const isActive =
+    typeof round.accepting_votes === 'boolean'
+      ? round.accepting_votes
+      : round.status === 'active' ||
+        (() => {
+          if (round.status === 'cancelled' || round.status === 'draft') return false;
+          const now = Date.now();
+          const start = round.start_date ? Date.parse(round.start_date) : NaN;
+          const end = round.end_date ? Date.parse(round.end_date) : NaN;
+          return Number.isFinite(start) && Number.isFinite(end) && now >= start && now <= end;
+        })();
   const canVoteMore = isActive && totalVotesCast < maxVotes && kycVerified;
   const votesRemaining = Math.max(0, maxVotes - totalVotesCast);
   const voteProgressPercent = maxVotes > 0 ? Math.round((totalVotesCast / maxVotes) * 100) : 0;

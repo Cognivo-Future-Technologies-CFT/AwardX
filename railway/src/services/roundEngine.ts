@@ -27,6 +27,7 @@ interface RoundRow {
   advancement_criteria: any;
   advancement_trigger: string;
   is_finalized: boolean;
+  sort_order?: number | null;
 }
 
 async function logTransition(roundId: string, from: string, to: string, triggeredBy: string, metadata?: any) {
@@ -208,6 +209,60 @@ export async function syncProgramNominationEnrollments(
   return enrollSubmissionsInRootRound(programId);
 }
 
+async function enrollAdvancedFromRound(
+  sourceRoundId: string,
+  targetRoundId: string,
+): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  const { data: rows, error } = await supabase
+    .from('round_submissions')
+    .select('submission_id')
+    .eq('round_id', sourceRoundId)
+    .in('status', ['advanced', 'active', 'shortlisted']);
+  if (error) throw new Error(error.message);
+  if (!rows?.length) return 0;
+
+  const { data: existing } = await supabase
+    .from('round_submissions')
+    .select('submission_id')
+    .eq('round_id', targetRoundId);
+  const existingIds = new Set((existing || []).map((r) => r.submission_id));
+  const toEnroll = rows
+    .map((r) => r.submission_id)
+    .filter((id) => id && !existingIds.has(id));
+  if (toEnroll.length === 0) return 0;
+
+  const payload = toEnroll.map((submission_id) => ({
+    round_id: targetRoundId,
+    submission_id,
+    status: 'active',
+    source_round_id: sourceRoundId,
+  }));
+  const { error: upsertError } = await supabase
+    .from('round_submissions')
+    .upsert(payload, { onConflict: 'round_id,submission_id' });
+  if (upsertError) throw new Error(upsertError.message);
+  return toEnroll.length;
+}
+
+async function getPreviousRoundBySortOrder(
+  programId: string,
+  round: RoundRow,
+): Promise<RoundRow | null> {
+  const supabase = getSupabaseAdmin();
+  const { data: rounds } = await supabase
+    .from('rounds')
+    .select('*')
+    .eq('program_id', programId)
+    .order('sort_order', { ascending: true });
+  if (!rounds?.length) return null;
+  const currentSort = Number(round.sort_order ?? 0);
+  const earlier = rounds
+    .filter((r) => r.id !== round.id && Number(r.sort_order ?? 0) < currentSort)
+    .sort((a, b) => Number(b.sort_order ?? 0) - Number(a.sort_order ?? 0));
+  return earlier[0] || null;
+}
+
 // ---- Public API ----
 
 export async function activateRound(roundId: string, triggeredBy: string = 'admin'): Promise<{ ok: boolean; error?: string }> {
@@ -219,16 +274,27 @@ export async function activateRound(roundId: string, triggeredBy: string = 'admi
     return { ok: false, error: `Cannot activate round with status '${round.status}'. Must be draft, scheduled, or upcoming.` };
   }
 
-  // Guard: predecessors must be finalized (unless root)
+  // Guard: only edge predecessors that come *before* this round in sort_order must be finalized.
+  // ponytail: stale edges after tile reorder can point at later rounds; those must not block activation.
   const predecessors = await getPredecessorRounds(roundId, round.program_id);
-  if (predecessors.length > 0) {
-    const unfinalized = predecessors.filter(p => !p.is_finalized);
-    if (unfinalized.length > 0) {
-      return {
-        ok: false,
-        error: `Cannot activate: predecessor round(s) not finalized: ${unfinalized.map(p => p.title).join(', ')}`,
-      };
-    }
+  const currentSort = Number(round.sort_order ?? 0);
+  const blockingPreds = predecessors.filter(
+    (p) => Number(p.sort_order ?? Number.MAX_SAFE_INTEGER) < currentSort,
+  );
+  const previousBySort = await getPreviousRoundBySortOrder(round.program_id, round);
+
+  const unfinalized = blockingPreds.filter((p) => !p.is_finalized);
+  if (unfinalized.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot activate: predecessor round(s) not finalized: ${unfinalized.map((p) => p.title).join(', ')}`,
+    };
+  }
+  if (blockingPreds.length === 0 && previousBySort && !previousBySort.is_finalized) {
+    return {
+      ok: false,
+      error: `Cannot activate: previous round "${previousBySort.title}" is not finalized.`,
+    };
   }
 
   // Guard: must have enrolled submissions (auto-enroll for Nomination/root rounds)
@@ -238,12 +304,28 @@ export async function activateRound(roundId: string, triggeredBy: string = 'admi
     await enrollSubmissionsInRootRound(round.program_id);
     enrolledCount = await getEnrolledCount(roundId);
   }
+  // Catch-up enroll from the nearest prior finalized round when empty (common after reorder / already-advanced nomination)
+  if (enrolledCount === 0 && previousBySort?.is_finalized) {
+    await enrollAdvancedFromRound(previousBySort.id, roundId);
+    enrolledCount = await getEnrolledCount(roundId);
+  }
   if (enrolledCount === 0) {
     return { ok: false, error: 'Cannot activate round with 0 enrolled submissions.' };
   }
 
   await updateRoundStatus(roundId, 'active');
   await logTransition(roundId, round.status, 'active', triggeredBy);
+
+  // Announce round: publish winners so /winners/:programId populates immediately
+  if (roundType === 'announce') {
+    try {
+      const { publishWinnersFromAnnounceRound } = await import('./advancementEngine.js');
+      await publishWinnersFromAnnounceRound(roundId, triggeredBy);
+    } catch (err) {
+      console.error('[activateRound] Failed to publish announce winners:', err);
+    }
+  }
+
   return { ok: true };
 }
 

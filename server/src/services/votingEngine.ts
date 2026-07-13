@@ -4,7 +4,7 @@
 
 import { getSupabaseAdmin } from '../supabase.js';
 import { buildPublicVotingSlug } from '../lib/votingSlug.js';
-import { isPublicVotingRoundRecord } from '../lib/votingRoundTypes.js';
+import { isPublicVotingRoundRecord, isVotingRoundOpen } from '../lib/votingRoundTypes.js';
 
 /** Disambiguate rounds → programs embed (certificate_round_display_labels added a second FK path). */
 const ROUND_PROGRAM_SELECT =
@@ -248,6 +248,7 @@ function mapRoundPayload(round: any, config: any) {
       start_date: round.start_date,
       end_date: round.end_date,
       public_voting_slug: config?.public_voting_slug || null,
+      accepting_votes: isVotingRoundOpen(round),
     },
     program: round.programs
       ? {
@@ -370,7 +371,7 @@ export async function castVote(
 
   const round = await getVotingRoundById(roundId);
   if (!round) return { ok: false, error: 'Voting round not found or not a public voting round.' };
-  if (round.status !== 'active') {
+  if (!isVotingRoundOpen(round)) {
     return { ok: false, error: 'This voting round is not currently active.' };
   }
 

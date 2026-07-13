@@ -140,7 +140,9 @@ export const PublicAnnouncementsPage: React.FC = () => {
           )}
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-amber-300">
             <Crown className="h-4 w-4" />
-            Winner Announcements
+            {String(announceRound?.title || '').includes('preliminary')
+              ? 'Preliminary standings'
+              : 'Winner Announcements'}
           </div>
           <h1 className="mb-3 text-4xl font-bold tracking-tight sm:text-5xl">{program.title}</h1>
           {program.description && (

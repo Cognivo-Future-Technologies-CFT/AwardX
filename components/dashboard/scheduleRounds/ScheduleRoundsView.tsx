@@ -833,10 +833,17 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       const targetRound = rounds.find((r) => r.id === finalTargetRoundId);
       const isFinalRound = !targetRound;
       if (targetRound && (targetRound.status === 'draft' || targetRound.status === 'scheduled')) {
-        await activateRound(targetRound.id);
-        toast.success(`Advanced participants into "${targetRound.name}"`);
+        const activated = await activateRound(targetRound.id);
+        if (!activated.ok) {
+          throw new Error(activated.error || `Could not start "${targetRound.name}"`);
+        }
+        toast.success(
+          result.alreadyFinalized
+            ? `"${targetRound.name}" is ready — participants were already advanced`
+            : `Advanced participants into "${targetRound.name}"`,
+        );
       } else {
-        toast.success('Round shortlist completed');
+        toast.success(result.alreadyFinalized ? 'Round was already finalized' : 'Round shortlist completed');
         if (isFinalRound) {
           fireCelebrationConfetti();
         }

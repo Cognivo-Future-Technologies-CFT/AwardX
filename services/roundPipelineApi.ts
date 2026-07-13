@@ -65,7 +65,7 @@ export async function executeAdvancement(
     targetRoundId?: string;
   },
 ) {
-  const response = await fetchBackendJson<{ data: { ok: boolean; error?: string } }>(
+  const response = await fetchBackendJson<{ data: { ok: boolean; error?: string; alreadyFinalized?: boolean } } | { ok: boolean; error?: string; alreadyFinalized?: boolean }>(
     `/api/advancement/rounds/${encodeURIComponent(roundId)}/execute`,
     {
       method: 'POST',
@@ -79,7 +79,7 @@ export async function executeAdvancement(
       errorPrefix: 'Advancement API',
     },
   );
-  return response.data;
+  return (response as any).data ?? response;
 }
 
 export async function resetPipeline(programId: string) {

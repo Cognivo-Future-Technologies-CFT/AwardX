@@ -3976,6 +3976,57 @@ class DatabaseService {
     const rows = orderedIds.map((id, index) => ({ id, program_id: programId, sort_order: index }));
     const { error } = await supabase.from('rounds').upsert(rows, { onConflict: 'id' });
     if (error) throw new Error(error.message || 'Failed to reorder rounds');
+
+    // Keep linear tile pipelines in sync with visible order (skip if custom branching).
+    const [{ data: rounds }, { data: edges }] = await Promise.all([
+      supabase
+        .from('rounds')
+        .select('id, type, sort_order')
+        .eq('program_id', programId)
+        .order('sort_order', { ascending: true }),
+      supabase
+        .from('round_edges')
+        .select('source_round_id, target_round_id, condition')
+        .eq('program_id', programId),
+    ]);
+
+    if (!rounds?.length) return;
+
+    const orderedRounds = orderedIds
+      .map((id, order) => {
+        const row = rounds.find((r) => r.id === id);
+        if (!row) return null;
+        return {
+          id: row.id,
+          type: row.type,
+          order,
+        } as any;
+      })
+      .filter(Boolean);
+
+    // Keep single-path pipelines aligned with visible order. Skip only when branching (multiple outs).
+    const outDegree = new Map<string, number>();
+    for (const edge of edges || []) {
+      outDegree.set(edge.source_round_id, (outDegree.get(edge.source_round_id) || 0) + 1);
+    }
+    const isBranching = [...outDegree.values()].some((n) => n > 1);
+    if (isBranching) return;
+
+    const { buildLinearEdges } = await import('../lib/roundScheduleUtils');
+    const nextEdges = buildLinearEdges(programId, orderedRounds as any);
+    await supabase.from('round_edges').delete().eq('program_id', programId);
+    if (nextEdges.length > 0) {
+      const { error: edgeError } = await supabase.from('round_edges').insert(
+        nextEdges.map((edge, idx) => ({
+          program_id: programId,
+          source_round_id: edge.sourceRoundId,
+          target_round_id: edge.targetRoundId,
+          condition: edge.condition || { type: 'always' },
+          sort_order: edge.order ?? idx,
+        })),
+      );
+      if (edgeError) throw new Error(edgeError.message || 'Failed to sync round edges after reorder');
+    }
   }
 
   // ── Team members ───────────────────────────────────────────────────────────
