@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db, PendingInvite } from '../../services/database';
 import { PERMISSIONS, Role, TeamMember, Program } from '../../services/models';
+import { ROLE_PRESETS, ALL_PERMISSION_KEYS, resolvePermissionKeysForStorage } from '../../lib/rolePresets';
 import { useAuth } from '../../contexts/AuthContext';
 import {
     Plus, UserPlus, Shield, MoreVertical, Search, Filter,
@@ -63,66 +64,6 @@ const PERMISSION_GROUPS = [
     }
 ];
 
-const ROLE_PRESETS = [
-  {
-    key: 'judge',
-    name: 'Judge',
-    description: 'Review and score submissions',
-    permissions: [
-      PERMISSIONS.VIEW_SUBMISSIONS,
-      PERMISSIONS.VIEW_JUDGING,
-    ],
-    color: 'bg-blue-100 text-blue-700',
-    icon: '🏆',
-  },
-  {
-    key: 'lead-judge',
-    name: 'Lead Judge',
-    description: 'Manage and oversee judging',
-    permissions: [
-      PERMISSIONS.VIEW_SUBMISSIONS,
-      PERMISSIONS.VIEW_JUDGING,
-      PERMISSIONS.MANAGE_JUDGING,
-    ],
-    color: 'bg-purple-100 text-purple-700',
-    icon: '⭐',
-  },
-  {
-    key: 'manager',
-    name: 'Event Manager',
-    description: 'Manage programs and operations',
-    permissions: [
-      PERMISSIONS.VIEW_OVERVIEW,
-      PERMISSIONS.MANAGE_PROGRAMS,
-      PERMISSIONS.VIEW_ANALYTICS,
-      PERMISSIONS.VIEW_SUBMISSIONS,
-      PERMISSIONS.MANAGE_SUBMISSIONS,
-      PERMISSIONS.MANAGE_FORMS,
-      PERMISSIONS.VIEW_JUDGING,
-      PERMISSIONS.MARK_ATTENDANCE,
-    ],
-    color: 'bg-emerald-100 text-emerald-700',
-    icon: '📋',
-  },
-  {
-    key: 'attendance-marker',
-    name: 'Attendance Marker',
-    description: 'Check in participants at the event',
-    permissions: [
-      PERMISSIONS.MARK_ATTENDANCE,
-    ],
-    color: 'bg-amber-100 text-amber-700',
-    icon: '✅',
-  },
-  {
-    key: 'admin',
-    name: 'Admin',
-    description: 'Full system access',
-    permissions: Object.values(PERMISSIONS),
-    color: 'bg-rose-100 text-rose-700',
-    icon: '🛡️',
-  },
-];
 interface TeamsViewProps {
     activeEvent?: Program | null;
 }
@@ -306,6 +247,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const handleCreateRole = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingRole.name) return;
+        const permissionKeys = resolvePermissionKeysForStorage(editingRole.permissions);
+        if (permissionKeys.length === 0) {
+            toast.error('Select at least one permission for this role.');
+            return;
+        }
         const roleId = editingRole.id;
         const isExistingRole = isPersistedUuid(roleId);
         try {
@@ -314,7 +260,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     id: roleId,
                     name: editingRole.name,
                     color: editingRole.color,
-                    permissions: editingRole.permissions || [],
+                    permissions: permissionKeys,
                 });
             } else {
                 if (!isPersistedUuid(eventId)) {
@@ -323,7 +269,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                 }
                 await db.createRole({
                     name: editingRole.name,
-                    permissions: editingRole.permissions || [],
+                    permissions: permissionKeys,
                     color: editingRole.color,
                     programId: eventId,
                 });
@@ -1246,7 +1192,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     </div>
                     <div className="pt-4 flex justify-between items-center border-t border-slate-100">
                         {!editingRole.permissions?.includes('all') && (
-                            <button type="button" onClick={() => setEditingRole({ ...editingRole, permissions: ['all'] })} className="text-xs text-slate-400 hover:text-indigo-600 font-medium">
+                            <button type="button" onClick={() => setEditingRole({ ...editingRole, permissions: [...ALL_PERMISSION_KEYS] })} className="text-xs text-slate-400 hover:text-indigo-600 font-medium">
                                 Grant Full Admin Access
                             </button>
                         )}

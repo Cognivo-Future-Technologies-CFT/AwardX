@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { isPersistedUuid } from '../lib/ids';
 import { resolveAuthCallbackUrl } from '../lib/siteUrl';
+import { resolvePermissionKeysForStorage } from '../lib/rolePresets';
 import { fetchBackendJson } from './backendApi';
 import { supabase, supabaseUrl, isSupabaseReady } from './supabaseClient';
 import {
@@ -1956,6 +1957,8 @@ export const roles = {
   create: async (role: { name: string; color?: string; permissions: string[]; programId?: string }) => {
     const org = await organizations.getCurrent();
     const programId = isPersistedUuid(role.programId) ? role.programId : null;
+    const permissionKeys = resolvePermissionKeysForStorage(role.permissions);
+
     const { data: newRole, error: roleError } = await supabase
       .from('roles')
       .insert({
@@ -1969,18 +1972,27 @@ export const roles = {
 
     if (roleError || !newRole) return { data: null, error: roleError };
 
+    if (permissionKeys.length === 0) {
+      return { data: newRole, error: { message: 'Select at least one permission for this role.' } };
+    }
+
     // Get permission IDs
     const { data: perms } = await supabase
       .from('permissions')
-      .select('id')
-      .in('key', role.permissions);
+      .select('id, key')
+      .in('key', permissionKeys);
 
-    if (perms && perms.length > 0) {
-      const rolePerms = perms.map(p => ({
-        role_id: newRole.id,
-        permission_id: p.id,
-      }));
-      await supabase.from('role_permissions').insert(rolePerms);
+    if (!perms || perms.length === 0) {
+      return { data: null, error: { message: 'No matching permissions found for this role.' } };
+    }
+
+    const rolePerms = perms.map(p => ({
+      role_id: newRole.id,
+      permission_id: p.id,
+    }));
+    const { error: linkError } = await supabase.from('role_permissions').insert(rolePerms);
+    if (linkError) {
+      return { data: null, error: linkError };
     }
 
     return { data: newRole, error: null };
@@ -2001,24 +2013,31 @@ export const roles = {
   },
 
   updatePermissions: async (roleId: string, permissionKeys: string[]) => {
+    const keys = resolvePermissionKeysForStorage(permissionKeys);
+
     // Delete existing
     await supabase.from('role_permissions').delete().eq('role_id', roleId);
+
+    if (keys.length === 0) {
+      return { error: { message: 'Select at least one permission for this role.' } };
+    }
 
     // Get permission IDs
     const { data: perms } = await supabase
       .from('permissions')
       .select('id')
-      .in('key', permissionKeys);
+      .in('key', keys);
 
-    if (perms && perms.length > 0) {
-      const rolePerms = perms.map(p => ({
-        role_id: roleId,
-        permission_id: p.id,
-      }));
-      const { error } = await supabase.from('role_permissions').insert(rolePerms);
-      return { error };
+    if (!perms || perms.length === 0) {
+      return { error: { message: 'No matching permissions found for this role.' } };
     }
-    return { error: null };
+
+    const rolePerms = perms.map(p => ({
+      role_id: roleId,
+      permission_id: p.id,
+    }));
+    const { error } = await supabase.from('role_permissions').insert(rolePerms);
+    return { error };
   },
 
   delete: async (id: string) => {

@@ -11,6 +11,8 @@ const MANAGEMENT_ROLE_NAMES = new Set([
   'lead judge',
   'lead_judge',
   'event manager',
+  'judge',
+  'attendance marker',
   'ceo',
 ]);
 
@@ -23,12 +25,19 @@ const MANAGEMENT_PERMISSION_KEYS = new Set([
   'manage_forms',
   'manage_teams',
   'manage_settings',
+  'manage_crm',
+  'manage_payments',
+  'manage_reach',
+  'manage_voting',
   'mark_attendance',
   'view_submissions',
   'view_judging',
   'view_overview',
   'view_analytics',
   'view_logs',
+  'view_messages',
+  'view_payments',
+  'view_subscription',
   'all',
 ]);
 
@@ -98,8 +107,9 @@ async function canManageOrganizationProgram(userId: string, organizationId: stri
 
       const allPermissions = [...permsFromArray, ...permsFromJunction];
 
-      // If the role has ANY recognized permission, it's a valid program member with access rights.
-      return allPermissions.some((permission: string) => MANAGEMENT_PERMISSION_KEYS.has(permission));
+      // Custom / predefined roles: any assigned permission unlocks program API access
+      // for this event. Fine-grained UI still gates individual views via hasPermission.
+      return allPermissions.length > 0;
     }
 
     return false;
