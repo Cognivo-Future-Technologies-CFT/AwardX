@@ -1597,7 +1597,7 @@ class DatabaseService {
 
   async getMySubmissionPortalData(): Promise<ApplicantPortalData> {
     const headers = await this.getAuthenticatedHeaders();
-    const response = await fetch('/api/submissions/my', {
+    const response = await fetch('https://awardx-production.up.railway.app/api/submissions/my', {
       method: 'GET',
       headers,
     });
