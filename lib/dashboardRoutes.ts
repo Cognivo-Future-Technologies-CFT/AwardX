@@ -19,6 +19,7 @@ export const DASHBOARD_PATH_VIEWS = new Set([
   'certificates',
   'broadcasts',
   'attendance',
+  'subscription',
 ]);
 
 export const SETTINGS_TABS = new Set([

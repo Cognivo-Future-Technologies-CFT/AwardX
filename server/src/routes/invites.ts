@@ -927,9 +927,9 @@ router.post('/team', async (req, res) => {
 				.eq('status', 'active')
 				.maybeSingle();
 
-			if (member) {
-				return res.status(400).json({ error: 'This user is already an active member of the team.' });
-			}
+			// We intentionally do not return 400 here if the user is already active.
+			// This allows the frontend to use this endpoint to send an email notification 
+			// to users who were just directly added to the team.
 		}
 
 		const ip = getClientIp(req);

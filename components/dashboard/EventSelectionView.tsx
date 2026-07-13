@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
-   Trophy, HandCoins, Building2, Sparkles, Calendar, ArrowRight,
+   Trophy, HandCoins, Building2, Sparkles, Calendar, ArrowRight, ArrowLeft,
    LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2,
-   Rocket, GraduationCap, BookOpen, UserCheck, Palette, Users, UserPlus, Shield
+   Rocket, GraduationCap, BookOpen, UserCheck, Palette, Users, UserPlus, Shield, CreditCard, Settings, Settings2
 } from 'lucide-react';
 import { Program, EventType, Organization, Role, TeamMember, JudgingType } from '../../services/models';
 import { db as databaseService, type DashboardNotification } from '../../services/database';
@@ -18,6 +18,7 @@ import { useUserProfile } from '../../hooks/useUserProfile';
 import { UserIdentity } from '../ui/UserIdentity';
 import { Logo, LogoTitle } from '../Logo';
 import { toast } from 'sonner';
+import { OrganizationSettings } from '../../features/organization/components/OrganizationSettings';
 import { JUDGING_TYPE_OPTIONS, DEFAULT_JUDGING_TYPE } from '../../lib/judgingType';
 
 interface EventSelectionViewProps {
@@ -198,6 +199,8 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
    const [newMemberEmail, setNewMemberEmail] = useState('');
    const [newMemberRoleId, setNewMemberRoleId] = useState('');
+   const [activeTab, setActiveTab] = useState<'events' | 'team' | 'billing' | 'settings'>('events');
+   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
    const [isAddingMember, setIsAddingMember] = useState(false);
    const { profile, isLoading: isUserProfileLoading } = useUserProfile({
       fetchFullProfile: async () => {
@@ -601,23 +604,107 @@ if (!newEvent.deadline) {
    };
 
    return (
-      <div className="min-h-screen bg-[#f8faf9] font-sans text-slate-900">
-         {/* Top Navigation Bar */}
-         <header className="bg-white/95 backdrop-blur border-b border-slate-200 sticky top-0 z-30">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex justify-between items-center">
-               <LogoTitle title={activeOrganization.name} logoSize="xl" />
-
-               <div className="flex items-center gap-4">
+      <div className="flex min-h-screen bg-[#f8faf9] font-sans text-slate-900">
+         {/* Left Sidebar (Expanding) */}
+         <aside
+            role="navigation"
+            aria-label="Workspace navigation"
+            onMouseEnter={() => setIsSidebarExpanded(true)}
+            onMouseLeave={() => setIsSidebarExpanded(false)}
+            className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-200 ease-out ${
+               isSidebarExpanded ? 'w-64 shadow-lg' : 'w-20'
+            }`}
+         >
+            <div className={`h-auto min-h-[5rem] flex flex-col border-b border-slate-50 transition-all ${!isSidebarExpanded ? 'items-center py-4' : 'p-4'}`}>
+               {/* Back to Console Button */}
+               {isSidebarExpanded && (
                   <button
-                     type="button"
-                     onClick={onSwitchOrganization}
-                     className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 hover:border-emerald-200"
+                     onClick={() => navigate('/admin')}
+                     className="flex items-center text-xs font-bold text-slate-400 hover:text-emerald-600 mb-4 transition-colors group"
                   >
-                     <Building2 className="w-4 h-4" />
-                     <span className="hidden sm:inline">Switch Organization</span>
-                     <span className="sm:hidden">Organizations</span>
+                     <ArrowLeft className="w-3 h-3 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Console
                   </button>
-                  <div className="hidden md:flex relative">
+               )}
+               {!isSidebarExpanded && (
+                  <button onClick={() => navigate('/admin')} className="mb-4 text-slate-400 hover:text-emerald-600" title="Back to Console">
+                     <ArrowLeft className="w-4 h-4" />
+                  </button>
+               )}
+
+               <div className="flex items-center gap-3 overflow-hidden">
+                  <Logo size="sm" className="shrink-0" />
+                  <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'w-32 opacity-100' : 'w-0 opacity-0'}`}>
+                     <span className="text-[10px] font-bold tracking-widest text-emerald-500 uppercase leading-none mt-0.5">AwardX</span>
+                     <span className="text-sm font-bold text-slate-900 leading-tight tracking-tight">Workspace</span>
+                  </div>
+               </div>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto py-6 px-3 scrollbar-hide">
+               {isSidebarExpanded && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3 font-display">Hub Navigation</div>}
+               
+               {[
+                  { id: 'events', label: 'Events', icon: Layers },
+                  { id: 'team', label: 'Team Members', icon: Users },
+                  { id: 'settings', label: 'Settings', icon: Settings },
+                  { id: 'billing', label: 'Billing', icon: CreditCard }
+               ].map((item) => (
+                  <div key={item.id} className="mb-1">
+                     <button
+                        onClick={() => setActiveTab(item.id as any)}
+                        className={`group w-full flex items-center ${!isSidebarExpanded ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                           activeTab === item.id
+                              ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-100/50'
+                              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent'
+                        }`}
+                        title={!isSidebarExpanded ? item.label : undefined}
+                     >
+                        <div className={`flex items-center gap-3 ${!isSidebarExpanded ? 'justify-center w-full' : ''}`}>
+                           <item.icon className={`w-5 h-5 transition-colors ${activeTab === item.id ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                           {isSidebarExpanded && <span>{item.label}</span>}
+                        </div>
+                        {isSidebarExpanded && activeTab === item.id && (
+                           <motion.div layoutId="active-hub-nav" className="w-1.5 h-1.5 rounded-full bg-emerald-600 shadow-[0_0_8px_rgba(5,150,105,0.5)]" />
+                        )}
+                     </button>
+                  </div>
+               ))}
+            </nav>
+            
+            <div className="p-3 border-t border-slate-100 relative group">
+               <button
+                  onClick={onLogout}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors ${!isSidebarExpanded ? 'justify-center' : ''}`}
+                  title={!isSidebarExpanded ? "Sign Out" : undefined}
+               >
+                  <LogOut className="w-4 h-4 shrink-0" />
+                  {isSidebarExpanded && <span>Sign Out</span>}
+               </button>
+            </div>
+         </aside>
+
+         {/* Main Content Area */}
+         <div className="flex-1 flex flex-col min-w-0 lg:pl-20 transition-all duration-200">
+            {/* Top Header */}
+            <header className="bg-white border-b border-slate-200 shrink-0">
+               <div className="px-8 h-16 flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                     <div className="font-semibold text-slate-800 flex items-center gap-2 text-lg tracking-tight">
+                        {activeOrganization.name}
+                     </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                     <button
+                        type="button"
+                        onClick={onSwitchOrganization}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200"
+                     >
+                        <Building2 className="w-4 h-4" />
+                        Switch Organization
+                     </button>
+                     <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
+                     <div className="hidden md:flex relative">
                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                      <input
                         type="text"
@@ -692,24 +779,17 @@ if (!newEvent.deadline) {
                         meta="Admin Workspace"
                         size="md"
                      />
-                     {/* Always visible logout button */}
-                     <button
-                        onClick={onLogout}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-slate-200 hover:border-red-200"
-                        title="Sign Out"
-                     >
-                        <LogOut className="w-4 h-4" />
-                        <span className="hidden sm:inline">Sign Out</span>
-                     </button>
                   </div>
                </div>
             </div>
          </header>
 
-         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="space-y-16">
-               {/* Active Events Section */}
-               <section className="mb-16">
+         <div className="flex-1 overflow-y-auto bg-slate-50">
+            {activeTab === 'events' && (
+                  <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                     <div className="space-y-16">
+                        {/* Active Events Section */}
+                        <section className="mb-16">
                <div className="mb-6">
                   <div>
                      <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Your Events</h2>
@@ -836,86 +916,35 @@ if (!newEvent.deadline) {
             </section>
          </div>
       </main>
+   )}
 
-      {/* Collapsible Right Sidebar Panel */}
-<motion.aside
-  initial={{ x: '100%' }}
-  animate={{
-    x: isSidebarOpen ? 0 : '100%',
-    y: '-50%',
-  }}
-  transition={{
-    type: 'spring',
-    damping: 28,
-    stiffness: 220,
-  }}
-  className="
-    fixed
-    right-0
-    top-1/2
-    w-[320px]
-    max-h-[75vh]
-    bg-white
-    border border-slate-200
-    rounded-l-[28px]
-    shadow-2xl
-    z-40
-    p-6
-    flex flex-col
-  "
->
-         {/* Toggle Tab Button on Left Edge */}
-         <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="absolute left-[-40px] top-1/2 -translate-y-1/2 w-10 h-24 bg-white border border-r-0 border-slate-200 shadow-[-6px_0_15px_-3px_rgba(0,0,0,0.1)] rounded-l-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-slate-50 text-slate-500 hover:text-emerald-600 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-            aria-label={isSidebarOpen ? "Close members sidebar" : "Open members sidebar"}
-         >
-            {isSidebarOpen ? (
-               <ArrowRight className="w-5 h-5" />
-            ) : (
-               <>
-                  <Users className="w-5 h-5 animate-pulse" />
-                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-0.5">
-                     {orgMembers.length}
-                  </span>
-               </>
-            )}
-         </button>
-
-         {/* Sidebar Content */}
-         <div className="flex items-center justify-between border-b border-slate-100 pb-4 shrink-0">
-            <div className="flex items-center gap-2">
-               <Users className="w-5 h-5 text-emerald-600" />
-               <h2 className="text-base font-bold text-slate-900">Members</h2>
+   {activeTab === 'team' && (
+      <div className="max-w-4xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-6">
+         <div className="flex items-center justify-between">
+            <div>
+               <h2 className="text-2xl font-bold text-slate-900">Team Members</h2>
+               <p className="text-slate-500 mt-1">Manage who has access to {activeOrganization.name}.</p>
             </div>
-            <div className="flex items-center gap-2">
-               <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-semibold">
-                  {orgMembers.length}
-               </span>
-               <button
-                  type="button"
-                  onClick={() => setIsAddMemberModalOpen(true)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                  aria-label="Add member"
-                  title="Add member"
-               >
-                  <UserPlus className="w-4 h-4" />
-               </button>
-            </div>
+            <button
+               type="button"
+               onClick={() => setIsAddMemberModalOpen(true)}
+               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors"
+            >
+               <UserPlus className="w-4 h-4" />
+               Add Member
+            </button>
          </div>
-
-         <div className="relative my-4 shrink-0">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+         <div className="relative">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
                type="text"
-               placeholder="Search members..."
+               placeholder="Search members by name, email, or role..."
                value={memberSearchQuery}
                onChange={(e) => setMemberSearchQuery(e.target.value)}
-               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
+               className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none shadow-sm"
             />
          </div>
-
-         <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
+         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
             {filteredMembers.map((member) => {
                const roleLower = (member.role || 'member').toLowerCase();
                const isOwner = roleLower === 'owner' || roleLower === 'superadmin';
@@ -939,56 +968,101 @@ if (!newEvent.deadline) {
                   .slice(0, 2) || 'U';
 
                return (
-                  <button
+                  <div
                      key={member.memberId}
-                     type="button"
                      onClick={() => openMemberDetails(member)}
-                     className="w-full flex items-center justify-between gap-3 rounded-xl border border-transparent p-2 text-left transition-colors hover:border-emerald-100 hover:bg-emerald-50/50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                     className="w-full flex items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-slate-50 cursor-pointer"
                   >
-                     <div className="flex items-center gap-2.5 min-w-0">
+                     <div className="flex items-center gap-4 min-w-0">
                         {member.avatar ? (
                            <img 
                               src={member.avatar} 
                               alt={member.name} 
-                              className="w-8 h-8 rounded-full border border-slate-100 object-cover shrink-0" 
+                              className="w-10 h-10 rounded-full border border-slate-200 object-cover shrink-0" 
                            />
                         ) : (
-                           <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-xs shrink-0">
+                           <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0">
                               {initials}
                            </div>
                         )}
                         <div className="min-w-0">
-                           <div className="text-xs font-semibold text-slate-900 truncate">
+                           <div className="text-sm font-semibold text-slate-900 truncate">
                               {member.name}
                            </div>
-                           <div className="text-[10px] text-slate-500 truncate">
+                           <div className="text-xs text-slate-500 truncate mt-0.5">
                               {member.email}
                            </div>
                         </div>
                      </div>
 
-                     <div className="flex items-center gap-1.5 shrink-0">
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold border ${badgeStyle}`}>
+                     <div className="flex items-center gap-3 shrink-0">
+                        <span className={`inline-flex px-2 py-1 rounded-md text-xs font-semibold border ${badgeStyle}`}>
                            {member.role}
                         </span>
                         <span 
-                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                           className={`w-2 h-2 rounded-full shrink-0 ${
                               member.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'
                            }`}
                            title={member.status}
                         />
                      </div>
-                  </button>
+                  </div>
                );
             })}
 
             {filteredMembers.length === 0 && (
-               <div className="py-6 text-center text-slate-400 text-xs">
-                  No members found
+               <div className="py-12 text-center text-slate-500 text-sm">
+                  No members found matching your search.
                </div>
             )}
          </div>
-      </motion.aside>
+      </div>
+   )}
+
+   {activeTab === 'settings' && (
+      <OrganizationSettings 
+         organization={activeOrganization}
+         onUpdate={() => window.location.reload()}
+      />
+   )}
+
+   {activeTab === 'billing' && (
+      <div className="max-w-4xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-6">
+         <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-sm text-center">
+            <div className="w-20 h-20 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-200">
+               <CreditCard className="w-10 h-10" />
+            </div>
+            <h2 className="text-3xl font-bold text-slate-900 mb-3">Current Plan: {activeOrganization.plan || 'Pro'}</h2>
+            <p className="text-slate-500 mb-10 max-w-lg mx-auto text-lg">You are currently on the {activeOrganization.plan || 'Pro'} plan. Enjoy your workspace features!</p>
+            
+            <div className="max-w-md mx-auto space-y-5 mb-10 text-left bg-slate-50 p-8 rounded-xl border border-slate-100">
+               <div className="flex items-center justify-between text-base">
+                  <span className="text-slate-500 font-medium">Payment Method</span>
+                  <span className="text-slate-900 font-semibold flex items-center gap-2">
+                     <CreditCard className="w-5 h-5 text-emerald-600" />
+                     •••• 4242
+                  </span>
+               </div>
+               <div className="h-px w-full bg-slate-200"></div>
+               <div className="flex items-center justify-between text-base">
+                  <span className="text-slate-500 font-medium">Next Billing Date</span>
+                  <span className="text-slate-900 font-semibold">
+                     {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString()}
+                  </span>
+               </div>
+            </div>
+
+            <button 
+               onClick={() => toast.info('Billing management is coming soon!')}
+               className="bg-white border border-slate-200 shadow-sm rounded-xl px-8 py-3 text-base font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+               Manage Subscription
+            </button>
+         </div>
+      </div>
+   )}
+</div>
+</div>
 
          {/* Member Details Modal */}
          <Modal
@@ -1309,3 +1383,4 @@ if (!newEvent.deadline) {
       </div>
    );
 };
+

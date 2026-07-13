@@ -33,6 +33,7 @@
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "dayjs": "^1.11.20",
     "framer-motion": "^11.0.28",
     "html5-qrcode": "^2.3.8",

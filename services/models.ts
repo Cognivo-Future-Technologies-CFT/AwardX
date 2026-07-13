@@ -41,6 +41,21 @@ export interface Organization {
   plan?: string;
   eventCount?: number;
   createdAt?: string;
+  timezone?: string;
+  language?: string;
+  defaultEventVisibility?: 'public' | 'private';
+  autosaveEnabled?: boolean;
+  emailNotifications?: boolean;
+}
+
+export interface OrganizationAuditLog {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  resourceType: string;
+  resourceName: string;
+  status: 'success' | 'failed';
 }
 
 export type JudgingType = 'parallel' | 'auto_assign';
@@ -269,5 +284,6 @@ export const PERMISSIONS = {
   VIEW_LOGS: 'view_logs',
   MANAGE_SETTINGS: 'manage_settings',
   MARK_ATTENDANCE: 'mark_attendance',
+  VIEW_SUBSCRIPTION: 'view_subscription',
 } as const;
 

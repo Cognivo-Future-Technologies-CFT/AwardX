@@ -8,7 +8,6 @@ import { SkeletonLoader } from '../SkeletonLoader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '../../services/queryKeys';
-
 interface DashboardOverviewProps {
   activeEvent?: Program | null;
   onNavigate?: (view: string) => void;
@@ -269,7 +268,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Left column: form selector */}
-        <div className="lg:col-span-1 flex flex-col gap-4">
+        <div className="lg:col-span-1 flex flex-col gap-6">
           <FormSelectorSection activeEvent={activeEvent ?? null} onNavigate={onNavigate} />
         </div>
 

@@ -44,6 +44,7 @@ const AnalyticsView = lazy(() => import('./AnalyticsView').then((m) => ({ defaul
 const BroadcastsView = lazy(() => import('./BroadcastsView').then((m) => ({ default: m.BroadcastsView })));
 const CertificatesView = lazy(() => import('./CertificatesView').then((m) => ({ default: m.CertificatesView })));
 const AttendanceView = lazy(() => import('./AttendanceView').then((m) => ({ default: m.AttendanceView })));
+const SubscriptionView = lazy(() => import('../../features/subscription/pages/SubscriptionPage').then((m) => ({ default: m.SubscriptionPage })));
 
 const ViewLoader: React.FC = () => (
   <div className="flex items-center justify-center h-64">
@@ -387,6 +388,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <TeamsView activeEvent={activeEvent} />;
       case 'logs':
         return <AuditLogsView />;
+      case 'subscription':
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <SubscriptionView />
+          </Suspense>
+        );
       case 'settings':
         return (
           <SettingsView

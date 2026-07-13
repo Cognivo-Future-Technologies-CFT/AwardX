@@ -8,7 +8,7 @@ import {
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Mail, Settings2,
   UserCog, Edit, Workflow, Layout, Command, Globe, CheckCircle2, AlertCircle, AlertTriangle,
-  Award, UserCheck, Layers
+  Award, UserCheck, Layers, CreditCard
 } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1163,18 +1163,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           )}
 
           {/* Active Event Display */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-              <Sparkles className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-3 overflow-hidden">
+            <Logo size="sm" className="shrink-0" />
+            <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'w-32 opacity-100' : 'w-0 opacity-0'}`}>
+              <span className="text-[10px] font-bold tracking-widest text-indigo-500 uppercase leading-none mt-0.5">
+                {activeEvent?.type || 'Event'}
+              </span>
+              <span className="text-sm font-bold text-slate-900 leading-tight tracking-tight">
+                {activeEvent?.title || 'Active Event'}
+              </span>
             </div>
-            {isSidebarExpanded && (
-              <div className="overflow-hidden">
-                <div className="font-display tracking-tight text-sm font-bold text-slate-900 truncate leading-tight">
-                  {activeEvent?.title || 'Active Event'}
-                </div>
-                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">{activeEvent?.type || 'Event'}</div>
-              </div>
-            )}
           </div>
         </div>
 

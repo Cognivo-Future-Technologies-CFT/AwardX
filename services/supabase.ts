@@ -2463,7 +2463,18 @@ export const settings = {
     return org;
   },
 
-  updateOrganization: async (updates: Partial<{ name: string; logo_url: string; website: string; industry: string; plan: string }>) => {
+  updateOrganization: async (updates: Partial<{ 
+    name: string; 
+    logo_url: string; 
+    website: string; 
+    industry: string; 
+    plan: string;
+    timezone: string;
+    language: string;
+    default_event_visibility: string;
+    autosave_enabled: boolean;
+    email_notifications: boolean;
+  }>) => {
     const org = await organizations.getCurrent();
     const orgId = org.data?.id;
     if (!orgId) return { data: null, error: { message: 'Organization not found' } };

@@ -22,7 +22,7 @@ import {
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { fetchBackendJson } from './backendApi';
-import { Program, Organization, Category, Round, Submission, Judge, JudgeGroup, Role, Log, SocialAccount, ScheduledPost, TeamMember, EventType } from './models';
+import { Program, Organization, Category, Round, Submission, Judge, JudgeGroup, Role, Log, SocialAccount, ScheduledPost, TeamMember, EventType, OrganizationAuditLog } from './models';
 import { getTemplateConfig } from './templateRoundConfigs';
 import { normalizeIntegrationSources } from '../lib/programIntegrations';
 import { resolveCategoryIdFromSelectorValue } from '../lib/resolveSubmissionCategory';
@@ -2827,6 +2827,78 @@ class DatabaseService {
     }
     return res;
   }
+
+  async getOrganizationAuditLogs(
+    organizationId: string,
+    options: {
+      page: number;
+      pageSize: number;
+      searchQuery?: string;
+      userFilter?: string;
+      actionFilter?: string;
+      dateFilter?: string;
+    }
+  ): Promise<PaginatedResult<OrganizationAuditLog>> {
+    const { data: rawLogs, error } = await auditLogs.getAll({ limit: 1000 });
+    
+    if (error || !rawLogs) {
+      console.error('Failed to fetch audit logs:', error);
+      return {
+        items: [],
+        total: 0,
+        page: options.page,
+        pageSize: options.pageSize,
+        hasMore: false,
+      };
+    }
+
+    const mappedLogs: OrganizationAuditLog[] = rawLogs.map((log: any) => ({
+      id: log.id,
+      timestamp: log.created_at || new Date().toISOString(),
+      user: log.user_name || log.user_id || 'System',
+      action: log.action || log.action_type || 'Unknown Action',
+      resourceType: log.resource_type || 'System',
+      resourceName: log.resource_id || log.details || 'Unknown Resource',
+      status: 'success'
+    }));
+
+    let filteredLogs = [...mappedLogs];
+
+    if (options.searchQuery) {
+      const q = options.searchQuery.toLowerCase();
+      filteredLogs = filteredLogs.filter(log => 
+        log.user.toLowerCase().includes(q) || 
+        log.action.toLowerCase().includes(q) || 
+        log.resourceName.toLowerCase().includes(q)
+      );
+    }
+    if (options.userFilter) {
+      filteredLogs = filteredLogs.filter(log => log.user === options.userFilter);
+    }
+    if (options.actionFilter) {
+      filteredLogs = filteredLogs.filter(log => log.action === options.actionFilter);
+    }
+    if (options.dateFilter) {
+      const days = parseInt(options.dateFilter, 10);
+      if (!isNaN(days)) {
+        const threshold = new Date(Date.now() - 1000 * 60 * 60 * 24 * days);
+        filteredLogs = filteredLogs.filter(log => new Date(log.timestamp) >= threshold);
+      }
+    }
+
+    const start = (options.page - 1) * options.pageSize;
+    const end = start + options.pageSize;
+    const paginatedItems = filteredLogs.slice(start, end);
+
+    return {
+      items: paginatedItems,
+      total: filteredLogs.length,
+      page: options.page,
+      pageSize: options.pageSize,
+      hasMore: end < filteredLogs.length,
+    };
+  }
+
 
   async getUserSettings() {
     return settings.getUserSettings();

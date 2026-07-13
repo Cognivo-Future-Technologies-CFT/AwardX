@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, BarChart3, Settings, ArrowLeft, Menu, X, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart3, Settings, ArrowLeft, Menu, X, ShieldAlert, CreditCard, LayoutTemplate } from 'lucide-react';
 import { Logo } from '../Logo';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -19,6 +19,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const navItems = [
     { id: '/', label: 'Dashboard', icon: LayoutDashboard },
     { id: '/pre-registrations', label: 'Pre-Registrations', icon: Users },
+    { id: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
+    { id: '/plans', label: 'Plans', icon: LayoutTemplate },
     { id: '/analytics', label: 'Analytics', icon: BarChart3 },
     { id: '/settings', label: 'Settings', icon: Settings },
   ];
