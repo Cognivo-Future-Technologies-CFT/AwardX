@@ -191,12 +191,6 @@ Deno.serve(async (req) => {
       to: record.email,
       subject,
       html,
-      attachments: [
-        {
-          filename: 'qr.png',
-          content: qrBase64,
-        },
-      ],
     })
 
     if (resError) {

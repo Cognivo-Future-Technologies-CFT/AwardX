@@ -254,7 +254,6 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 		}
 		const { data: publicData } = supabase.storage.from('media').getPublicUrl(qrPath);
 		const qrImageUrl = `${publicData.publicUrl}?v=${Date.now()}`;
-		const qrBase64 = qrBuffer.toString('base64');
 
 		const resendApiKey = process.env.RESEND_API_KEY;
 		if (!resendApiKey) return { ok: false, error: 'RESEND_API_KEY environment variable is not set.' };
@@ -350,12 +349,6 @@ async function sendQrEmailHelper(recordId: string): Promise<{ ok: boolean; error
 			to: record.email,
 			subject,
 			html,
-			attachments: [
-				{
-					filename: 'qr.png',
-					content: qrBase64,
-				}
-			]
 		});
 
 		if (resError) {
