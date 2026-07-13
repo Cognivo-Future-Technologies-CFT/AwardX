@@ -1,4 +1,4 @@
-/** Public production origin used in outbound emails when local/dev URLs would be useless. */
+/** Public production origin used in outbound emails. */
 export const PUBLIC_SITE_URL = 'https://www.awardx.one';
 
 export function isLocalDevHost(url: string): boolean {
@@ -10,14 +10,23 @@ export function isLocalDevHost(url: string): boolean {
   }
 }
 
-/** Site origin for email CTAs — skips localhost env values. */
+/**
+ * Site origin for email CTAs.
+ * Only trusts SITE_URL when it is a real public host — never VITE_SITE_URL/FRONTEND_URL
+ * (those are often left as localhost in deploy envs).
+ */
 export function resolveEmailSiteUrl(): string {
-  for (const raw of [process.env.SITE_URL, process.env.VITE_SITE_URL, process.env.FRONTEND_URL]) {
-    const configured = (raw || '').split(',')[0].trim().replace(/\/$/, '');
-    if (configured && !isLocalDevHost(configured)) {
+  const configured = (process.env.SITE_URL || '').trim().replace(/\/$/, '');
+  if (configured && !isLocalDevHost(configured)) {
+    try {
+      const parsed = new URL(configured);
+      if (parsed.protocol === 'http:') parsed.protocol = 'https:';
+      return parsed.origin;
+    } catch {
       return configured;
     }
   }
+  // ponytail: hard default so misconfigured Railway envs cannot leak localhost into mail
   return PUBLIC_SITE_URL;
 }
 

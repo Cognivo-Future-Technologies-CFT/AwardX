@@ -35,14 +35,26 @@ export function resolveSiteUrl(): string {
 export function resolvePublicSiteUrl(): string {
   const configured = (import.meta.env.VITE_SITE_URL || '').trim().replace(/\/$/, '');
   if (configured && !isLocalDevHost(configured)) {
-    return configured.replace(/\/$/, '');
+    return forceHttpsPublicOrigin(configured);
   }
 
   if (typeof window !== 'undefined' && window.location?.origin && !isLocalDevHost(window.location.origin)) {
-    return window.location.origin.replace(/\/$/, '');
+    return forceHttpsPublicOrigin(window.location.origin);
   }
 
   return PUBLIC_SITE_URL;
+}
+
+function forceHttpsPublicOrigin(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!isLocalDevHost(parsed.origin) && parsed.protocol === 'http:') {
+      parsed.protocol = 'https:';
+    }
+    return parsed.origin;
+  } catch {
+    return url.replace(/\/$/, '');
+  }
 }
 
 export function resolveAuthCallbackUrl(): string {

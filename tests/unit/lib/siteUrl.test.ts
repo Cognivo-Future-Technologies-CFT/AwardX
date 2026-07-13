@@ -42,6 +42,12 @@ describe('emailSiteUrl', () => {
     expect(resolveEmailSiteUrl()).toBe('https://www.awardx.one');
   });
 
+  it('ignores VITE_SITE_URL even when SITE_URL is missing', () => {
+    delete process.env.SITE_URL;
+    process.env.VITE_SITE_URL = 'http://localhost:3000';
+    expect(resolveEmailSiteUrl()).toBe('https://www.awardx.one');
+  });
+
   it('rewrites localhost invite URLs onto the public site', () => {
     process.env.SITE_URL = 'https://www.awardx.one';
     expect(resolveEmailActionUrl('http://localhost:3000/judge/abc', '/judge/fallback')).toBe(

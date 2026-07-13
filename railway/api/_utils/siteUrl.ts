@@ -44,12 +44,17 @@ export function resolveServerSiteUrl(origin?: string | null): string {
 
 /** Site origin for email CTAs — skips localhost env values and request origins. */
 export function resolveEmailSiteUrl(): string {
-  for (const raw of [process.env.SITE_URL, process.env.VITE_SITE_URL]) {
-    const configured = (raw || '').trim().replace(/\/$/, '');
-    if (configured && !isLocalDevHost(configured)) {
+  const configured = (process.env.SITE_URL || '').trim().replace(/\/$/, '');
+  if (configured && !isLocalDevHost(configured)) {
+    try {
+      const parsed = new URL(configured);
+      if (parsed.protocol === 'http:') parsed.protocol = 'https:';
+      return parsed.origin;
+    } catch {
       return configured;
     }
   }
+  // ponytail: hard default so misconfigured deploy envs cannot leak localhost into mail
   return PUBLIC_SITE_URL;
 }
 
