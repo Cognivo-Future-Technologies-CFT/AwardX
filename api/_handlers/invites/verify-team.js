@@ -174,7 +174,12 @@ export default async function handler(req, res) {
             res.status(500).json({ error: 'Failed to accept invite' });
             return;
         }
-        res.json({ ok: true, accepted: true });
+        res.json({
+            ok: true,
+            accepted: true,
+            organizationId: invite.organization_id,
+            programId: invite.program_id || null,
+        });
     }
     catch (error) {
         console.error('Verify team invite error:', error);

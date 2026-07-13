@@ -669,7 +669,36 @@ export const programs = {
     const orgId = organizationId || (await getCurrentOrgId());
     if (!orgId) return { data: [], error: null };
 
-    const { data, error } = await supabase
+    const userId = await getCurrentUserId();
+    if (!userId) return { data: [], error: null };
+
+    // Scope listing to membership: org-wide (program_id null) sees all; else only scoped ids.
+    const { data: memberships, error: membershipError } = await supabase
+      .from('organization_members')
+      .select('program_id')
+      .eq('organization_id', orgId)
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    if (membershipError) {
+      return { data: [], error: membershipError };
+    }
+
+    const rows = memberships || [];
+    const isOrgWide = rows.some((row) => row.program_id == null);
+    const scopedProgramIds = Array.from(
+      new Set(
+        rows
+          .map((row) => row.program_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    );
+
+    if (!isOrgWide && scopedProgramIds.length === 0) {
+      return { data: [], error: null };
+    }
+
+    let query = supabase
       .from('programs')
       .select(`
         *,
@@ -681,6 +710,12 @@ export const programs = {
       `)
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
+
+    if (!isOrgWide) {
+      query = query.in('id', scopedProgramIds);
+    }
+
+    const { data, error } = await query;
     return { data, error };
   },
 

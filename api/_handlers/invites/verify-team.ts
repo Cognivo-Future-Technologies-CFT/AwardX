@@ -198,7 +198,12 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    res.json({ ok: true, accepted: true });
+    res.json({
+      ok: true,
+      accepted: true,
+      organizationId: invite.organization_id,
+      programId: invite.program_id || null,
+    });
   } catch (error: any) {
     console.error('Verify team invite error:', error);
     res.status(500).json({ error: error?.message || 'Internal server error' });

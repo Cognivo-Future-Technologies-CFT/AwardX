@@ -2,7 +2,11 @@ import type { NextFunction, Response } from 'express';
 import { getSupabaseAdmin } from '../supabase.js';
 import type { AuthenticatedRequest } from './auth.js';
 
-/** True if user belongs to the program's organization (owner profile or active member). */
+export type AccessiblePrograms =
+  | { all: true }
+  | { all: false; programIds: string[] };
+
+/** True if user belongs to the organization as an active member. */
 export async function canAccessOrganization(userId: string, organizationId: string): Promise<boolean> {
   if (!userId || !organizationId) return false;
 
@@ -18,7 +22,47 @@ export async function canAccessOrganization(userId: string, organizationId: stri
   return (memberships || []).length > 0;
 }
 
-/** True if user belongs to the program's organization (owner profile or active member). */
+/**
+ * Org-wide membership (program_id IS NULL) → all programs.
+ * Otherwise only explicitly scoped program_ids.
+ */
+export async function getAccessiblePrograms(
+  userId: string,
+  organizationId: string,
+): Promise<AccessiblePrograms> {
+  if (!userId || !organizationId) {
+    return { all: false, programIds: [] };
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { data: memberships, error } = await supabase
+    .from('organization_members')
+    .select('program_id')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .eq('status', 'active');
+
+  if (error) {
+    throw new Error(error.message || 'Failed to load organization memberships');
+  }
+
+  const rows = memberships || [];
+  if (rows.some((row) => row.program_id == null)) {
+    return { all: true };
+  }
+
+  const programIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.program_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+
+  return { all: false, programIds };
+}
+
+/** True if user can access this specific program (org-wide or matching program scope). */
 export async function canAccessProgram(userId: string, programId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin();
 
@@ -30,7 +74,9 @@ export async function canAccessProgram(userId: string, programId: string): Promi
 
   if (!program?.organization_id) return false;
 
-  return canAccessOrganization(userId, program.organization_id);
+  const access = await getAccessiblePrograms(userId, program.organization_id);
+  if (access.all) return true;
+  return access.programIds.includes(programId);
 }
 
 export function requireProgramAccess(paramName = 'programId') {

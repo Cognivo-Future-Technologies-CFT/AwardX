@@ -870,7 +870,12 @@ router.post('/verify-team', async (req, res) => {
 			metadata: { inviteId: resolved.invite.id },
 		});
 
-		return res.json({ ok: true, accepted: true });
+		return res.json({
+			ok: true,
+			accepted: true,
+			organizationId: resolved.invite.organization_id,
+			programId: resolved.invite.program_id || null,
+		});
 	} catch (err: any) {
 		console.error('Verify team invite (POST) error:', err);
 		return res.status(500).json({ error: err?.message || 'Internal server error' });

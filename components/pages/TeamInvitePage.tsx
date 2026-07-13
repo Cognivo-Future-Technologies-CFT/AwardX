@@ -1,8 +1,10 @@
 import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, Mail, UserPlus, XCircle } from 'lucide-react';
-import { auth } from '../../services/supabase';
+import { auth, refreshUserCache, setActiveOrganization } from '../../services/supabase';
+import { db as databaseService } from '../../services/database';
 import { resolveBackendPath } from '../../services/backendApi';
+import { buildDashboardPath } from '../../lib/dashboardRoutes';
 import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
 
 type InviteContext = {
@@ -158,8 +160,27 @@ export const TeamInvitePage: React.FC = () => {
         return;
       }
 
+      const organizationId = body?.organizationId || invite?.organizationId || null;
+      const programId = body?.programId || invite?.programId || null;
+
+      try {
+        await refreshUserCache();
+        if (organizationId) {
+          await setActiveOrganization(organizationId);
+          await databaseService.setActiveOrganization(organizationId);
+        }
+        if (programId) {
+          await databaseService.setActiveProgram(programId);
+        }
+      } catch (cacheErr) {
+        console.warn('Failed to refresh workspace after invite accept:', cacheErr);
+      }
+
       setAccepted(true);
-      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+      const nextDashboard = programId
+        ? buildDashboardPath({ eventId: programId, view: 'overview' })
+        : '/dashboard';
+      setTimeout(() => navigate(nextDashboard, { replace: true }), 1500);
     } catch (e: any) {
       setError(e?.message || 'Failed to accept invite.');
     } finally {
