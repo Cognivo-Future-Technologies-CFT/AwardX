@@ -4,12 +4,13 @@ import {
   ImageIcon, Link2, List, Calendar, Mail, CheckSquare, Radio,
   MoreVertical, ArrowUp, ArrowDown, X, AlertCircle, Palette, Layers,
   ChevronLeft, ChevronRight, Layout, Edit3, Move, ChevronDown, Award,
-  CheckCircle, XCircle, CreditCard, PanelLeftClose, PanelRightClose
+  CheckCircle, XCircle, CreditCard, PanelLeftClose, PanelRightClose, Info
 } from 'lucide-react';
 import { Button } from '../Button';
 import { useConfirm } from '../ConfirmDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCategorySelectorLabels } from '../../lib/judgingType';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export interface FormField {
   id: string;
@@ -84,39 +85,107 @@ const buildFieldTypes = (isAutoAssign: boolean) => {
   {
     group: 'Essentials',
     items: [
-      { type: 'text', label: 'Short Text', icon: Type, description: 'Names, titles, etc.' },
-      { type: 'textarea', label: 'Long Text', icon: FileText, description: 'Essays, bios, etc.' },
-      { type: 'email', label: 'Email', icon: Mail, description: 'Contact email' },
-      { type: 'date', label: 'Date', icon: Calendar, description: 'Event dates, deadlines' },
+      {
+        type: 'text',
+        label: 'Short Text',
+        icon: Type,
+        description: 'Names, titles, etc.',
+        infoDescription: 'For short answers like a name or title. Use one line of text.',
+      },
+      {
+        type: 'textarea',
+        label: 'Long Text',
+        icon: FileText,
+        description: 'Essays, bios, etc.',
+        infoDescription: 'For longer answers like an essay or bio. Use when you need more than one line.',
+      },
+      {
+        type: 'email',
+        label: 'Email',
+        icon: Mail,
+        description: 'Contact email',
+        infoDescription: 'Asks for an email address. Good for contact or follow-up.',
+      },
+      {
+        type: 'date',
+        label: 'Date',
+        icon: Calendar,
+        description: 'Event dates, deadlines',
+        infoDescription: 'Lets people pick a date from a calendar. Good for birthdays or deadlines.',
+      },
     ]
   },
   {
     group: 'Choices',
     items: [
-      { type: 'select', label: 'Dropdown', icon: List, description: 'Select one from list' },
-      { type: 'radio', label: 'Single Choice', icon: Radio, description: 'Radio buttons' },
-      { type: 'checkbox', label: 'Multi Choice', icon: CheckSquare, description: 'Checkboxes' },
+      {
+        type: 'select',
+        label: 'Dropdown',
+        icon: List,
+        description: 'Select one from list',
+        infoDescription: 'Shows a dropdown list. People pick one option.',
+      },
+      {
+        type: 'radio',
+        label: 'Choice',
+        icon: Radio,
+        description: 'Single or multiple options',
+        infoDescription: 'Lets people select one or multiple options. Style is similar to WhatsApp polls with toggle support.',
+      },
     ]
   },
   {
     group: 'Media & More',
     items: [
-      { type: 'file', label: 'File Upload', icon: ImageIcon, description: 'Images, Docs, PDF' },
-      { type: 'url', label: 'Website', icon: Link2, description: 'External links' },
-      { type: 'number', label: 'Number', icon: Layout, description: 'Quantities, scores' },
-      { type: 'award_selector', label: labels.fieldTypeLabel, icon: Award, description: labels.fieldDescription },
-          {
-      type: 'image',
-      label: 'Image',
-      icon: ImageIcon,
-      description: 'Display banners, logos, and images'
-    },
+      {
+        type: 'file',
+        label: 'File Upload',
+        icon: ImageIcon,
+        description: 'Images, Docs, PDF',
+        infoDescription: 'Lets people upload files like PDFs or images. You can set file type and size limits.',
+      },
+      {
+        type: 'url',
+        label: 'Website',
+        icon: Link2,
+        description: 'External links',
+        infoDescription: 'Asks for a website link. Good for portfolios or project pages.',
+      },
+      {
+        type: 'number',
+        label: 'Number',
+        icon: Layout,
+        description: 'Quantities, scores',
+        infoDescription: 'Asks for a number only. Good for scores, counts, or years.',
+      },
+      {
+        type: 'award_selector',
+        label: labels.fieldTypeLabel,
+        icon: Award,
+        description: labels.fieldDescription,
+        infoDescription: isAutoAssign
+          ? 'Lets people pick a category for their submission. Needed for auto-assign judging.'
+          : 'Lets people pick which award or category they want. Helps sort submissions.',
+      },
+      {
+        type: 'image',
+        label: 'Image',
+        icon: ImageIcon,
+        description: 'Display banners, logos, and images',
+        infoDescription: 'Shows a picture on the form, like a logo or banner. It does not ask for an answer.',
+      },
     ]
   },
   {
     group: 'Advanced',
     items: [
-      { type: 'payment', label: 'Payment', icon: CreditCard, description: 'Collect submission fees' },
+      {
+        type: 'payment',
+        label: 'Payment',
+        icon: CreditCard,
+        description: 'Collect submission fees',
+        infoDescription: 'Collects a fee before the form is sent. Uses your payment setup.',
+      },
     ]
   }
 ];
@@ -842,7 +911,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
 
                     {selectedFieldId === field.id ? (
                       <div className="space-y-3" onClick={e => e.stopPropagation()}>
-                        {field.type !== 'date' && (
+                        {field.type !== 'date' && field.type !== 'radio' && field.type !== 'checkbox' && (
                           <div>
                             <input
                               value={field.placeholder || ''}
@@ -852,14 +921,40 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                             />
                           </div>
                         )}
-                        <div>
-                          <input
-                            value={field.helpText || ''}
-                            onChange={e => updateField(field.id, { helpText: e.target.value })}
-                            className="w-full p-2 border border-dashed border-slate-200 rounded-lg text-xs text-slate-500 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                            placeholder="Help text (optional)..."
-                          />
-                        </div>
+                        {field.type !== 'radio' && field.type !== 'checkbox' && (
+                          <div>
+                            <input
+                              value={field.helpText || ''}
+                              onChange={e => updateField(field.id, { helpText: e.target.value })}
+                              className="w-full p-2 border border-dashed border-slate-200 rounded-lg text-xs text-slate-500 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                              placeholder="Help text (optional)..."
+                            />
+                          </div>
+                        )}
+                        {(field.type === 'radio' || field.type === 'checkbox') && (
+                          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100/80 my-2">
+                            <div>
+                              <span className="text-xs font-semibold text-slate-700 block">Allow multiple options</span>
+                              <span className="text-[10px] text-slate-400 block mt-0.5">Let respondents select more than one choice</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newType = field.type === 'radio' ? 'checkbox' : 'radio';
+                                updateField(field.id, { type: newType });
+                              }}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                field.type === 'checkbox' ? 'bg-indigo-600' : 'bg-slate-200'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  field.type === 'checkbox' ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        )}
                         {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
                           <div className="space-y-1.5 pt-2 border-t border-slate-100">
                             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Options</span>
@@ -1109,19 +1204,39 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 px-2">{group.group}</h3>
               <div className="grid gap-3">
                 {group.items.map(item => (
-                  <button
+                  <div
                     key={item.type}
-                    onClick={() => addField(item.type)}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10 hover:-translate-y-0.5 transition-all group text-left"
+                    className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/10 hover:-translate-y-0.5 transition-all group"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 group-hover:bg-indigo-50 flex items-center justify-center text-slate-500 group-hover:text-indigo-600 transition-colors">
-                      <item.icon className="w-4 h-4" />
-        </div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-700 group-hover:text-indigo-900">{item.label}</div>
-                      <div className="text-[10px] text-slate-400">{item.description}</div>
-      </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => addField(item.type)}
+                      className="flex flex-1 items-center gap-3 min-w-0 text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-slate-50 group-hover:bg-indigo-50 flex items-center justify-center text-slate-500 group-hover:text-indigo-600 transition-colors shrink-0">
+                        <item.icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-700 group-hover:text-indigo-900">{item.label}</div>
+                        <div className="text-[10px] text-slate-400">{item.description}</div>
+                      </div>
+                    </button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-indigo-600"
+                          aria-label={`About ${item.label}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Info className="w-3.5 h-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent side="right" align="start" className="w-64 p-3 text-sm leading-relaxed text-slate-600">
+                        {item.infoDescription}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 ))}
                 </div>
             </div>
